@@ -16,3 +16,10 @@ This area can include:
 Keep one current version of each canvas and use Git history to show how it changes rather than creating files named `final`, `final-2`, or similar. If the team has several customer segments, use a `value-propositions/` subfolder with one clearly named Markdown file per segment.
 
 Link hypotheses and important claims to the relevant test cards, learning cards, interview records, or other evidence under `docs/discovery/`. Distinguish validated knowledge from current assumptions.
+
+## Current direction
+
+- [`business-model-canvas.md`](business-model-canvas.md) focuses on time-sensitive public-transport travellers.
+- [`value-propositions/value-proposition-canvas.md`](value-propositions/value-proposition-canvas.md) describes the matching customer profile and proposed value map.
+
+Both canvases remain drafts. The existing software is an exploratory comparison prototype rather than a tested journey-recovery product, and the household water direction remains a separate opportunity.
