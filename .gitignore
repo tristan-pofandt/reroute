@@ -24,5 +24,7 @@ coverage/
 private/
 docs/discovery/interviews/private/
 docs/discovery/interviews/recordings/
+# De-identified transcripts in docs/discovery/interviews/raw transcripts/ are kept in Git as evidence
+# (team decision, 2026-09-25), so that folder is intentionally not ignored.
 # docs/discovery/interviews/raw-transcripts/
 # docs/discovery/interviews/raw transcripts/
