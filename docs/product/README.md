@@ -21,5 +21,6 @@ Link hypotheses and important claims to the relevant test cards, learning cards,
 
 - [`business-model-canvas.md`](business-model-canvas.md) focuses on time-sensitive public-transport travellers.
 - [`value-propositions/value-proposition-canvas.md`](value-propositions/value-proposition-canvas.md) describes the matching customer profile and proposed value map.
+- [`competitors/competitor-comparison.md`](competitors/competitor-comparison.md) compares five competitors/current alternatives plus Plan B in the assessed table format and links to the five full analyses.
 
-Both canvases have been updated after Iteration 1 and remain drafts for team review. They distinguish the accepted and uncertain customer findings, the retrospective narrower fare claim, and the untested solution, channels and relationships. The transport prototypes offer prepared recovery tasks and a fixed-endpoint route comparison, but no participant prototype result is recorded. The household water direction remains a separate opportunity.
+Both canvases have been updated with the current Iteration 2 evidence and remain drafts for team review. They distinguish accepted and uncertain customer findings, the retrospective narrower fare claim, final formative prototype feedback, draft task analyses and untested channels, relationships and revenue. The household water direction remains a separate opportunity.
