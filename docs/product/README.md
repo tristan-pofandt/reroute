@@ -22,5 +22,6 @@ Link hypotheses and important claims to the relevant test cards, learning cards,
 - [`business-model-canvas.md`](business-model-canvas.md) focuses on time-sensitive public-transport travellers.
 - [`value-propositions/value-proposition-canvas.md`](value-propositions/value-proposition-canvas.md) describes the matching customer profile and proposed value map.
 - [`competitors/team-competitor-comparison-2026-09-25.md`](competitors/team-competitor-comparison-2026-09-25.md) combines the five individual competitor analyses into the Iteration 2 team comparison.
+- [`mvp-scope-2026-10-20.md`](mvp-scope-2026-10-20.md) traces the local Plan B MVP's small feature set to the prototypes and 21 de-identified prototype interview records, with its untested boundaries and review tasks.
 
 Both canvases have been updated with the current Iteration 2 evidence and remain drafts for team review. They distinguish accepted and uncertain customer findings, the retrospective narrower fare claim, final formative prototype feedback, draft task analyses and untested channels, relationships and revenue. The household water direction remains a separate opportunity.

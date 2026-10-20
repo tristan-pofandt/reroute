@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f7f4">
+  <meta name="description" content="Plan B compares Google Maps route estimates against your deadline, fare and walking limits.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <title>Plan B | Plan a journey</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="live.css">
+  <script src="live.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to journey planner</a>
+  <div class="app-shell">
+    <header class="site-header">
+      <a class="brand" href="index.html" aria-label="Plan B home"><span class="brand-mark" aria-hidden="true">↗</span><span>plan<span class="brand-accent">b</span><small>journey recovery</small></span></a>
+      <div class="header-actions"><a class="mode-link" href="demo.html">Try the interview scenario →</a><span class="live-pill"><span class="demo-dot" aria-hidden="true"></span>Real route estimates</span></div>
+    </header>
+    <main id="main">
+      <section class="hero live-hero" aria-labelledby="hero-title">
+        <div class="hero-copy"><p class="eyebrow"><span class="eyebrow-line"></span> PLAN YOUR NEXT MOVE</p><h1 id="hero-title">A clearer way <em>forward.</em></h1><p class="hero-subtitle">Compare public transport and driving estimates against the time, cost and walking that work for you.</p></div>
+        <div class="hero-route"><div class="route-line" aria-hidden="true"><span></span><i></i><span></span></div><div><strong>Your starting point</strong><small>Set below</small></div><span class="route-arrow" aria-hidden="true">→</span><div><strong>Your destination</strong><small>Set below</small></div></div>
+      </section>
+      <div class="workspace">
+        <aside class="settings-panel" aria-labelledby="settings-title">
+          <div class="panel-topline"><span class="step-number">01</span><span>YOUR JOURNEY</span></div>
+          <h2 id="settings-title">Where to next?</h2>
+          <p class="panel-intro">Enter real places in Australia. Your search is sent to Google Routes when you choose <strong>Find routes</strong>.</p>
+          <form id="journey-form" novalidate>
+            <div class="field"><label for="origin">Starting point</label><input id="origin" name="origin" type="text" minlength="3" maxlength="200" autocomplete="street-address" value="Taringa Station, Brisbane QLD" required></div>
+            <div class="field"><label for="destination">Destination</label><input id="destination" name="destination" type="text" minlength="3" maxlength="200" value="The University of Queensland, St Lucia QLD" required></div>
+            <div class="field"><label for="departure">Leave at · Brisbane time</label><input id="departure" name="departure" type="datetime-local" required></div>
+            <div class="field"><label for="deadline">Arrive by · Brisbane time</label><input id="deadline" name="deadline" type="datetime-local" required></div>
+            <div class="field-pair"><div class="field"><label for="budget">Maximum total fare</label><div class="input-unit"><span aria-hidden="true">$</span><input id="budget" name="budget" type="number" min="0" max="500" step="0.01" value="5" required></div></div><div class="field"><label for="walking">Maximum walking</label><div class="input-unit"><input id="walking" name="walking" type="number" min="0" max="120" step="1" value="15" required><span aria-hidden="true">min</span></div></div></div>
+            <fieldset class="mode-fieldset"><legend>Modes I can use</legend><label class="mode-choice"><input id="mode-transit" type="checkbox" checked><span class="mode-icon" aria-hidden="true">▣</span><span>Public transport</span><span class="checkmark" aria-hidden="true">✓</span></label><label class="mode-choice"><input id="mode-drive" type="checkbox"><span class="mode-icon" aria-hidden="true">◇</span><span>My own car</span><span class="checkmark" aria-hidden="true">✓</span></label></fieldset>
+            <p id="form-error" class="form-error" role="alert" hidden></p>
+            <button id="find-button" type="submit" class="primary-button">Find routes <span aria-hidden="true">→</span></button>
+            <div class="map-handoffs" aria-label="Open this journey in Google Maps"><a id="transit-map-link" class="secondary-button" href="https://www.google.com/maps/dir/?api=1" target="_blank" rel="noopener noreferrer">Public transport in Google Maps ↗</a><a id="drive-map-link" class="secondary-button" href="https://www.google.com/maps/dir/?api=1" target="_blank" rel="noopener noreferrer" hidden>Driving in Google Maps ↗</a></div>
+            <p class="map-handoff-note">These links work without an API key. Opening one sends the two places to Google Maps; choose or recheck the departure time there.</p>
+          </form>
+          <p class="setting-note">Fare is the whole ticket price, when Google provides one. Driving cost is unknown. No disruption or ride booking is detected.</p>
+        </aside>
+        <section class="results-panel" id="results" aria-labelledby="results-title">
+          <div class="results-head"><div><div class="panel-topline"><span class="step-number">02</span><span>YOUR OPTIONS</span></div><h2 id="results-title" tabindex="-1">Compare your routes</h2></div><span class="updated-pill" id="result-count">Ready to search</span></div>
+          <div class="live-notice" id="status-notice" role="status">Checking whether live route search is available…</div>
+          <div id="results-content" hidden>
+            <div class="results-toolbar"><div><strong id="fit-summary" role="status"></strong><span id="fit-caption">Routes that meet all known limits appear first. Unknown costs need checking.</span></div><label class="sort-control" for="sort-by">Then sort by <select id="sort-by"><option value="arrival">Earliest arrival</option><option value="cost">Lowest known fare</option><option value="walking">Least known walking</option></select></label></div>
+            <div id="no-match" class="no-match" hidden><span aria-hidden="true">◇</span><div><strong>No returned route is confirmed within every limit.</strong><p>Inspect a route and verify unknown fares or costs. You can change your limits and search again.</p></div></div>
+            <div id="option-list" class="option-list"></div>
+            <p id="partial-errors" class="source-footnote" role="status" hidden></p>
+            <p class="source-footnote">Route times and steps are Google Maps estimates, checked at <span id="checked-at"></span>. They may change. Walking time is estimated from walking steps. An unknown fare or driving cost cannot be treated as within your budget. <span class="google-attribution" translate="no">Google Maps</span></p>
+          </div>
+        </section>
+      </div>
+      <section class="next-step" id="next-step" aria-labelledby="next-step-title" hidden><div><div class="panel-topline"><span class="step-number">03</span><span>YOUR NEXT STEP</span></div><h2 id="next-step-title">Your selected route</h2><p id="selected-summary"></p></div><div class="next-step-body"><ol id="step-list"></ol><div class="verify-card"><span aria-hidden="true">↗</span><h3>Before you travel</h3><p>Recheck the service, fare, walking path and any disruption. Google Maps may offer a different route when you open it.</p><a id="maps-link" href="https://www.google.com/maps/dir/?api=1" target="_blank" rel="noopener noreferrer">Open directions in Google Maps <span aria-hidden="true">↗</span></a><a href="https://translink.com.au/plan-your-journey" target="_blank" rel="noopener noreferrer">Check public transport at Translink <span aria-hidden="true">↗</span></a></div></div></section>
+    </main>
+    <footer class="site-footer"><span>PLAN B · STUDENT MVP</span><span>Google Maps estimates · No live disruption monitoring</span></footer>
+  </div>
+</body>
+</html>

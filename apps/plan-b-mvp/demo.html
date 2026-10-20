@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f7f4">
+  <meta name="description" content="Plan B: compare practical alternatives after a disrupted journey in a fictional demonstration.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <title>Plan B | Find your next move</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="live.css">
+  <script src="demo.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to journey planner</a>
+  <div class="app-shell">
+    <header class="site-header">
+      <a class="brand" href="index.html" aria-label="Plan B home"><span class="brand-mark" aria-hidden="true">↗</span><span>plan<span class="brand-accent">b</span><small>journey recovery</small></span></a>
+      <div class="header-actions"><a class="mode-link" href="index.html">Plan a real journey →</a><span class="demo-pill"><span class="demo-dot" aria-hidden="true"></span>Fictional scenario</span></div>
+    </header>
+
+    <main id="main">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="eyebrow-line"></span> WHEN THE ORIGINAL PLAN CHANGES</p>
+          <h1 id="hero-title">A clearer way <em>forward.</em></h1>
+          <p class="hero-subtitle">Your bus is cancelled. Set what matters to you, compare the trade-offs, and choose your next step.</p>
+        </div>
+        <div class="hero-route" aria-label="Fictional journey from Taringa Station to UQ St Lucia">
+          <div class="route-line" aria-hidden="true"><span></span><i></i><span></span></div>
+          <div><strong>Taringa Station</strong><small>Starting point</small></div>
+          <span class="route-arrow" aria-hidden="true">→</span>
+          <div><strong>UQ St Lucia</strong><small>Destination</small></div>
+        </div>
+      </section>
+
+      <div class="workspace">
+        <aside class="settings-panel" aria-labelledby="settings-title">
+          <div class="panel-topline"><span class="step-number">01</span><span>YOUR JOURNEY</span></div>
+          <h2 id="settings-title">Set your limits</h2>
+          <p class="panel-intro">The fictional disruption starts at <strong>8:20 am</strong>. Change a limit to see how your options change.</p>
+
+          <form id="constraints-form" novalidate>
+            <div class="field">
+              <label for="deadline">I need to arrive by</label>
+              <input id="deadline" name="deadline" type="time" min="08:20" max="12:00" value="09:00" required>
+              <small>Between 8:20 am and noon in this scenario</small>
+            </div>
+            <div class="field-pair">
+              <div class="field">
+                <label for="budget">Maximum extra cost</label>
+                <div class="input-unit"><span aria-hidden="true">$</span><input id="budget" name="budget" type="number" min="0" max="100" step="1" value="5" required></div>
+              </div>
+              <div class="field">
+                <label for="walking">Maximum walking</label>
+                <div class="input-unit"><input id="walking" name="walking" type="number" min="0" max="60" step="1" value="10" required><span aria-hidden="true">min</span></div>
+              </div>
+            </div>
+            <fieldset class="mode-fieldset">
+              <legend>Modes I can use</legend>
+              <label class="mode-choice"><input id="mode-bus" type="checkbox" checked><span class="mode-icon" aria-hidden="true">▣</span><span>Bus</span><span class="checkmark" aria-hidden="true">✓</span></label>
+              <label class="mode-choice"><input id="mode-rideshare" type="checkbox" checked><span class="mode-icon" aria-hidden="true">◈</span><span>Rideshare</span><span class="checkmark" aria-hidden="true">✓</span></label>
+            </fieldset>
+            <p id="form-error" class="form-error" role="alert" hidden></p>
+            <button type="submit" class="primary-button">Show my Plan B <span aria-hidden="true">→</span></button>
+          </form>
+          <p class="setting-note">Estimates, service names and prices are invented for this demonstration. Nothing is monitored or booked.</p>
+        </aside>
+
+        <section class="results-panel" id="results" aria-labelledby="results-title">
+          <div class="results-head">
+            <div><div class="panel-topline"><span class="step-number">02</span><span>YOUR OPTIONS</span></div><h2 id="results-title" tabindex="-1">Find your next move</h2></div>
+            <span class="updated-pill" id="result-count">3 prepared options</span>
+          </div>
+
+          <div class="disruption-banner" role="status"><span class="disruption-icon" aria-hidden="true">!</span><div><strong>Bus 412 is cancelled in this scenario</strong><p>It is 8:20 am at Taringa Station. Your arrival deadline is <span id="banner-deadline">9:00 am</span>.</p></div></div>
+
+          <div class="results-toolbar"><div><strong id="fit-summary" role="status">1 option fits your limits</strong><span id="fit-caption">Options that fit appear first. Every option stays visible.</span></div><label class="sort-control" for="sort-by">Then sort by <select id="sort-by"><option value="arrival">Earliest arrival</option><option value="cost">Lowest extra cost</option><option value="walking">Least walking</option></select></label></div>
+
+          <div id="no-match" class="no-match" hidden><span aria-hidden="true">◇</span><div><strong>No prepared option fits every limit.</strong><p>You can adjust your limits or inspect an option that falls outside them. Your deadline stays as you set it.</p></div></div>
+
+          <div id="option-list" class="option-list"></div>
+          <p class="source-footnote">Prepared estimates begin at 8:20 am and include walking, waiting, travel and the final walk to the UQ St Lucia destination. Extra cost means added spending from that point, not the full fare; the $0 waiting option assumes no additional payment in this invented scenario. Arrival is an estimate, not a promise.</p>
+        </section>
+      </div>
+
+      <section class="next-step" id="next-step" aria-labelledby="next-step-title" hidden>
+        <div><div class="panel-topline"><span class="step-number">03</span><span>YOUR NEXT STEP</span></div><h2 id="next-step-title">Your selected route</h2><p id="selected-summary"></p></div>
+        <div class="next-step-body"><ol id="step-list"></ol><div class="verify-card"><span aria-hidden="true">↗</span><h3>Before you travel</h3><p id="verify-copy">These are fictional instructions. Check actual services and directions in an official journey planner.</p><a href="https://translink.com.au/plan-your-journey" target="_blank" rel="noopener noreferrer">Check public transport at Translink <span aria-hidden="true">↗</span></a></div></div>
+      </section>
+    </main>
+
+    <footer class="site-footer"><span>PLAN B · STUDENT MVP DEMONSTRATION</span><span>Scenario data only · No live routes or alerts</span></footer>
+  </div>
+</body>
+</html>
