@@ -117,7 +117,7 @@ def _post_json(url, key, body, field_mask, timeout=18):
 
 
 def _get_json(url, timeout=15):
-    request = Request(url, headers={"User-Agent": "PlanB-student-MVP"})
+    request = Request(url, headers={"User-Agent": "Reroute-student-MVP"})
     with urlopen(request, timeout=timeout) as response:
         return json.load(response)
 

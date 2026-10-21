@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Plan B">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Reroute">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#6D70F5"/>
@@ -9,7 +9,7 @@
   <!-- The planned direct route, broken by a disruption -->
   <path d="M16 48 L48 16" fill="none" stroke="#fff" stroke-opacity=".38" stroke-width="4" stroke-linecap="round" stroke-dasharray="1 7"/>
   <path d="M28.5 31.5l7 7M35.5 31.5l-7 7" stroke="#FCA5A5" stroke-width="3.6" stroke-linecap="round"/>
-  <!-- Plan B: the route that curves around it -->
+  <!-- Reroute: the route that curves around it -->
   <path d="M16 48 C16 30 27 18 45 18" fill="none" stroke="#fff" stroke-width="5.2" stroke-linecap="round"/>
   <circle cx="16" cy="48" r="5" fill="#34D399" stroke="#fff" stroke-width="2.6"/>
   <circle cx="47" cy="17" r="6" fill="#fff"/>

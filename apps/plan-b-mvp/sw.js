@@ -1,7 +1,7 @@
-/* Plan B service worker: offline app shell, network-first API reads, and Web Push notifications. */
+/* Reroute service worker: offline app shell, network-first API reads, and Web Push notifications. */
 "use strict";
 
-const VERSION = "planb-v3-1";
+const VERSION = "planb-reroute-1"; // keep the planb- prefix: activate() deletes older planb- caches
 const SHELL = ["/", "/app.css", "/app.js", "/favicon.svg", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
@@ -46,15 +46,15 @@ async function cacheFirst(req, url) {
   const hit = await cache.match(key, { ignoreSearch: true });
   const refresh = fetch(req).then((res) => { if (res.ok && (req.mode !== "navigate" || url.pathname === "/")) cache.put(key, res.clone()); return res; }).catch(() => null);
   if (hit) { refresh.catch(() => {}); return hit; }
-  return (await refresh) || new Response("Plan B is offline and this page has not been saved yet.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  return (await refresh) || new Response("Reroute is offline and this page has not been saved yet.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } });
 }
 
 self.addEventListener("push", (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch { data = { body: event.data ? event.data.text() : "" }; }
-  const title = data.title || "Plan B";
+  const title = data.title || "Reroute";
   event.waitUntil(self.registration.showNotification(title, {
-    body: data.body || "There is a disruption on your trip. Open Plan B for alternatives.",
+    body: data.body || "There is a disruption on your trip. Open Reroute for alternatives.",
     tag: data.tag || "planb",
     icon: "/icons/icon-192.png",
     badge: "/icons/icon-192.png",

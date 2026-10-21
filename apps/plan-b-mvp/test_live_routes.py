@@ -123,8 +123,15 @@ class ValidationTests(unittest.TestCase):
     def test_no_travel_mode_is_rejected(self):
         self.assert_invalid(modes={"transit": False, "drive": False, "rideshare": False})
 
-    def test_planb_without_deadline_is_rejected(self):
-        self.assert_invalid(deadline="")
+    def test_deadline_is_optional(self):
+        journey = validate({**PAYLOAD, "deadline": ""}, NOW)
+        self.assertIsNone(journey["deadline"])
+
+    def test_the_removed_planb_search_type_becomes_a_regular_search(self):
+        self.assertEqual(validate({**PAYLOAD, "purpose": "planb"}, NOW)["purpose"], "regular")
+
+    def test_an_unknown_search_type_is_rejected(self):
+        self.assert_invalid(purpose="disrupted")
 
     def test_unknown_fuel_type_is_rejected(self):
         self.assert_invalid(vehicle={"fuel_type": "UNICORN"})

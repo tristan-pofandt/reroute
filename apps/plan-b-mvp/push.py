@@ -249,7 +249,7 @@ class Push:
         if not entry:
             raise PushError("Turn on notifications for a trip first.", 404)
         label = entry["watch"]["label"] or (entry["watch"]["lines"] or ["your trip"])[0]
-        payload = {"title": f"Simulated disruption on {label}", "body": "This is a test of Plan B notifications. Tap to see your alternatives.",
+        payload = {"title": f"Simulated disruption on {label}", "body": "This is a test of Reroute notifications. Tap to see your alternatives.",
                    "url": f"/?alternatives={identifier}", "tag": "planb-test", "simulated": True}
         if delay_s == 0:
             self._send(identifier, entry, payload)

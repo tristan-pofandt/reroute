@@ -178,7 +178,7 @@ class Traffic:
 
     @staticmethod
     def _download(url):
-        request = Request(url, headers={"User-Agent": "PlanB-student-MVP", "Accept": "application/json"})
+        request = Request(url, headers={"User-Agent": "Reroute-student-MVP", "Accept": "application/json"})
         with urlopen(request, timeout=15) as response:
             return json.load(response)
 

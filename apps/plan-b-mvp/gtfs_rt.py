@@ -1,7 +1,7 @@
 """Read Translink SEQ GTFS-Realtime alerts and trip delays without a protobuf dependency.
 
 GTFS-Realtime feeds are Protocol Buffers. Only the small part of the published
-schema that Plan B needs is decoded here: service alerts (cause, effect, text,
+schema that Reroute needs is decoded here: service alerts (cause, effect, text,
 active period and affected routes) and trip updates (route, cancellation and delay).
 """
 
@@ -95,7 +95,7 @@ def _text(translated):
     return texts[0][1] if texts else ""
 
 
-# ── Decoders for the parts of the schema Plan B uses ────────────────────────────
+# ── Decoders for the parts of the schema Reroute uses ────────────────────────────
 
 def decode_alerts(feed):
     alerts = []
@@ -412,7 +412,7 @@ class Monitor:
 
     @staticmethod
     def _download(name):
-        request = Request(FEED_BASE + name, headers={"User-Agent": "PlanB-student-MVP"})
+        request = Request(FEED_BASE + name, headers={"User-Agent": "Reroute-student-MVP"})
         try:
             with urlopen(request, timeout=20) as response:
                 return response.read()

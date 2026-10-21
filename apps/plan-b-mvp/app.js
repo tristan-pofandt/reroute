@@ -1,4 +1,4 @@
-/* Plan B MVP v3 — mobile-first front end. Plain JavaScript, no build step. */
+/* Reroute (formerly Plan B MVP v3) — mobile-first front end. Plain JavaScript, no build step. */
 "use strict";
 
 // ── Icons: Lucide-style, 24 px grid, 1.75 stroke, round caps (icons under 16 px get a slightly heavier stroke) ─────────────
@@ -82,6 +82,11 @@ const I = {
   bell: (s) => svg('<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>', s),
   flask: (s) => svg('<path d="M10 2v7.31L4.5 19a2 2 0 0 0 1.74 3h11.52a2 2 0 0 0 1.74-3L14 9.31V2M8.5 2h7M7 16h10"/>', s),
   play: (s) => svg('<polygon points="6 3 20 12 6 21 6 3"/>', s),
+  // Saved places, impact
+  star: (s) => svg('<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>', s),
+  edit: (s) => svg('<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/>', s),
+  trash: (s) => svg('<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>', s),
+  flame: (s) => svg('<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>', s),
 };
 const WX_ICON = { sun: I.sun, moon: I.moon, "cloud-sun": I.cloudSun, cloud: I.cloud, fog: I.fog, drizzle: I.drizzle, rain: I.rain, storm: I.storm, snow: I.snow, wind: I.wind, heat: I.heat };
 const WX_TONE = { sun: "var(--warning)", moon: "var(--violet)", "cloud-sun": "var(--warning)", cloud: "var(--text-muted)", fog: "var(--text-muted)", drizzle: "var(--accent)", rain: "var(--accent)", storm: "var(--violet)", snow: "var(--teal)", wind: "var(--teal)", heat: "var(--error)" };
@@ -115,18 +120,44 @@ const DEFAULT_SETTINGS = {
   parking_cost: null, use_flat_fare: true, flat_fare: 0.5,
   budget: 10, walking: 15,
   show: { buffer: true, cost: true, walking: true, transfers: true, elevation: true, co2: true, parking: true, realtime: true },
-  places: { home: "", work: "The University of Queensland, St Lucia QLD 4072" },
-  place_ids: { home: null, work: null },
   watch: true, voice: false,
   factors: { bus: 0.105, rail: 0.035, tram: 0.029, ferry: 0.019 },
+  co2_goal_kg: 10,
 };
+
+// Saved places: Home and Work/Uni always exist (edit the address, cannot be deleted); up to MAX_CUSTOM_PLACES more can be added.
+// The storage keys stay "planb.*" so existing saved data keeps working.
+const FIXED_PLACES = [["home", "Home"], ["work", "Work/Uni"]];
+const DEFAULT_WORK = "The University of Queensland, St Lucia QLD 4072";
+const MAX_CUSTOM_PLACES = 10;
+const PLACE_NAME_MAX = 30;
+const PLACE_ADDRESS_MAX = 200;
+
+// Builds settings.saved_places. Older versions stored settings.places and settings.place_ids (Home and Work only); those values are carried over, nothing is dropped.
+function migratePlaces(saved) {
+  const clean = (p) => ({ id: String(p.id).slice(0, 40), name: String(p.name ?? "").slice(0, PLACE_NAME_MAX), address: String(p.address ?? "").slice(0, PLACE_ADDRESS_MAX), place_id: typeof p.place_id === "string" ? p.place_id : null });
+  const list = (Array.isArray(saved.saved_places) ? saved.saved_places : []).filter((p) => p && p.id).map(clean);
+  const fixed = FIXED_PLACES.map(([id, name]) => {
+    const kept = list.find((p) => p.id === id);
+    if (kept) return { ...kept, name };
+    const legacy = saved.places?.[id];
+    return { id, name, address: typeof legacy === "string" ? legacy.slice(0, PLACE_ADDRESS_MAX) : id === "work" ? DEFAULT_WORK : "", place_id: saved.place_ids?.[id] || null };
+  });
+  return [...fixed, ...list.filter((p) => !FIXED_PLACES.some(([id]) => id === p.id) && p.name.trim()).slice(0, MAX_CUSTOM_PLACES)];
+}
 
 function loadSettings() {
   const saved = store.get("settings", {});
   const merged = { ...DEFAULT_SETTINGS, ...saved };
-  for (const key of ["modes", "transit_modes", "show", "places", "place_ids", "factors"]) merged[key] = { ...DEFAULT_SETTINGS[key], ...(saved[key] || {}) };
+  for (const key of ["modes", "transit_modes", "show", "factors"]) merged[key] = { ...DEFAULT_SETTINGS[key], ...(saved[key] || {}) };
+  merged.saved_places = migratePlaces(saved);
+  delete merged.places;
+  delete merged.place_ids;
   return merged;
 }
+const savedPlace = (id) => settings.saved_places.find((p) => p.id === id);
+const customPlaces = () => settings.saved_places.filter((p) => !FIXED_PLACES.some(([id]) => id === p.id));
+const placeGlyph = (p) => (p.id === "home" ? "home" : p.id === "work" ? "pin" : "star");
 
 const DEMO_DEFAULT = { on: false, weather: "live", disrupted: "none", traffic: "live", late_min: 0, start: "preset", simulate: true };
 const settings = loadSettings();
@@ -140,17 +171,19 @@ const state = {
   demo: { ...DEMO_DEFAULT, ...store.get("demo", {}) }, costOpen: false, errorKind: "error",
   nav: null,
   sync: { loading: false, feedback: null, at: null },
-  purpose: "planb", form: null, plan: null, loading: false, error: null,
+  purpose: "regular", form: null, plan: null, loading: false, error: null,
   sort: "best", chosenId: null,
   watch: { lines: [], seen: new Set(), alert: null },
   panic: { phase: "ask", coords: null, locating: false, dest: "", by: "", error: null },
   rides: { mine: [], loading: false, error: null, joining: null },
-  dashTable: false, fuelPreview: null, fuelLoading: false,
+  dashTable: false, fuelPreview: null, fuelLoading: false, placeDraft: null,
 };
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const money = (v) => (v === null || v === undefined ? "Unknown" : `$${Number(v).toFixed(2).replace(/\.00$/, "")}`);
-const kg = (v) => (Math.abs(v) < 1 ? `${Math.round(v * 1000)} g` : `${v.toFixed(1)} kg`);
+const kg = (v) => (v === 0 ? "0 kg" : Math.abs(v) < 1 ? `${Math.round(v * 1000)} g` : `${v.toFixed(1)} kg`);
+// Header and goal figures read better in kilograms throughout ("0.4 kg", "0 kg").
+const kgShort = (v) => (v > 0 ? `${v < 0.1 ? "<0.1" : +v.toFixed(1)} kg` : "0 kg");
 const timeOf = (iso) => new Intl.DateTimeFormat("en-AU", { timeZone: "Australia/Brisbane", hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(iso)).replace(" ", " ");
 const dateLabel = (iso) => new Intl.DateTimeFormat("en-AU", { timeZone: "Australia/Brisbane", weekday: "short", day: "numeric", month: "short" }).format(new Date(iso));
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -220,8 +253,8 @@ function notice(text, kind = "warning") {
 const skelLines = (label, ...widths) => `<div class="skel-stack" role="status" aria-label="${esc(label)}">${widths.map((w, i) => `<div class="skeleton skel-line${i ? " sm" : ""} w-${w}"></div>`).join("")}</div>`;
 const skelBar = (label, width = 72) => `<span class="skeleton skel-line" style="width:${width}px;margin:0" aria-hidden="true"></span><span class="visually-hidden">${esc(label)}</span>`;
 const skeletonCard = () => `<div class="skel-card" aria-hidden="true"><div class="skel-head"><div class="skeleton skel-tile"></div><div><div class="skeleton skel-line w-60"></div><div class="skeleton skel-line sm w-40"></div></div></div><div class="skeleton skel-block"></div><div class="skeleton skel-line w-80"></div><div class="skeleton skel-line sm w-60"></div></div>`;
-function stepper(field, value, display, min, max) {
-  return `<div class="stepper" role="group" aria-label="${esc(field)}">
+function stepper(field, value, display, min, max, label = field) {
+  return `<div class="stepper" role="group" aria-label="${esc(label)}">
     <button data-action="step" data-field="${field}" data-delta="-1" ${value <= min ? "disabled" : ""} aria-label="Decrease">${I.minus()}</button>
     <output aria-live="polite">${display}</output>
     <button data-action="step" data-field="${field}" data-delta="1" ${value >= max ? "disabled" : ""} aria-label="Increase">${I.plus()}</button></div>`;
@@ -235,6 +268,37 @@ function segmented(name, value, choices, action = "segment") {
     <span class="thumb" style="width:calc((100% - 4px) / ${choices.length});transform:translateX(${index * 100}%)"></span>
     ${choices.map(([v, label]) => `<button data-action="${action}" data-name="${name}" data-value="${v}" aria-pressed="${v === value}">${esc(label)}</button>`).join("")}</div>`;
 }
+
+// ── Clear (x) buttons on text inputs ─────────────────────────────────────────
+// One helper covers every text, search and address input. enhanceClear(root) wraps each such input once and adds the button right after the HTML is
+// inserted (before focus is restored, so nothing loses focus). CSS shows the button only while the input has text (:placeholder-shown), so typing,
+// autocomplete picks and re-renders need no extra code. The click is handled by the delegated "clear-input" action.
+
+const CLEARABLE = 'input[type="text"], input[type="search"], input:not([type])';
+function enhanceClear(root) {
+  root.querySelectorAll(CLEARABLE).forEach((input) => {
+    if (input.dataset.clr || input.readOnly || input.disabled) return;
+    input.dataset.clr = "1";
+    input.classList.add("clr-input");
+    if (!input.placeholder) input.placeholder = " ";
+    const name = (input.getAttribute("aria-label") || input.labels?.[0]?.textContent || input.placeholder || "text").trim() || "text";
+    const wrap = document.createElement("span");
+    wrap.className = "clr-wrap";
+    input.replaceWith(wrap);
+    wrap.append(input);
+    wrap.insertAdjacentHTML("beforeend", `<button type="button" class="clr" data-action="clear-input" aria-label="Clear ${esc(name)}"><span class="clr-dot">${I.x(12)}</span></button>`);
+  });
+}
+// Empties the field, tells the app (the shared input handler resets stored place IDs and state), keeps focus in the field and closes the suggestions.
+function clearInput(button) {
+  const input = button.closest(".clr-wrap")?.querySelector("input");
+  if (!input) return;
+  input.focus({ preventScroll: true });
+  input.value = "";
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  autocomplete.close();
+}
+document.addEventListener("mousedown", (event) => { if (event.target.closest?.(".clr")) event.preventDefault(); });
 
 // ── Weather ──────────────────────────────────────────────────────────────────
 
@@ -324,7 +388,7 @@ function costLine() {
 // Screens
 // ══════════════════════════════════════════════════════════════════════════════
 
-// The Plan B mark: the direct route is broken, Plan B curves around it.
+// The Reroute mark: the direct route is broken, and the route curves around it.
 function logo(size = 40, id = "lg") {
   return `<svg width="${size}" height="${size}" viewBox="0 0 64 64" aria-hidden="true">
     <defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6D70F5"/><stop offset="1" stop-color="#4F46E5"/></linearGradient></defs>
@@ -361,7 +425,7 @@ function heroArt() {
   </svg>`;
 }
 
-function homeHero(alertCount, impact) {
+function homeHero(alertCount) {
   const live = state.alertsError ? `<span class="banner-chip">${I.signal(14)}Live alerts unavailable</span>`
     : !state.alerts ? `<span class="skeleton skel-chip" role="status" aria-label="Checking Translink alerts"></span>`
     : `<button class="banner-chip" data-action="open-alerts"><span class="live-dot"></span>Translink live · ${plural(alertCount, "alert")}</button>`;
@@ -370,13 +434,9 @@ function homeHero(alertCount, impact) {
       ${heroArt()}
       <div class="hero-copy">
         <p class="eyebrow">${greeting()}</p>
-        <h1 id="hero-title">When your journey goes wrong, <em>what now?</em></h1>
+        <h1 id="hero-title">Go greener. <em>Reroute</em> when plans break.</h1>
       </div>
-      <div class="hero-chips">
-        ${live}
-        ${impact.co2 > 0 ? `<button class="banner-chip" data-action="go" data-screen="dashboard">${I.leaf(14)}${kg(impact.co2)} CO₂ avoided this month</button>`
-          : `<button class="banner-chip" data-action="start" data-purpose="regular">${I.leaf(14)}Plan a greener trip</button>`}
-      </div>
+      <div class="hero-chips">${live}</div>
     </section>`;
 }
 
@@ -393,6 +453,11 @@ function syncCardInner() {
 const syncCard = () => `<div class="sync-card" data-sync>${syncCardInner()}</div>`;
 const renderSync = () => { const el = currentPage?.querySelector("[data-sync]"); if (el) el.innerHTML = syncCardInner(); };
 
+// Header Impact button: this month's CO₂ avoided, straight to the dashboard.
+function impactButton(impact) {
+  return `<button class="impact-btn" data-action="go" data-screen="dashboard" aria-label="Impact Dashboard: ${kgShort(impact.co2)} CO₂ avoided this month">${I.leaf(18)}<span>${kgShort(impact.co2)}</span></button>`;
+}
+
 function homeScreen() {
   const live = state.status?.live_available;
   const alerts = (state.alerts?.alerts || []).filter((a) => a.disruptive);
@@ -400,19 +465,19 @@ function homeScreen() {
   const myRides = state.rides.mine.length;
   return `
     <div class="scroll tight">
-      <div class="home-top"><span class="brand">${logo(36, "lg-home")}<span class="wordmark">Plan<span>B</span></span></span><div class="home-actions"><button class="icon-btn${demoOn() ? " on" : ""}" data-action="open-demo" aria-label="Demo mode">${I.flask(20)}</button>${gearButton()}</div></div>
-      ${homeHero(alerts.length, impact)}
-      <button class="panic-btn" data-action="go" data-screen="panic">
-        <span class="panic-icon">${I.bolt(24)}</span>
-        <span><strong>Panic mode</strong><small>Get me there now. One answer, no decisions.</small></span>
+      <div class="home-top"><span class="brand">${logo(36, "lg-home")}<span class="wordmark"><span>Re</span>route</span></span>${impactButton(impact)}<div class="home-actions"><button class="icon-btn${demoOn() ? " on" : ""}" data-action="open-demo" aria-label="Demo mode">${I.flask(20)}</button>${gearButton()}</div></div>
+      ${homeHero(alerts.length)}
+      <button class="interactive-element primary trip-btn" data-action="start" data-purpose="regular">
+        <span class="trip-icon">${I.route(24)}</span>
+        <span class="trip-text"><strong>Plan a trip</strong><small>Everyday routes, public transport first</small></span>
+        <span class="chev">${I.arrowRight(18)}</span>
       </button>
-      ${weatherCard()}
-      <p class="section-header">Plan</p>
-      <div class="group"><div class="group-card">
-        <button class="row lg" data-action="start" data-purpose="planb"><span class="row-icon" style="--tone:var(--warning)">${I.alert(20)}</span><span class="row-label">My journey is disrupted<small>Compare alternatives against your deadline</small></span><span class="chev">${I.chevronRight()}</span></button>
-        <button class="row lg" data-action="start" data-purpose="regular"><span class="row-icon" style="--tone:var(--success)">${I.leaf(20)}</span><span class="row-label">Plan a trip<small>Everyday routes, public transport first</small></span><span class="chev">${I.chevronRight()}</span></button>
-      </div></div>
+      <button class="panic-btn" data-action="go" data-screen="panic" aria-label="Journey disrupted? Get the fastest working way there now. One answer, no decisions.">
+        <span class="panic-icon">${I.bolt(24)}</span>
+        <span><strong>Journey disrupted?</strong><small>Get the fastest working way there now — one answer, no decisions.</small></span>
+      </button>
       <p class="section-header">Right now</p>
+      ${weatherCard()}
       <button class="tile-card" data-action="open-alerts">
         <div class="tile-head"><h3>${state.alerts ? `<span class="live-dot"></span>` : ""}Translink right now</h3>${I.chevronRight()}</div>
         ${state.alertsError ? `<p class="hint">${esc(state.alertsError)}</p>`
@@ -437,7 +502,7 @@ function homeScreen() {
       </button>
       <p class="section-header">Get the app</p>
       <div class="group"><div class="group-card">
-        ${canInstall() ? `<button class="row" data-action="install"><span class="row-icon" style="--tone:var(--accent)">${I.download(18)}</span><span class="row-label">Install Plan B<small>Add it to your home screen for background alerts</small></span><span class="chev">${I.chevronRight()}</span></button>` : ""}
+        ${canInstall() ? `<button class="row" data-action="install"><span class="row-icon" style="--tone:var(--accent)">${I.download(18)}</span><span class="row-label">Install Reroute<small>Add it to your home screen for background alerts</small></span><span class="chev">${I.chevronRight()}</span></button>` : ""}
         <button class="row" data-action="open-share"><span class="row-icon" style="--tone:var(--teal)">${I.qr(18)}</span><span class="row-label">Share this app<small>QR code and link for friends and testers</small></span><span class="chev">${I.chevronRight()}</span></button>
       </div></div>
       ${live === false ? notice("Live search is off: no Google Maps API key was found on the server. See the README.", "error") : ""}
@@ -448,21 +513,19 @@ function homeScreen() {
 function placeChips(field) {
   const chips = [];
   if (field === "origin") chips.push(`<button class="chip" data-action="use-location">${I.locate(14)}Current location</button>`);
-  if (settings.places.home) chips.push(`<button class="chip" data-action="fill-place" data-field="${field}" data-place="home">${I.home(14)}Home</button>`);
-  if (settings.places.work) chips.push(`<button class="chip" data-action="fill-place" data-field="${field}" data-place="work">${I.pin(14)}Work/Uni</button>`);
+  settings.saved_places.filter((p) => p.address).forEach((p) => chips.push(`<button class="chip" data-action="fill-place" data-field="${field}" data-place="${esc(p.id)}">${I[placeGlyph(p)](14)}${esc(p.name)}</button>`));
   return chips.length ? `<div class="place-chips">${chips.join("")}</div>` : "";
 }
 
 function journeyScreen() {
   const f = state.form;
-  const planB = state.purpose === "planb";
   const modes = [settings.modes.transit && "Public transport", settings.modes.drive && "My car", settings.modes.rideshare && "Uber"].filter(Boolean).join(", ") || "None";
   return `
     ${navbar("Home", gearButton())}
     <div class="scroll">
-      <p class="eyebrow">${planB ? "Disrupted journey" : "Plan a trip"}</p>
-      <h2 class="large-title">${planB ? "Where do you need to be?" : "Where are you going?"}</h2>
-      <p class="subtitle">${planB ? "Tell us your deadline. We'll find what still gets you there, using live Translink alerts." : "Public transport options come first, with the true cost of driving alongside."}</p>
+      <p class="eyebrow">Plan a trip</p>
+      <h2 class="large-title">Where are you going?</h2>
+      <p class="subtitle">Public transport options come first, with the true cost of driving and the CO₂ you avoid alongside.</p>
       <p class="section-header">Journey</p>
       <div class="group"><div class="group-card">
         <div class="row field-row"><span class="row-icon" style="--tone:var(--success)">${I.walk(18)}</span><div class="place-input"><label for="f-origin">From</label><input id="f-origin" type="text" data-field="origin" ${acAttrs("form.origin")} value="${esc(f.origin)}" placeholder="Address, stop or place" autocomplete="off"></div></div>
@@ -474,18 +537,14 @@ function journeyScreen() {
       <div class="group"><div class="group-card">
         <div class="row"><span class="row-icon" style="--tone:var(--accent)">${I.clock(18)}</span><span class="row-label">Leave now</span>${toggle("form.leave_now", f.leave_now, "Leave now")}</div>
         ${f.leave_now ? "" : row(I.clock(18), "var(--violet)", "Leave at", `<input type="datetime-local" data-field="departure" value="${esc(f.departure)}" aria-label="Departure time">`)}
-        ${row(I.hourglass(18), "var(--warning)", planB ? "Arrive by" : "Arrive by <small>Optional</small>", `<input type="datetime-local" data-field="deadline" value="${esc(f.deadline)}" aria-label="Arrival deadline">`)}
+        ${row(I.hourglass(18), "var(--warning)", "Arrive by <small>Optional</small>", `<input type="datetime-local" data-field="deadline" value="${esc(f.deadline)}" aria-label="Arrival deadline">`)}
       </div>
-      <p class="group-footer">Brisbane time.${planB ? "" : " Leave the deadline empty to just see the options."}</p></div>
+      <p class="group-footer">Brisbane time. Leave the deadline empty to just see the options.</p></div>
       <p class="section-header">Limits</p>
       <div class="group"><div class="group-card">
         ${row(I.dollar(18), "var(--success)", "Max cost", stepper("budget", f.budget, `$${f.budget}`, 0, 200))}
         ${row(I.walk(18), "var(--accent)", "Max walking", stepper("walking", f.walking, `${f.walking} min`, 0, 60))}
       </div></div>
-      ${planB ? `<p class="section-header">What was disrupted? (optional)</p>
-      <div class="group"><div class="group-card">
-        <div class="row field-row"><span class="row-icon" style="--tone:var(--error)">${I.alert(18)}</span><div class="place-input"><input type="text" data-field="avoid" value="${esc(f.avoid)}" placeholder="Bus or train line, e.g. 412" aria-label="Disrupted service"></div></div>
-      </div><p class="group-footer">Routes using this service are flagged. Live Translink alerts are checked automatically.</p></div>` : ""}
       <div class="group"><div class="group-card">
         <button class="row" data-action="open-settings"><span class="row-icon" style="--tone:var(--violet)">${I.route(18)}</span><span class="row-label">Ways to travel<small>${esc(modes)}</small></span><span class="chev">${I.chevronRight()}</span></button>
       </div></div>
@@ -493,7 +552,7 @@ function journeyScreen() {
     </div>
     <footer class="sticky">
       <button class="btn btn-primary${state.loading ? " is-loading" : ""}" data-action="search" ${state.loading || !state.status?.live_available ? "disabled" : ""} ${state.loading ? 'aria-busy="true"' : ""}>
-        ${state.loading ? skelBar("Checking routes and live services", 120) : planB ? "Find my Plan B" : "Show routes"}
+        ${state.loading ? skelBar("Checking routes and live services", 120) : "Show routes"}
       </button>
     </footer>`;
 }
@@ -541,11 +600,46 @@ function parkingFact(o) {
   return `<span class="fact ${cls}">${I.parking(14)}${esc(o.parking_note)}</span>`;
 }
 
-function ecoFact(o) {
-  if (!state.plan?.baseline || o.co2_kg === undefined) return "";
+// ── CO₂ on results ───────────────────────────────────────────────────────────
+// Every figure comes from the option's own estimate (co2_kg), the same journey driven alone (the plan's baseline) and the factors in Settings.
+
+const co2Known = (o) => o.co2_kg !== undefined && o.co2_kg !== null;
+// The option(s) with the lowest CO₂. Needs two or more estimates that are not all equal, so a badge always means something.
+function lowestCo2(options) {
+  const pool = options.filter(co2Known);
+  if (!pool.length) return null;
+  const min = Math.min(...pool.map((o) => o.co2_kg));
+  const ids = new Set(pool.filter((o) => o.co2_kg <= min + 0.005).map((o) => o.id));
+  const best = pool.filter((o) => ids.has(o.id)).sort((a, b) => new Date(a.arrival) - new Date(b.arrival))[0];
+  return { ids, best, badge: pool.length > 1 && ids.size < pool.length };
+}
+
+function co2Line(o) {
+  const base = state.plan?.baseline;
+  if (!co2Known(o)) return null;
   const saved = o.vs_drive?.co2_saved_kg;
-  if (o.mode !== "transit") return `<span class="fact">${I.leaf(14)}${kg(o.co2_kg)} CO₂</span>`;
-  return `<span class="fact ${saved > 0 ? "good" : ""}">${I.leaf(14)}${kg(o.co2_kg)} CO₂${saved > 0.05 ? ` · ${kg(saved)} less than driving` : ""}</span>`;
+  if (!base || saved === undefined || saved === null) return { tone: "", main: `${kg(o.co2_kg)} CO₂`, sub: o.mode === "drive" ? "Driving alone: the baseline the other options are compared with" : "" };
+  const sub = `${kg(o.co2_kg)} for this trip, against ${kg(base.co2_kg)} driving alone`;
+  if (saved > 0.05) return { tone: "good", main: `${kg(saved)} CO₂ less than driving`, sub };
+  if (saved < -0.05) return { tone: "warn", main: `${kg(-saved)} CO₂ more than driving`, sub };
+  return { tone: "", main: "About the same CO₂ as driving", sub };
+}
+
+function co2Block(o, lowest) {
+  const line = co2Line(o);
+  if (!line) return "";
+  return `<div class="co2-line ${line.tone}"><span class="co2-ic">${I.leaf(18)}</span><div class="co2-text"><b>${esc(line.main)}</b>${line.sub ? `<small>${esc(line.sub)}</small>` : ""}</div>${lowest?.badge && lowest.ids.has(o.id) ? `<span class="badge success solid">Lowest CO₂</span>` : ""}</div>`;
+}
+
+// One sentence above the cards: how much the greenest option saves compared with driving.
+function co2Summary(options) {
+  const base = state.plan?.baseline, lowest = lowestCo2(options);
+  if (!base || !lowest) return "";
+  const best = lowest.best, saved = base.co2_kg - best.co2_kg;
+  const text = best.mode === "drive" || saved <= 0.05
+    ? `Driving alone is already the lowest-CO₂ option for this trip (about ${kg(base.co2_kg)}).`
+    : `The greenest option, <b>${esc(best.title)}</b>, saves about ${kg(saved)} CO₂ compared with driving the same trip alone (${Math.round((saved / base.co2_kg) * 100)}% less).`;
+  return `<div class="co2-summary">${I.leaf(18)}<p>${text}</p></div>`;
 }
 
 function tradeoff(o) {
@@ -571,7 +665,7 @@ function badge(o) {
   return `<span class="badge ${hard ? "error" : "warning"}">${hard ? I.xCircle(12) : I.alert(12)}${hard ? (o.reasons[0].limit === "disruption" ? "Disrupted" : "Late") : "Check"}</span>`;
 }
 
-function optionCard(o, index, highlight) {
+function optionCard(o, index, highlight, lowest) {
   const show = settings.show;
   const icon = (KIND_ICON[o.kind] || I.route)(20);
   const b = bufferInfo(o);
@@ -579,7 +673,7 @@ function optionCard(o, index, highlight) {
   const walkOver = o.reasons.some((r) => r.limit === "walking");
   const facts = [
     show.realtime ? realtimeFact(o) : "", weatherFact(o), trafficFact(o), show.elevation ? climbFact(o) : "",
-    show.parking ? parkingFact(o) : "", show.co2 ? ecoFact(o) : "",
+    show.parking ? parkingFact(o) : "",
     o.vs_drive?.cost_saved > 0.5 && show.cost ? `<span class="fact good">${I.dollar(14)}Saves ${money(o.vs_drive.cost_saved)} vs driving</span>` : "",
   ].filter(Boolean).join("");
   const sub = [o.subtitle, o.mode === "transit" ? leaveLabel(o) : `${o.duration_minutes} min`, show.transfers && o.transfers ? plural(o.transfers, "transfer") : ""].filter(Boolean).join(" · ");
@@ -600,6 +694,7 @@ function optionCard(o, index, highlight) {
           ${show.buffer ? `<div class="buffer ${b.cls}">${b.text}</div>` : ""}</div>
           <div class="stats">${stats}</div>
         </div>
+        ${show.co2 ? co2Block(o, lowest) : ""}
         ${facts ? `<div class="facts">${facts}</div>` : ""}
         <p class="tradeoff">${esc(tradeoff(o))}</p>
       </button>
@@ -639,7 +734,7 @@ const ridesTile = (title, text) => `<button class="tile-card" data-action="go" d
 function resultsScreen() {
   const p = state.plan;
   const f = state.form;
-  const planB = p.purpose === "planb";
+  const avoiding = (f.avoid || "").trim();
   const options = sortedOptions();
   const fit = options.filter((o) => o.fits).length;
   const chips = `<div class="chips">
@@ -649,6 +744,7 @@ function resultsScreen() {
       ${state.alerts ? `<span class="chip live"><span class="live-dot"></span>Translink live</span>` : ""}
     </div>`;
   const sortChips = `<div class="chips" role="group" aria-label="Sort options">${SORTS.map(([v, label]) => `<button class="chip" data-action="sort" data-value="${v}" aria-pressed="${state.sort === v}">${esc(label)}</button>`).join("")}</div>`;
+  const lowest = lowestCo2(p.options);
   let body;
   if (state.loading) {
     body = `<div class="cards" role="status" aria-label="Finding options">${skeletonCard()}${skeletonCard()}${skeletonCard()}</div>`;
@@ -658,7 +754,8 @@ function resultsScreen() {
     const noneFit = !fit && p.deadline;
     body = (noneFit ? `<div class="empty-card"><div class="empty-icon">${I.alert(24)}</div><h3>No option meets all your limits</h3><p>Every option misses at least one limit. Each card says which one. Change a limit deliberately, or choose and verify.</p></div>` : "")
       + `<p class="why-rank">${esc(SORT_WHY[state.sort])}</p>`
-      + `<div class="cards">${options.map((o, i) => optionCard(o, i, i === 0 && o.fits ? "best" : "")).join("")}</div>`;
+      + (settings.show.co2 ? co2Summary(p.options) : "")
+      + `<div class="cards">${options.map((o, i) => optionCard(o, i, i === 0 && o.fits ? "best" : "", lowest)).join("")}</div>`;
   }
   const rides = p.rides?.length ? ridesTile(`${plural(p.rides.length, "shared ride")} heading your way`, "Share a car or split an Uber. It costs less for everyone and means fewer cars.")
     : ridesTile("Going this way with others?", "Offer spare seats or start a split Uber on the shared ride board.");
@@ -667,12 +764,13 @@ function resultsScreen() {
     ${navbar("Edit", gearButton())}
     <div class="scroll tight">
       ${chips}
-      <div class="heading-row"><div><p class="eyebrow">${planB ? "Plan B options" : "Routes"}</p><h2>${planB ? "Choose your Plan B" : "Your options"}</h2>
+      <div class="heading-row"><div><p class="eyebrow">Routes</p><h2>Your options</h2>
         ${state.loading ? `<div class="skeleton skel-line sm w-60" role="status" aria-label="Updating options" style="margin-top:8px"></div>` : `<p>${fit} of ${options.length} fit your limits</p>`}</div>
         <button class="icon-btn" data-action="map-overview" aria-label="Show all routes on a map">${I.route(20)}</button></div>
       ${sortChips}
       <div style="height:16px"></div>
       ${state.error ? notice(esc(state.error), state.errorKind) : ""}
+      ${avoiding ? notice(`Routes that use ${esc(avoiding)} are flagged because of the disruption.`, "info") : ""}
       ${costLine()}
       ${body}
       ${rides}
@@ -737,6 +835,7 @@ function sheetContent(o) {
       </div>
       ${explain}
       ${weather}
+      ${settings.show.co2 ? co2Block(o, lowestCo2(state.plan.options)) : ""}
       ${o.segments?.length ? mapBlock(o.id, legendFor(o)) : ""}
       <p class="section-header">Your limits</p>
       <div class="group"><div class="group-card">
@@ -771,6 +870,26 @@ function sheetContent(o) {
 
 // ── Next steps ───────────────────────────────────────────────────────────────
 
+// The trip's CO₂ saving, before logging (what you would add) and after (what you added and the new monthly total against the goal).
+const progressBar = (fraction) => `<div class="progress" role="progressbar" aria-label="Monthly CO₂ goal" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(Math.min(1, fraction) * 100)}"><span style="transform:scaleX(${Math.max(0.02, Math.min(1, fraction))})"></span></div>`;
+function impactPanel(o, logged) {
+  const month = impactTotals(thisMonthTrips()), goal = settings.co2_goal_kg;
+  const saved = o.vs_drive ? Math.max(0, o.vs_drive.co2_saved_kg) : 0;
+  if (logged) {
+    const entry = store.get("trips", []).find((t) => t.ref === tripRef(o));
+    const added = entry ? entry.co2_saved : saved;
+    return `<div class="impact-card done" role="status"><span class="impact-ic">${I.checkCircle(22)}</span><div>
+      <b>${added > 0.005 ? `${kg(added)} CO₂ avoided, added to your month` : "Trip added to your history"}</b>
+      <small>New total this month: <strong>${kg(month.co2)}</strong> of your ${goal} kg goal</small>${progressBar(month.co2 / goal)}</div></div>`;
+  }
+  if (saved > 0.05) {
+    return `<div class="impact-card"><span class="impact-ic">${I.leaf(22)}</span><div><b>Saves ${kg(saved)} CO₂ compared with driving</b>
+      <small>Add it to your month with “I'm taking this trip”. This month so far: ${kg(month.co2)} of your ${goal} kg goal.</small></div></div>`;
+  }
+  return `<div class="impact-card neutral"><span class="impact-ic">${I.leaf(22)}</span><div><b>${o.mode === "drive" ? "This is the driving baseline" : "No CO₂ saving compared with driving"}</b>
+    <small>${o.mode === "drive" ? "Logging it counts as a driving trip and does not add to your CO₂ total." : "Logging it records the trip without adding to your CO₂ total."}</small></div></div>`;
+}
+
 function nextScreen() {
   const o = findOption(state.chosenId);
   if (!o) return resultsScreen();
@@ -789,15 +908,16 @@ function nextScreen() {
     <div class="scroll">
       ${watchAlert ? `<div class="watch-banner" role="alert">${I.alert(20)}<div><p><b>New disruption on ${esc(watchAlert.lines.join(", "))}:</b> ${esc(watchAlert.header)}</p><button class="btn btn-primary" data-action="replan">See my alternatives</button></div></div>` : ""}
       <div class="confirm ${o.fits ? "" : "warn"}">
-        <p class="eyebrow">${o.fits ? I.checkCircle(16) : I.alert(16)}${o.fits ? "Plan B confirmed" : "Chosen, but outside your limits"}</p>
+        <p class="eyebrow">${o.fits ? I.checkCircle(16) : I.alert(16)}${o.fits ? "Route confirmed" : "Chosen, but outside your limits"}</p>
         <h2>${esc(o.title)}</h2>
         <div class="confirm-grid">
           <div><span>Arrival</span><b>${timeOf(o.arrival)}</b></div>
           <div><span>${state.plan.deadline ? "Buffer" : "Trip"}</span><b>${b.text}</b></div>
           <div><span>Cost</span><b>${o.cost_known ? money(o.cost) : "Unknown"}</b></div>
-          <div><span>CO₂ avoided vs driving</span><b>${o.vs_drive ? kg(Math.max(0, o.vs_drive.co2_saved_kg)) : "–"}</b></div>
+          <div><span>Distance</span><b>${o.distance_km ? `${o.distance_km} km` : "–"}</b></div>
         </div>
       </div>
+      ${impactPanel(o, logged)}
       ${o.weather_warning ? notice(`<b>Weather:</b> ${esc(o.weather_warning)}${state.plan.weather?.simulated ? " (Simulated)" : ""}`) : ""}
       ${o.traffic?.closure ? notice("<b>Road closure on this route.</b> Check the closure before you leave.", "error") : o.traffic?.added_delay_min ? notice(`<b>Traffic incidents:</b> about ${o.traffic.added_delay_min} min added${o.traffic.source === "Simulated" ? " (Simulated)" : ""}.`) : ""}
       <div class="actions">
@@ -810,9 +930,9 @@ function nextScreen() {
       </div>
       ${o.mode === "transit" ? `<div class="group"><div class="group-card">
         <div class="row"><span class="row-icon" style="--tone:var(--error)">${I.signal(18)}</span><span class="row-label">Watch for disruptions<small>Checks Translink every minute while this app is open</small></span>${toggle("watch", settings.watch, "Watch for disruptions")}</div>
-        <div class="row"><span class="row-icon" style="--tone:var(--accent)">${I.bell(18)}</span><span class="row-label">Watch this trip in the background<small>Get a notification even when Plan B is closed</small></span>${toggle("bg.watch", bgWatchActive(o), "Watch this trip in the background")}</div>
+        <div class="row"><span class="row-icon" style="--tone:var(--accent)">${I.bell(18)}</span><span class="row-label">Watch this trip in the background<small>Get a notification even when Reroute is closed</small></span>${toggle("bg.watch", bgWatchActive(o), "Watch this trip in the background")}</div>
         <div class="bg-slot" data-bg-slot>${bgSlotInner()}</div>
-      </div><p class="group-footer">Background alerts need HTTPS${isIos() ? ", and on iPhone Plan B must be added to your Home Screen first" : ""}. They are sent by this Plan B server.</p></div>` : ""}
+      </div><p class="group-footer">Background alerts need HTTPS${isIos() ? ", and on iPhone Reroute must be added to your Home Screen first" : ""}. They are sent by this Reroute server.</p></div>` : ""}
       <div class="section-live"><p class="section-header">Step-by-step</p>${hasLive(o) ? liveAge() : ""}</div>
       <div class="timeline">${steps}</div>
       ${o.segments?.length ? `<p class="section-header">Route map</p>${mapBlock(o.id, legendFor(o))}` : ""}
@@ -826,7 +946,7 @@ function nextScreen() {
 
 function panicScreen() {
   const pm = state.panic;
-  const top = `<div class="panic-top"><span class="panic-label">${I.bolt(14)}PANIC MODE</span><button class="panic-exit" data-action="exit-panic">Exit</button></div>`;
+  const top = `<div class="panic-top"><span class="panic-label">${I.bolt(14)}FASTEST WAY NOW</span><button class="panic-exit" data-action="exit-panic">Exit</button></div>`;
   if (pm.phase === "answer" && state.plan) {
     const o = findOption(state.plan.recommended_id);
     if (o) {
@@ -852,13 +972,13 @@ function panicScreen() {
       </div>`;
     }
   }
-  const chips = [settings.places.home && ["home", "Home"], settings.places.work && ["work", "Work/Uni"], store.get("lastDestination", "") && ["last", "Last place"]].filter(Boolean);
+  const chips = [...settings.saved_places.filter((p) => p.address).map((p) => [p.id, p.name]), store.get("lastDestination", "") && ["last", "Last place"]].filter(Boolean);
   return `${top}<div class="scroll">
-    <h1>Where do you need to be?</h1>
+    <h1>Journey disrupted?<span>Where do you need to be?</span></h1>
     ${pm.locating ? `<div class="lead">${skelLines("Finding your location", 60)}</div>` : `<p class="lead">${pm.coords ? "Using your current location." : demoOn() && state.demo.start === "preset" ? "Demo start point: Taringa Station." : "Location unavailable. Type where you are."}</p>`}
     ${pm.coords || pm.locating ? "" : `<div class="panic-field"><input class="panic-input" data-panic="origin" ${acAttrs("panic.origin")} placeholder="Where are you now?" value="${esc(pm.origin || "")}" aria-label="Where are you now"></div>`}
     <div class="panic-field"><input class="panic-input" data-panic="dest" ${acAttrs("panic.dest")} placeholder="Destination" value="${esc(pm.dest)}" aria-label="Destination"></div>
-    ${chips.length ? `<div class="panic-chips">${chips.map(([k, l]) => `<button class="panic-chip" data-action="panic-place" data-place="${k}">${esc(l)}</button>`).join("")}</div>` : ""}
+    ${chips.length ? `<div class="panic-chips">${chips.map(([k, l]) => `<button class="panic-chip" data-action="panic-place" data-place="${esc(k)}">${esc(l)}</button>`).join("")}</div>` : ""}
     <label class="panic-by">Need to be there by <input class="panic-input" type="time" data-panic="by" value="${esc(pm.by)}" aria-label="Deadline (optional)"></label>
     ${pm.error ? notice(esc(pm.error), pm.errorKind || "error") : ""}
     <button class="panic-go${pm.phase === "loading" ? " is-loading" : ""}" data-action="panic-go" ${pm.phase === "loading" ? 'disabled aria-busy="true"' : ""}>${pm.phase === "loading" ? skelBar("Finding the fastest safe option", 140) : "Get me there"}</button>
@@ -929,11 +1049,11 @@ function navNoticesHtml() {
   if (n.finished) return "";
   const cards = [];
   if (n.sim) cards.push(`<span class="badge info nav-sim">Simulated journey, not using GPS</span>`);
-  if (n.error === "denied") cards.push(`<div class="nav-card nav-notice">${notice("<b>Location is blocked.</b> Allow location for Plan B in your browser settings to follow your position. The steps below still work: tap Next step as you go.", "error")}${next}</div>`);
-  else if (n.error === "unsupported") cards.push(`<div class="nav-card nav-notice">${notice("This browser can't share its location, so Plan B can't follow you. The steps below still work.", "error")}${next}</div>`);
-  else if (n.error === "weak") cards.push(`<div class="nav-card nav-notice">${notice("GPS signal is weak. Plan B will keep trying.")}</div>`);
+  if (n.error === "denied") cards.push(`<div class="nav-card nav-notice">${notice("<b>Location is blocked.</b> Allow location for Reroute in your browser settings to follow your position. The steps below still work: tap Next step as you go.", "error")}${next}</div>`);
+  else if (n.error === "unsupported") cards.push(`<div class="nav-card nav-notice">${notice("This browser can't share its location, so Reroute can't follow you. The steps below still work.", "error")}${next}</div>`);
+  else if (n.error === "weak") cards.push(`<div class="nav-card nav-notice">${notice("GPS signal is weak. Reroute will keep trying.")}</div>`);
   else if (!n.pos) cards.push(`<div class="nav-card nav-skel" role="status" aria-label="Finding your location"><div class="skeleton skel-tile" style="width:48px;height:48px;border-radius:14px"></div><div><div class="skeleton skel-line w-60"></div><div class="skeleton skel-line sm w-40"></div></div></div>`);
-  if (n.off) cards.push(`<div class="nav-card nav-notice">${notice("<b>You're off the route.</b> Plan B can find a new way from where you are.")}<button class="btn btn-primary" data-action="nav-replan">${I.route(16)}Re-plan from here</button></div>`);
+  if (n.off) cards.push(`<div class="nav-card nav-notice">${notice("<b>You're off the route.</b> Reroute can find a new way from where you are.")}<button class="btn btn-primary" data-action="nav-replan">${I.route(16)}Re-plan from here</button></div>`);
   if (n.replanError) cards.push(`<div class="nav-card nav-notice">${notice(esc(n.replanError), "error")}</div>`);
   return cards.join("");
 }
@@ -1170,7 +1290,13 @@ async function navReplan() {
 // ── Impact dashboard ─────────────────────────────────────────────────────────
 
 const tripRef = (o) => `${state.plan?.queried_at}|${o.id}`;
-const thisMonthTrips = () => { const m = new Date().toISOString().slice(0, 7); return store.get("trips", []).filter((t) => t.date.slice(0, 7) === m); };
+
+// Months and weeks use Brisbane time (UTC+10, no daylight saving). Reading a shifted Date with the UTC getters gives the Brisbane wall-clock fields.
+const bneDate = (iso) => new Date(Date.parse(iso) + 10 * 3600000);
+const monthKeyOf = (iso) => bneDate(iso).toISOString().slice(0, 7);
+const thisMonthTrips = () => { const m = monthKeyOf(new Date().toISOString()); return store.get("trips", []).filter((t) => monthKeyOf(t.date) === m); };
+// Weeks run Monday to Sunday. 1 January 1970 was a Thursday, so (days + 3) / 7 starts a new week every Monday.
+const weekOf = (iso) => Math.floor((Math.floor(bneDate(iso).getTime() / 86400000) + 3) / 7);
 function impactTotals(trips) {
   return {
     co2: trips.reduce((s, t) => s + Math.max(0, t.co2_saved || 0), 0),
@@ -1183,15 +1309,46 @@ function impactTotals(trips) {
 function monthSeries() {
   const trips = store.get("trips", []);
   const months = [];
-  const now = new Date();
+  const now = bneDate(new Date().toISOString());
   for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const inMonth = trips.filter((t) => t.date.slice(0, 7) === key);
-    const totals = impactTotals(inMonth);
-    months.push({ key, label: d.toLocaleDateString("en-AU", { month: "short" }), ...totals });
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    const key = d.toISOString().slice(0, 7);
+    const totals = impactTotals(trips.filter((t) => monthKeyOf(t.date) === key));
+    months.push({ key, label: d.toLocaleDateString("en-AU", { month: "short", timeZone: "UTC" }), ...totals });
   }
   return months;
+}
+
+// Weekly streak: consecutive weeks (Monday to Sunday) with at least one logged trip and no logged trip by your own car. An empty current week
+// does not break the streak, but a driving trip logged this week does. Only trips logged in the app count.
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function weeklyStreak(trips) {
+  const weeks = new Map();
+  trips.forEach((t) => { const w = weekOf(t.date), e = weeks.get(w) || { n: 0, drove: 0 }; e.n++; if (t.mode === "drive") e.drove++; weeks.set(w, e); });
+  const current = weekOf(new Date().toISOString());
+  const clean = (w) => weeks.get(w)?.n > 0 && !weeks.get(w).drove;
+  let streak = 0, w = weeks.get(current)?.drove ? null : clean(current) ? current : current - 1;
+  while (w !== null && clean(w)) { streak++; w--; }
+  const recent = Array.from({ length: 8 }, (_, i) => {
+    const wk = current - 7 + i, e = weeks.get(wk);
+    const monday = new Date((wk * 7 - 3) * 86400000);
+    const label = `${monday.getUTCDate()} ${MONTHS[monday.getUTCMonth()]}`;
+    return { wk, label, state: !e ? "empty" : e.drove ? "drove" : "clean", n: e?.n || 0, now: wk === current };
+  });
+  return { streak, recent };
+}
+
+// Car emissions per km from the user's own Settings: litres per km times kg CO₂ per litre (the same factors the server uses for driving).
+const FUEL_CO2_PER_L = { DIESEL: 2.68, LPG: 1.51 };
+const PETROL_CO2_PER_L = 2.31;
+const carKgPerKm = () => (settings.fuel_l_per_100km / 100) * (FUEL_CO2_PER_L[settings.fuel_type] ?? PETROL_CO2_PER_L);
+const kmText = (km) => `${km >= 10 ? Math.round(km) : km > 0 ? km.toFixed(1) : 0} km`;
+
+const KIND_LABEL = { bus: "Bus", rail: "Train", tram: "Light rail", ferry: "Ferry", mixed: "Mixed public transport", rideshare: "Uber", car: "Driving", carpool: "Shared ride", walk: "Walking" };
+function modeBreakdown(trips) {
+  const by = new Map();
+  trips.forEach((t) => { const kind = t.kind || "mixed", e = by.get(kind) || { kind, trips: 0, co2: 0 }; e.trips++; e.co2 += Math.max(0, t.co2_saved || 0); by.set(kind, e); });
+  return [...by.values()].sort((a, b) => b.co2 - a.co2 || b.trips - a.trips);
 }
 
 function barChart(id, months, field, format, title, subtitle) {
@@ -1219,9 +1376,52 @@ function barChart(id, months, field, format, title, subtitle) {
     <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)} by month">${grid}${bars}</svg><div class="chart-tip"></div></div>`;
 }
 
+// Goal ring: a stroke-dasharray arc, drawn once (no looping or animated stroke).
+function goalRing(value, goal) {
+  const frac = goal > 0 ? Math.min(1, value / goal) : 0, R = 52, C = 2 * Math.PI * R;
+  return `<div class="ring-wrap"><svg class="ring" viewBox="0 0 128 128" role="img" aria-label="${kgShort(value)} of your ${goal} kg monthly goal">
+      <circle class="ring-track" cx="64" cy="64" r="${R}"/>
+      ${frac > 0 ? `<circle class="ring-bar${frac >= 1 ? " done" : ""}" cx="64" cy="64" r="${R}" stroke-dasharray="${(C * frac).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 64 64)"/>` : ""}</svg>
+    <div class="ring-center"><b>${Math.round(frac * 100)}%</b><span>of ${goal} kg</span></div></div>`;
+}
+
+function goalCard(monthCo2) {
+  const goal = settings.co2_goal_kg, left = Math.max(0, goal - monthCo2), reached = monthCo2 >= goal;
+  return `<section class="goal-card${reached ? " reached" : ""}" aria-labelledby="goal-title">
+    ${goalRing(monthCo2, goal)}
+    <div class="goal-text"><p class="eyebrow" id="goal-title">Monthly CO₂ goal</p>
+      <h3>${reached ? "Goal reached" : `${kgShort(left)} to go`}</h3>
+      <p>${kgShort(monthCo2)} avoided this month, against a goal of ${goal} kg.</p>
+      <button class="btn btn-text" data-action="open-settings">${I.gear(16)}Change goal</button></div></section>`;
+}
+
+function equivalentCard(monthCo2, allCo2) {
+  const perKm = carKgPerKm(), fuel = (state.status?.fuel_types || {})[settings.fuel_type] || settings.fuel_type;
+  return `<section class="equiv-card"><span class="equiv-ic">${I.car(22)}</span><div>
+    <p class="equiv-big">Equivalent to <b>${kmText(monthCo2 / perKm)}</b> not driven this month</p>
+    <p class="fine">${kmText(allCo2 / perKm)} not driven in total. Assumption: your car uses ${settings.fuel_l_per_100km} L/100 km of ${esc(fuel)} and each litre burned gives ${(FUEL_CO2_PER_L[settings.fuel_type] ?? PETROL_CO2_PER_L).toFixed(2)} kg of CO₂, so each km driven is about ${perKm.toFixed(3)} kg. This is an estimate from your Settings, not a measurement.</p></div></section>`;
+}
+
+function streakCard(trips) {
+  const { streak, recent } = weeklyStreak(trips);
+  const weekLabel = (w) => `Week of ${w.label}: ${w.state === "empty" ? "no trips logged" : w.state === "drove" ? `${plural(w.n, "trip")}, including driving` : `${plural(w.n, "trip")}, none by car`}`;
+  return `<section class="streak-card"><div class="streak-head"><span class="streak-ic${streak ? " on" : ""}">${I.flame(22)}</span>
+      <div><p class="eyebrow">Weekly streak</p><h3>${streak ? plural(streak, "week") : "No streak yet"}</h3></div></div>
+    <p class="hint">${streak ? `You have logged trips without driving your own car for ${plural(streak, "week")} in a row.` : "Log a trip that is not by your own car to start a streak. A week counts when you log at least one trip and none of them are by car."}</p>
+    <div class="streak-weeks" role="list" aria-label="Last eight weeks">${recent.map((w, i) => `<span class="wk ${w.state}${w.now ? " now" : ""}" role="listitem" aria-label="${esc(weekLabel(w))}"><i></i><small>${w.now ? "Now" : i % 2 ? w.label : ""}</small></span>`).join("")}</div>
+    <p class="fine">Only trips you log count. Uber and shared rides are counted as not driving your own car.</p></section>`;
+}
+
+function breakdownCard(trips) {
+  const rows = modeBreakdown(trips), total = rows.reduce((s, r) => s + r.co2, 0);
+  return `<p class="section-header">CO₂ avoided by mode</p><div class="group"><div class="group-card">${rows.map((r) => row((KIND_ICON[r.kind] || I.route)(16), SEGMENT_COLOUR[r.kind] || "var(--accent)",
+    `${esc(KIND_LABEL[r.kind] || r.kind)}<small>${plural(r.trips, "trip")} · ${total > 0 ? `${Math.round((r.co2 / total) * 100)}% of your CO₂ avoided` : "no CO₂ avoided"}</small><span class="share" aria-hidden="true"><i style="transform:scaleX(${total > 0 ? Math.max(0.02, r.co2 / total) : 0.02})"></i></span>`,
+    valueSpan(kgShort(r.co2), true))).join("")}</div><p class="group-footer">Each logged trip is compared with driving the same journey alone in your car.</p></div>`;
+}
+
 function dashboardScreen() {
   const all = store.get("trips", []);
-  const t = impactTotals(all);
+  const t = impactTotals(all), month = impactTotals(thisMonthTrips());
   const months = monthSeries();
   const share = t.trips ? Math.round((t.greenTrips / t.trips) * 100) : 0;
   const table = state.dashTable ? `<table class="data-table"><thead><tr><th>Month</th><th>Trips</th><th>CO₂ avoided</th><th>Saved</th></tr></thead><tbody>${months.map((m) => `<tr><td>${m.label}</td><td>${m.trips}</td><td>${kg(m.co2)}</td><td>${money(m.saved)}</td></tr>`).join("")}</tbody></table>` : "";
@@ -1233,14 +1433,18 @@ function dashboardScreen() {
       <h2 class="large-title">Your impact</h2>
       <p class="subtitle">Each trip you log is compared with driving the same journey alone in your car (fuel, tolls and parking where known).</p>
       <div class="kpis">
-        <div class="kpi lead"><span>CO₂ avoided</span><b>${kg(t.co2)}</b><small>all time</small></div>
+        <div class="kpi lead"><span>CO₂ avoided</span><b>${kg(t.co2)}</b><small>all time · ${kgShort(month.co2)} this month</small></div>
         <div class="kpi-row">
           <div class="kpi"><span>Saved</span><b>${money(t.saved)}</b><small>vs driving</small></div>
           <div class="kpi"><span>Low-car</span><b>${t.greenTrips}</b><small>of ${t.trips} logged</small></div>
           <div class="kpi"><span>Not driving</span><b>${share}%</b><small>of trips</small></div>
         </div>
       </div>
+      ${goalCard(month.co2)}
+      ${equivalentCard(month.co2, t.co2)}
+      ${streakCard(all)}
       ${all.length ? `
+        ${breakdownCard(all)}
         ${barChart("co2", months, "co2", (v, axis) => (axis ? `${v < 1 && v > 0 ? v.toFixed(1) : Math.round(v)}` : kg(v)), "CO₂ avoided per month", "kg CO₂, last six months")}
         ${barChart("saved", months, "saved", (v, axis) => (axis ? `$${Math.round(v)}` : money(v)), "Money saved per month", "Compared with driving, last six months")}
         <button class="btn btn-text" data-action="toggle-table">${state.dashTable ? "Hide table" : "Show as a table"}</button>
@@ -1287,9 +1491,9 @@ function ridesScreen() {
       <p class="section-header">${p ? `Heading from ${esc(p.origin)} towards ${esc(p.destination)}` : "Heading your way"}</p>
       ${!p ? `<div class="empty-card"><h3>Search a journey first</h3><p>We match rides by where you're starting, where you're going and when.</p></div>`
         : matches.length ? matches.map(rideCard).join("")
-        : `<div class="empty-card"><div class="empty-icon" style="--tone:var(--accent)">${I.users(24)}</div><h3>No shared rides yet</h3><p>Be the first. Anyone searching a similar trip on this Plan B server will see your post.</p></div>`}
+        : `<div class="empty-card"><div class="empty-icon" style="--tone:var(--accent)">${I.users(24)}</div><h3>No shared rides yet</h3><p>Be the first. Anyone searching a similar trip on this Reroute server will see your post.</p></div>`}
       ${p?.start && p?.end ? `<button class="btn btn-primary" data-action="open-ride-form" style="margin:8px 0 24px">Offer seats or start a split Uber</button>` : ""}
-      ${notice("Prototype: posts are visible to everyone using this Plan B server and expire 30 minutes after departure. Don't post phone numbers or exact addresses. Meet somewhere public and trust your judgement.")}
+      ${notice("Prototype: posts are visible to everyone using this Reroute server and expire 30 minutes after departure. Don't post phone numbers or exact addresses. Meet somewhere public and trust your judgement.")}
     </div>`;
 }
 
@@ -1309,6 +1513,75 @@ function rideFormSheet() {
       <p class="fine">Shared from your search: ${esc(p.origin)} ${I.arrowRight(12)} ${esc(p.destination)}. Only rounded start and end points (about 100 m) are stored.</p>
     </div></div>
     <div class="sheet-foot"><button class="btn btn-primary" data-action="ride-create">Post to the ride board</button></div>`;
+}
+
+// ── Saved place editor (opens above Settings) ────────────────────────────────
+
+function placeFoot() {
+  const d = state.placeDraft;
+  return `<button class="btn btn-primary" data-action="save-place">${d.isNew ? "Add place" : "Save changes"}</button>
+    ${d.isNew ? "" : `<button class="btn btn-secondary delete-btn${d.confirmDelete ? " confirm" : ""}" data-action="delete-place">${I.trash(16)}${d.confirmDelete ? "Tap again to delete" : "Delete place"}</button>`}`;
+}
+function placeSheet() {
+  const d = state.placeDraft;
+  return `<div class="grabber"><span></span></div>
+    <div class="sheet-head"><h3 id="sheet-title">${d.isNew ? "Add a place" : "Edit place"}</h3><button class="icon-btn" data-action="close-sheet" aria-label="Close">${I.x(18)}</button></div>
+    <div class="sheet-scroll">
+      <p class="hint" style="margin-bottom:16px">Give it a short name, like Gym or Mum's, and find its address. It will sit next to Home and Work/Uni when you plan a trip or tap Journey disrupted?.</p>
+      <div class="group"><div class="group-card">
+        <div class="row field-row"><span class="row-icon" style="--tone:var(--teal)">${I.star(18)}</span><input type="text" data-draft="name" maxlength="${PLACE_NAME_MAX}" value="${esc(d.name)}" placeholder="Name, e.g. Gym or Mum's" aria-label="Place name" autocomplete="off"></div>
+        <div class="row field-row"><span class="row-icon" style="--tone:var(--error)">${I.pin(18)}</span><input type="text" data-draft="address" ${acAttrs("draft.address")} value="${esc(d.address)}" placeholder="Address" aria-label="Place address"></div>
+      </div></div>
+      <div data-place-msg>${d.error ? notice(esc(d.error), "error") : ""}</div>
+    </div>
+    <div class="sheet-foot" data-place-foot>${placeFoot()}</div>`;
+}
+function openPlaceSheet() {
+  openSheet(placeSheet());
+  sheetEl.dataset.place = "1";
+  sheetEl.classList.add("above-settings");
+  if (state.placeDraft.isNew) sheetEl.querySelector('[data-draft="name"]')?.focus({ preventScroll: true });
+}
+const newPlaceId = () => `p${(crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}${Math.random().toString(16).slice(2)}`).replace(/[^A-Za-z0-9]/g, "").slice(0, 10)}`;
+function savePlace() {
+  const d = state.placeDraft;
+  if (!d) return;
+  const name = d.name.trim().slice(0, PLACE_NAME_MAX), address = d.address.trim().slice(0, PLACE_ADDRESS_MAX), key = name.toLowerCase();
+  const problem = !name ? "Give the place a name."
+    : address.length < 3 ? "Enter an address for this place."
+    : FIXED_PLACES.some(([, fixed]) => fixed.toLowerCase() === key) ? "Home and Work/Uni already exist. Choose a different name."
+    : customPlaces().some((p) => p.id !== d.id && p.name.toLowerCase() === key) ? "You already have a place with that name."
+    : d.isNew && customPlaces().length >= MAX_CUSTOM_PLACES ? `You can add up to ${MAX_CUSTOM_PLACES} places. Delete one first.` : null;
+  if (problem) {
+    d.error = problem;
+    const slot = sheetEl?.querySelector("[data-place-msg]");
+    if (slot) slot.innerHTML = notice(esc(problem), "error");
+    return;
+  }
+  const isNew = d.isNew;
+  if (isNew) settings.saved_places.push({ id: newPlaceId(), name, address, place_id: d.place_id || null });
+  else { const p = savedPlace(d.id); if (p) Object.assign(p, { name, address, place_id: d.place_id || null }); }
+  saveSettings();
+  closeSheet();
+  rerenderSettings();
+  toast(isNew ? `Added ${name}.` : `Saved ${name}.`);
+}
+// Two taps to delete: the first arms the button, the second removes the place.
+function deletePlace() {
+  const d = state.placeDraft;
+  if (!d || d.isNew) return;
+  if (!d.confirmDelete) {
+    d.confirmDelete = true;
+    const foot = sheetEl?.querySelector("[data-place-foot]");
+    if (foot) foot.innerHTML = placeFoot();
+    return;
+  }
+  settings.saved_places = settings.saved_places.filter((p) => p.id !== d.id);
+  saveSettings();
+  const name = d.name;
+  closeSheet();
+  rerenderSettings();
+  toast(`Deleted ${name}.`);
 }
 
 // ── Alerts sheet ─────────────────────────────────────────────────────────────
@@ -1392,9 +1665,10 @@ function settingsContent() {
 
       <p class="section-header">Saved places</p>
       <div class="group"><div class="group-card">
-        <div class="row field-row"><span class="row-icon" style="--tone:var(--accent)">${I.home(18)}</span><input type="text" data-setting-text="places.home" ${acAttrs("places.home")} value="${esc(s.places.home)}" placeholder="Home address" aria-label="Home address"></div>
-        <div class="row field-row"><span class="row-icon" style="--tone:var(--warning)">${I.pin(18)}</span><input type="text" data-setting-text="places.work" ${acAttrs("places.work")} value="${esc(s.places.work)}" placeholder="Work or uni" aria-label="Work or uni address"></div>
-      </div><p class="group-footer">Used by Panic mode and the quick-fill buttons. Stored only on this device.</p></div>
+        ${FIXED_PLACES.map(([id, name]) => `<div class="row field-row"><span class="row-icon" style="--tone:${id === "home" ? "var(--accent)" : "var(--warning)"}">${I[placeGlyph({ id })](18)}</span><span class="place-field"><span class="place-name" aria-hidden="true">${name}</span><input type="text" data-place-text="${id}" ${acAttrs(`places.${id}`)} value="${esc(savedPlace(id).address)}" placeholder="${id === "home" ? "Home address" : "Work or uni address"}" aria-label="${id === "home" ? "Home address" : "Work or uni address"}"></span></div>`).join("")}
+        ${customPlaces().map((p) => `<button class="row" data-action="edit-place" data-id="${esc(p.id)}" aria-label="Edit ${esc(p.name)}"><span class="row-icon" style="--tone:var(--teal)">${I.star(18)}</span><span class="row-label">${esc(p.name)}<small>${esc(p.address)}</small></span><span class="chev">${I.edit(16)}</span></button>`).join("")}
+        <button class="row" data-action="add-place" ${customPlaces().length >= MAX_CUSTOM_PLACES ? "disabled" : ""}><span class="row-icon" style="--tone:var(--success)">${I.plus(18)}</span><span class="row-label">Add a place<small>${customPlaces().length >= MAX_CUSTOM_PLACES ? `You have added the most you can (${MAX_CUSTOM_PLACES})` : "A gym, a friend's home or anywhere you go often"}</small></span></button>
+      </div><p class="group-footer">Used by Journey disrupted?, the quick-fill buttons when planning a trip, and address suggestions. Tap an added place to edit or delete it. Stored only on this device.</p></div>
 
       <p class="section-header">Live disruptions</p>
       <div class="group"><div class="group-card">
@@ -1408,10 +1682,15 @@ function settingsContent() {
 
       <p class="section-header">App</p>
       <div class="group"><div class="group-card">
-        ${canInstall() ? `<button class="row" data-action="settings-install"><span class="row-icon" style="--tone:var(--accent)">${I.download(18)}</span><span class="row-label">Install Plan B<small>${standalone() ? "" : "Add it to your home screen"}</small></span><span class="chev">${I.chevronRight()}</span></button>` : standalone() ? `<div class="row"><span class="row-icon" style="--tone:var(--success)">${I.checkCircle(18)}</span><span class="row-label">Installed<small>Plan B is running as an app</small></span></div>` : ""}
+        ${canInstall() ? `<button class="row" data-action="settings-install"><span class="row-icon" style="--tone:var(--accent)">${I.download(18)}</span><span class="row-label">Install Reroute<small>${standalone() ? "" : "Add it to your home screen"}</small></span><span class="chev">${I.chevronRight()}</span></button>` : standalone() ? `<div class="row"><span class="row-icon" style="--tone:var(--success)">${I.checkCircle(18)}</span><span class="row-label">Installed<small>Reroute is running as an app</small></span></div>` : ""}
         <button class="row" data-action="settings-share"><span class="row-icon" style="--tone:var(--teal)">${I.qr(18)}</span><span class="row-label">Share this app<small>QR code and link</small></span><span class="chev">${I.chevronRight()}</span></button>
         <button class="row" data-action="settings-demo"><span class="row-icon" style="--tone:var(--violet)">${I.flask(18)}</span><span class="row-label">Demo mode<small>Simulate weather, disruptions and traffic for a walkthrough</small></span>${valueSpan(demoOn() ? "On" : "Off")}<span class="chev">${I.chevronRight()}</span></button>
-      </div><p class="group-footer">Background alerts need HTTPS${isIos() ? ". On iPhone, add Plan B to your Home Screen first" : ""}.</p></div>
+      </div><p class="group-footer">Background alerts need HTTPS${isIos() ? ". On iPhone, add Reroute to your Home Screen first" : ""}.</p></div>
+
+      <p class="section-header">Impact goal</p>
+      <div class="group"><div class="group-card">
+        ${row(I.leaf(18), "var(--success)", "Monthly CO₂ goal<small>CO₂ avoided by the trips you log</small>", stepper("co2_goal_kg", s.co2_goal_kg, `${s.co2_goal_kg} kg`, 1, 200, "Monthly CO₂ goal in kilograms"))}
+      </div><p class="group-footer">Drives the progress ring on the Impact Dashboard. The default of 10 kg a month is a starting point the team chose, not a recommended target.</p></div>
 
       <p class="section-header">CO₂ factors (kg per passenger-km)</p>
       <div class="group"><div class="group-card">
@@ -1433,6 +1712,7 @@ function openSettings() {
   settingsEl.className = "settings-backdrop";
   settingsEl.dataset.action = "settings-backdrop";
   settingsEl.innerHTML = `<div class="settings-panel" role="dialog" aria-modal="true" aria-label="Settings">${settingsContent()}</div>`;
+  enhanceClear(settingsEl);
   viewport.appendChild(settingsEl);
   requestAnimationFrame(() => requestAnimationFrame(() => settingsEl?.classList.add("open")));
   settingsEl.querySelector(".nav-action").focus({ preventScroll: true });
@@ -1443,6 +1723,7 @@ function rerenderSettings() {
   const scroller = settingsEl.querySelector(".settings-scroll");
   const top = scroller.scrollTop;
   settingsEl.querySelector(".settings-panel").innerHTML = settingsContent();
+  enhanceClear(settingsEl);
   settingsEl.querySelector(".settings-scroll").scrollTop = top;
 }
 function closeSettings() {
@@ -1493,6 +1774,7 @@ function makePage(screen) {
   page.className = pageClass(screen);
   page.dataset.screen = screen;
   page.innerHTML = SCREENS[screen]();
+  enhanceClear(page);
   return page;
 }
 
@@ -1551,6 +1833,7 @@ function rerender() {
     const focused = document.activeElement?.dataset?.field;
     currentPage.className = pageClass(state.screen);
     currentPage.innerHTML = SCREENS[state.screen]();
+    enhanceClear(currentPage);
     const next = currentPage.querySelector(".scroll");
     if (next) next.scrollTop = top;
     if (focused) currentPage.querySelector(`[data-field="${focused}"]`)?.focus({ preventScroll: true });
@@ -1717,6 +2000,7 @@ function openSheet(html) {
   sheetEl.className = "sheet-backdrop";
   sheetEl.dataset.action = "backdrop";
   sheetEl.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">${html}</div>`;
+  enhanceClear(sheetEl);
   viewport.appendChild(sheetEl);
   requestAnimationFrame(() => requestAnimationFrame(() => sheetEl?.classList.add("open")));
   mountMaps(sheetEl);
@@ -1724,6 +2008,7 @@ function openSheet(html) {
 }
 function closeSheet(immediate = false) {
   if (!sheetEl) return;
+  if (sheetEl.dataset.place) state.placeDraft = null;
   collapseExpanded();
   const el = sheetEl;
   sheetEl = null;
@@ -1780,7 +2065,6 @@ async function search(extra = {}) {
   if (state.loading) return;
   const f = state.form;
   if (f.origin.trim().length < 3 || f.destination.trim().length < 3) { state.error = "Enter where you're starting and where you're going."; return rerender(); }
-  if (state.purpose === "planb" && !f.deadline) { state.error = "Enter the time you need to arrive by."; return rerender(); }
   state.loading = true;
   state.error = null;
   state.errorKind = "error";
@@ -1790,7 +2074,7 @@ async function search(extra = {}) {
     state.plan = await postJSON("/api/plan", payload(extra));
     store.set("lastDestination", f.destination.trim());
     store.set("lastDestinationPlaceId", f.destinationPlaceId || null);
-    state.sort = state.purpose === "regular" ? "pt" : "best";
+    state.sort = f.avoid ? "best" : "pt";
     state.loading = false;
     if (state.screen === "results") rerender();
     else { rerender(); const go = () => (transitioning ? setTimeout(go, 120) : navigate("results")); go(); }
@@ -1856,7 +2140,7 @@ function checkWatch() {
   if (hit) {
     state.watch.seen.add(hit.id);
     state.watch.alert = { ...hit, lines: hit.lines.filter((l) => keys.has(l)) };
-    toast(`Disruption on ${state.watch.alert.lines.join(", ")}. Open Plan B for alternatives.`);
+    toast(`Disruption on ${state.watch.alert.lines.join(", ")}. Open Reroute for alternatives.`);
     if (state.screen === "next") rerender();
   }
 }
@@ -1881,9 +2165,9 @@ function freshForm() {
   return {
     origin: preset ? DEMO_PRESET.origin : store.get("lastOrigin", "Taringa Station, Brisbane QLD"),
     originPlaceId: preset ? null : store.get("lastOriginPlaceId", null),
-    destination: preset ? DEMO_PRESET.destination : store.get("lastDestination", "") || settings.places.work || "",
-    destinationPlaceId: preset ? null : store.get("lastDestination", "") ? store.get("lastDestinationPlaceId", null) : settings.place_ids.work || null,
-    leave_now: true, departure: addMinutes(now, 10), deadline: state.purpose === "planb" ? addMinutes(now, 60) : "",
+    destination: preset ? DEMO_PRESET.destination : store.get("lastDestination", "") || savedPlace("work")?.address || "",
+    destinationPlaceId: preset ? null : store.get("lastDestination", "") ? store.get("lastDestinationPlaceId", null) : savedPlace("work")?.place_id || null,
+    leave_now: true, departure: addMinutes(now, 10), deadline: "",
     budget: settings.budget, walking: settings.walking, avoid: "",
   };
 }
@@ -1925,6 +2209,12 @@ const actions = {
       saveSettings();
       return rerenderSettings();
     }
+    if (field === "co2_goal_kg") {
+      const v = settings.co2_goal_kg;
+      settings.co2_goal_kg = Math.min(200, Math.max(1, v + delta * ((delta > 0 ? v >= 20 : v > 20) ? 5 : 1)));
+      saveSettings();
+      return rerenderSettings();
+    }
     if (field === "fuel_l_per_100km") {
       settings.fuel_l_per_100km = Math.min(25, Math.max(3, Math.round((settings.fuel_l_per_100km + delta * 0.5) * 10) / 10));
       saveSettings();
@@ -1944,8 +2234,10 @@ const actions = {
     });
   },
   "fill-place": (el) => {
-    state.form[el.dataset.field] = settings.places[el.dataset.place];
-    state.form[`${el.dataset.field}PlaceId`] = settings.place_ids[el.dataset.place] || null;
+    const place = savedPlace(el.dataset.place);
+    if (!place) return;
+    state.form[el.dataset.field] = place.address;
+    state.form[`${el.dataset.field}PlaceId`] = place.place_id || null;
     rerender();
   },
   sort: (el) => { state.sort = el.dataset.value; rerender(); currentPage.querySelector(`[data-action="sort"][data-value="${state.sort}"]`)?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" }); },
@@ -1970,18 +2262,18 @@ const actions = {
       cost: o.cost_known ? o.cost : null, cost_saved: o.vs_drive?.cost_saved ?? null, distance_km: o.distance_km,
     });
     store.set("trips", trips.slice(-500));
-    toast(o.vs_drive?.co2_saved_kg > 0 ? `Logged. ${kg(o.vs_drive.co2_saved_kg)} CO₂ avoided.` : "Logged to your trips.");
+    const month = impactTotals(thisMonthTrips());
+    toast(o.vs_drive?.co2_saved_kg > 0.005 ? `Logged. ${kg(o.vs_drive.co2_saved_kg)} CO₂ avoided. ${kgShort(month.co2)} so far this month.` : "Logged to your trips.");
     rerender();
   },
   replan: () => {
     const lines = state.watch.alert?.lines || [];
-    state.purpose = "planb";
+    state.purpose = "regular";
     state.form.avoid = lines.join(" ");
     state.form.leave_now = true;
-    if (!state.form.deadline) state.form.deadline = addMinutes(brisbaneNowLocal(), 60);
     state.watch.alert = null;
     navigate("results", "back");
-    search({ avoid_lines: lines, purpose: "planb", leave_now: true });
+    search({ avoid_lines: lines, purpose: "regular", leave_now: true });
   },
   done: () => { endBgWatch(); state.chosenId = null; state.stack = ["home"]; navigate("home", "back"); },
   "open-alerts": () => { openSheet(alertsSheet()); },
@@ -1997,6 +2289,20 @@ const actions = {
     if (name === "fuel_price_mode" && value === "auto") previewFuel();
     rerenderSettings();
   },
+  "add-place": () => {
+    if (customPlaces().length >= MAX_CUSTOM_PLACES) return;
+    state.placeDraft = { isNew: true, id: null, name: "", address: "", place_id: null, error: null, confirmDelete: false };
+    openPlaceSheet();
+  },
+  "edit-place": (el) => {
+    const p = savedPlace(el.dataset.id);
+    if (!p) return;
+    state.placeDraft = { isNew: false, id: p.id, name: p.name, address: p.address, place_id: p.place_id, error: null, confirmDelete: false };
+    openPlaceSheet();
+  },
+  "save-place": savePlace,
+  "delete-place": deletePlace,
+  "clear-input": clearInput,
   "toggle-transit": (el) => { settings.transit_modes[el.dataset.value] = !settings.transit_modes[el.dataset.value]; saveSettings(); rerenderSettings(); },
   "clear-trips": () => { store.set("trips", []); toast("Impact history cleared."); rerenderSettings(); rerender(); },
   "toggle-table": () => { state.dashTable = !state.dashTable; rerender(); },
@@ -2054,15 +2360,16 @@ const actions = {
   "open-share": () => openSheet(shareSheet()),
   "settings-share": () => { closeSettings(); setTimeout(() => openSheet(shareSheet()), 420); },
   "copy-link": copyLink,
-  "share-native": (el) => navigator.share({ title: "Plan B", text: "Plan B finds a way to your destination when public transport is disrupted.", url: el.dataset.url }).catch(() => {}),
+  "share-native": (el) => navigator.share({ title: "Reroute", text: "Reroute finds a way to your destination when public transport is disrupted.", url: el.dataset.url }).catch(() => {}),
   install: installApp,
   "settings-install": () => { if (state.installEvent) installApp(); else { closeSettings(); setTimeout(() => openSheet(installSheet()), 420); } },
   "toggle-cost": () => { state.costOpen = !state.costOpen; const el = currentPage.querySelector(".cost-line"); if (el) el.outerHTML = costLine(); },
   // Panic mode
   "exit-panic": () => { state.panic.phase = "ask"; navigate(state.stack.length > 1 ? state.stack[state.stack.length - 2] : "home", "down"); },
   "panic-place": (el) => {
-    state.panic.dest = el.dataset.place === "last" ? store.get("lastDestination", "") : settings.places[el.dataset.place];
-    state.panic.destPlaceId = el.dataset.place === "last" ? store.get("lastDestinationPlaceId", null) : settings.place_ids[el.dataset.place] || null;
+    const place = savedPlace(el.dataset.place);
+    state.panic.dest = el.dataset.place === "last" ? store.get("lastDestination", "") : place?.address || "";
+    state.panic.destPlaceId = el.dataset.place === "last" ? store.get("lastDestinationPlaceId", null) : place?.place_id || null;
     rerender();
   },
   "panic-go": async () => {
@@ -2163,10 +2470,13 @@ document.addEventListener("input", (event) => {
   const t = event.target;
   if (t.dataset.field && state.form) { state.form[t.dataset.field] = t.value; state.form[`${t.dataset.field}PlaceId`] = null; state.error = null; }
   if (t.dataset.panic) { state.panic[t.dataset.panic] = t.value; state.panic[`${t.dataset.panic}PlaceId`] = null; }
-  if (t.dataset.settingText) {
-    setPath(settings, t.dataset.settingText, t.value.slice(0, 200));
-    if (t.dataset.settingText.startsWith("places.")) settings.place_ids[t.dataset.settingText.slice(7)] = null;
-    saveSettings();
+  if (t.dataset.placeText) {
+    const p = savedPlace(t.dataset.placeText);
+    if (p) { p.address = t.value.slice(0, PLACE_ADDRESS_MAX); p.place_id = null; saveSettings(); }
+  }
+  if (t.dataset.draft && state.placeDraft) {
+    state.placeDraft[t.dataset.draft] = t.value;
+    if (t.dataset.draft === "address") state.placeDraft.place_id = null;
   }
   if (t.dataset.ac) autocomplete.onInput(t);
   if (t.dataset.settingNumber) {
@@ -2311,7 +2621,7 @@ function demoSheet() {
         <div class="opt-group"><p>Background alerts</p><div class="demo-test">
           <button class="btn btn-secondary${push?.busy ? " is-loading" : ""}" data-action="demo-push" ${push?.busy ? "disabled aria-busy=\"true\"" : ""}>${push?.busy ? skelBar("Sending test push", 140) : `${I.bell(16)}Send test disruption push in 10 s`}</button>
           ${push?.text ? notice(esc(push.text), push.kind) : ""}</div>
-          <p class="fine" style="margin-top:8px">Asks for notification permission, then the server sends a simulated disruption 10 seconds later. Minimise Plan B to watch it arrive.</p></div>
+          <p class="fine" style="margin-top:8px">Asks for notification permission, then the server sends a simulated disruption 10 seconds later. Minimise Reroute to watch it arrive.</p></div>
         <button class="btn btn-text" data-action="demo-exit">Exit demo mode</button>` : `<p class="hint">Turn on demo mode to simulate bad weather, a disrupted line or traffic, and to see what each search costs in Google API requests.</p>`}
     </div>`;
 }
@@ -2348,7 +2658,7 @@ async function demoPush() {
       rememberWatch(r.id, watch);
     }
     const res = await postJSON("/api/push/test", { endpoint: b.endpoint, delay_s: 10 });
-    state.demoPush = { kind: "success", text: `Test sent. It arrives in about ${res.sent_in_s ?? 10} seconds. Minimise Plan B to see the notification.` };
+    state.demoPush = { kind: "success", text: `Test sent. It arrives in about ${res.sent_in_s ?? 10} seconds. Minimise Reroute to see the notification.` };
   } catch (error) { state.demoPush = { kind: "error", text: error.message }; }
   refreshDemoSheet();
 }
@@ -2359,14 +2669,14 @@ function shareSheet() {
   const url = state.status?.public_url || location.origin;
   const local = /^(localhost|127\.|\[::1\])/.test(location.hostname) && !state.status?.public_url;
   return `<div class="grabber"><span></span></div>
-    <div class="sheet-head"><h3 id="sheet-title">Share Plan B</h3><button class="icon-btn" data-action="close-sheet" aria-label="Close">${I.x(18)}</button></div>
+    <div class="sheet-head"><h3 id="sheet-title">Share Reroute</h3><button class="icon-btn" data-action="close-sheet" aria-label="Close">${I.x(18)}</button></div>
     <div class="sheet-scroll">
-      <p class="hint" style="margin-bottom:20px">Scan with a phone camera to open Plan B, then add it to the home screen.</p>
-      <div class="qr-card"><img src="/qr.svg" alt="QR code that opens Plan B at ${esc(url)}" loading="lazy" width="244" height="244" onload="this.parentElement.classList.add('ready')" onerror="this.parentElement.classList.add('ready')"></div>
+      <p class="hint" style="margin-bottom:20px">Scan with a phone camera to open Reroute, then add it to the home screen.</p>
+      <div class="qr-card"><img src="/qr.svg" alt="QR code that opens Reroute at ${esc(url)}" loading="lazy" width="244" height="244" onload="this.parentElement.classList.add('ready')" onerror="this.parentElement.classList.add('ready')"></div>
       <div class="share-url"><code>${esc(url)}</code><button class="btn btn-primary" data-action="copy-link" data-url="${esc(url)}">${I.copy(16)}Copy link</button></div>
       <div data-share-fb></div>
       ${navigator.share ? `<button class="btn btn-secondary" data-action="share-native" data-url="${esc(url)}">${I.share(16)}Share with other apps</button>` : ""}
-      ${local ? notice("This address only works on this computer. Deploy Plan B, or set PUBLIC_URL, so the QR code points to a public address.", "info") : ""}
+      ${local ? notice("This address only works on this computer. Deploy Reroute, or set PUBLIC_URL, so the QR code points to a public address.", "info") : ""}
     </div>`;
 }
 async function copyLink(el) {
@@ -2388,13 +2698,13 @@ const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.
 const canInstall = () => !standalone() && (!!state.installEvent || isIos());
 function installSheet() {
   return `<div class="grabber"><span></span></div>
-    <div class="sheet-head"><h3 id="sheet-title">Install Plan B</h3><button class="icon-btn" data-action="close-sheet" aria-label="Close">${I.x(18)}</button></div>
+    <div class="sheet-head"><h3 id="sheet-title">Install Reroute</h3><button class="icon-btn" data-action="close-sheet" aria-label="Close">${I.x(18)}</button></div>
     <div class="sheet-scroll">
-      <p class="hint" style="margin-bottom:20px">Add Plan B to your Home Screen to open it like an app and to get background disruption alerts.</p>
+      <p class="hint" style="margin-bottom:20px">Add Reroute to your Home Screen to open it like an app and to get background disruption alerts.</p>
       <ol class="install-steps">
         <li><span>Tap the Share button ${I.share(18)} in Safari's toolbar.</span></li>
         <li><span>Scroll down and tap <b>Add to Home Screen</b> ${I.plus(18)}.</span></li>
-        <li><span>Open Plan B from your Home Screen, then turn on <b>Watch this trip in the background</b>.</span></li>
+        <li><span>Open Reroute from your Home Screen, then turn on <b>Watch this trip in the background</b>.</span></li>
       </ol>
       ${notice("On iPhone, background alerts only work for the installed app (iOS 16.4 or later) and need an HTTPS address.", "info")}
     </div>`;
@@ -2405,7 +2715,7 @@ async function installApp() {
   state.installEvent = null;
   try { await ev.prompt(); } catch { return openSheet(installSheet()); }
   const choice = await ev.userChoice.catch(() => null);
-  if (choice?.outcome === "accepted") toast("Plan B is installing.");
+  if (choice?.outcome === "accepted") toast("Reroute is installing.");
   if (state.screen === "home") rerender();
   rerenderSettings();
 }
@@ -2415,9 +2725,9 @@ window.addEventListener("appinstalled", () => { state.installEvent = null; if (s
 const b64ToBytes = (b64) => Uint8Array.from(atob(b64.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (b64.length % 4)) % 4)), (c) => c.charCodeAt(0));
 function pushSupport() {
   if (!window.isSecureContext) return "Background alerts need HTTPS. Open the secure (https://) address of this app.";
-  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return isIos() && !standalone() ? "On iPhone, add Plan B to your Home Screen first (Share, then Add to Home Screen), open it from there and try again." : "This browser doesn't support background notifications.";
-  if (state.status && state.status.push === false) return "This Plan B server isn't set up for push notifications.";
-  if (Notification.permission === "denied") return "Notifications are blocked for Plan B. Allow them in your browser settings, then try again.";
+  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return isIos() && !standalone() ? "On iPhone, add Reroute to your Home Screen first (Share, then Add to Home Screen), open it from there and try again." : "This browser doesn't support background notifications.";
+  if (state.status && state.status.push === false) return "This Reroute server isn't set up for push notifications.";
+  if (Notification.permission === "denied") return "Notifications are blocked for Reroute. Allow them in your browser settings, then try again.";
   return null;
 }
 async function subscribePush(watch) {
@@ -2467,7 +2777,7 @@ async function bgWatchToggle(box) {
       const ends = watch.deadline ? Date.parse(`${watch.deadline.slice(0, 16)}:00+10:00`) + 30 * 60000 : Date.now() + 3 * 3600000;
       store.set("bgwatch", { ref: tripRef(o), id: r.id, endpoint: r.endpoint, title: o.title, expires: new Date(ends).toISOString() });
       rememberWatch(r.id, watch);
-      state.bg = { msg: { kind: "success", text: "Watching this trip. You'll get a notification if Translink posts a disruption on your lines, even with Plan B closed." } };
+      state.bg = { msg: { kind: "success", text: "Watching this trip. You'll get a notification if Translink posts a disruption on your lines, even with Reroute closed." } };
     } else {
       await endBgWatch();
       state.bg = { msg: { kind: "info", text: "Background alerts are off for this trip." } };
@@ -2489,14 +2799,14 @@ async function endBgWatch() {
 // A notification opened the app at /?alternatives=<watch id>: re-plan the stored trip avoiding the disrupted lines.
 function openAlternatives(id) {
   const w = store.get("watches", {})[id];
-  if (!w) return toast("That alert is from another device. Start a new Plan B search.", "warning");
-  const now = brisbaneNowLocal(), deadline = w.deadline && w.deadline.slice(0, 16) > now ? w.deadline.slice(0, 16) : addMinutes(now, 60);
-  state.purpose = "planb";
+  if (!w) return toast("That alert is from another device. Start a new search.", "warning");
+  const now = brisbaneNowLocal(), deadline = w.deadline && w.deadline.slice(0, 16) > now ? w.deadline.slice(0, 16) : "";
+  state.purpose = "regular";
   state.form = { ...freshForm(), origin: w.origin, originPlaceId: null, destination: w.destination, destinationPlaceId: w.destination_place_id || null, leave_now: true, deadline,
     budget: w.budget ?? settings.budget, walking: w.walking ?? settings.walking, avoid: w.lines.join(" ") };
   state.error = null;
   if (state.screen !== "journey") navigate("journey");
-  search({ avoid_lines: w.lines, purpose: "planb", leave_now: true });
+  search({ avoid_lines: w.lines, purpose: "regular", leave_now: true });
 }
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
@@ -2549,12 +2859,11 @@ const autocomplete = (() => {
     const q = text.trim().toLowerCase();
     const entries = [];
     if (input && isOrigin(input) && !q) entries.push({ kind: "location", main: "Current location", secondary: "Use this device's location" });
-    [["home", "Home"], ["work", "Work/Uni"]].forEach(([k, label]) => {
-      const saved = settings.places[k];
-      if (saved && input && !input.dataset.ac.startsWith("places.") && (!q || saved.toLowerCase().includes(q) || label.toLowerCase().startsWith(q))) {
-        entries.push({ kind: "saved", main: label, secondary: saved, text: saved, place_id: settings.place_ids[k] });
-      }
-    });
+    const editing = input && /^(places|draft)\./.test(input.dataset.ac);
+    if (!editing) {
+      settings.saved_places.filter((p) => p.address && (!q || p.address.toLowerCase().includes(q) || p.name.toLowerCase().startsWith(q))).slice(0, q ? 3 : 4)
+        .forEach((p) => entries.push({ kind: "saved", glyph: placeGlyph(p), main: p.name, secondary: p.address, text: p.address, place_id: p.place_id }));
+    }
     recent().filter((r) => !q || r.text.toLowerCase().includes(q)).slice(0, q ? 2 : 4)
       .forEach((r) => { if (!entries.some((e) => e.text === r.text)) entries.push({ ...r, kind: "recent" }); });
     return entries;
@@ -2567,7 +2876,7 @@ const autocomplete = (() => {
     return out + esc(item.main.slice(last));
   }
 
-  const ICON = { transit: () => I.bus(16), street: () => I.route(16), place: () => I.pin(16), saved: () => I.home(16), recent: () => I.clock(16), location: () => I.locate(16) };
+  const ICON = { transit: () => I.bus(16), street: () => I.route(16), place: () => I.pin(16), recent: () => I.clock(16), location: () => I.locate(16) };
 
   function render(loading = false) {
     if (!input) return;
@@ -2583,7 +2892,7 @@ const autocomplete = (() => {
     const hasGoogle = items.some((i) => !["saved", "recent", "location"].includes(i.kind));
     list.innerHTML = `${items.map((item, i) => `
       <div class="ac-item${i === active ? " active" : ""}" id="ac-opt-${i}" role="option" aria-selected="${i === active}" data-ac-index="${i}" style="animation-delay:${i * 28}ms">
-        <span class="ac-icon ${item.kind}">${(ICON[item.kind] || ICON.place)()}</span>
+        <span class="ac-icon ${item.kind}">${item.kind === "saved" ? I[item.glyph || "star"](16) : (ICON[item.kind] || ICON.place)()}</span>
         <span class="ac-text"><span class="ac-main">${bolded(item)}</span>${item.secondary ? `<span class="ac-sub">${esc(item.secondary)}</span>` : ""}</span>
       </div>`).join("")}
       ${loading ? `<div role="status" aria-label="Loading suggestions">${[0, 1].map(() => `<div class="ac-skel" aria-hidden="true"><div class="skeleton skel-tile" style="width:32px;height:32px;border-radius:10px"></div><div><div class="skeleton skel-line w-80"></div><div class="skeleton skel-line sm w-40"></div></div></div>`).join("")}</div>` : ""}
@@ -2656,7 +2965,8 @@ const autocomplete = (() => {
     const [scope, field] = path.split(".");
     if (scope === "form") { state.form[field] = text; state.form[`${field}PlaceId`] = placeId || null; state.error = null; }
     else if (scope === "panic") { state.panic[field] = text; state.panic[`${field}PlaceId`] = placeId || null; }
-    else { settings.places[field] = text; settings.place_ids[field] = placeId || null; saveSettings(); }
+    else if (scope === "draft") { if (state.placeDraft) Object.assign(state.placeDraft, { [field]: text, place_id: placeId || null }); }
+    else { const p = savedPlace(field); if (p) { p.address = text; p.place_id = placeId || null; saveSettings(); } }
   }
 
   function choose(index) {

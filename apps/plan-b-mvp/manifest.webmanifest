@@ -1,7 +1,7 @@
 {
-  "name": "Plan B",
-  "short_name": "Plan B",
-  "description": "Finds a practical way to your destination when public transport is disrupted, and helps you choose lower-emission journeys every day.",
+  "name": "Reroute",
+  "short_name": "Reroute",
+  "description": "Plans everyday trips with public transport first, shows the CO2 you avoid compared with driving, and finds a practical way there when your journey is disrupted.",
   "id": "/",
   "start_url": "/",
   "scope": "/",
@@ -17,6 +17,6 @@
     { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    { "name": "Panic mode", "short_name": "Panic", "description": "One answer, no decisions.", "url": "/?panic=1", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }] }
+    { "name": "Journey disrupted", "short_name": "Disrupted", "description": "The fastest working way there now, one answer.", "url": "/?panic=1", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }] }
   ]
 }

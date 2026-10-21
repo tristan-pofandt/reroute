@@ -170,7 +170,7 @@ class StaticAndPwaTests(unittest.TestCase):
     def test_pwa_files_are_served_with_their_headers_when_present(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
-            (root / "manifest.webmanifest").write_text('{"name": "Plan B"}', encoding="utf-8")
+            (root / "manifest.webmanifest").write_text('{"name": "Reroute"}', encoding="utf-8")
             (root / "sw.js").write_text("self.addEventListener('fetch', () => {});", encoding="utf-8")
             (root / "icons").mkdir()
             (root / "icons" / "icon-192.png").write_bytes(b"\x89PNG\r\n\x1a\n")

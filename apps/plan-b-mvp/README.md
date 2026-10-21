@@ -1,8 +1,12 @@
-# Plan B MVP (v3)
+# Reroute (formerly Plan B MVP)
 
-Plan B MVP v3 is a student prototype, run locally or from a prepared deployment configuration, that helps a traveller choose a practical alternative when a public-transport journey is disrupted, and also lets them view routes regularly in a "Plan a trip" mode. v3 is an installable web app (PWA) with a Flask server, a dark editorial look taken from the [design system brief](../../docs/design/design-system.md), live Translink vehicle positions, in-app directions, weather, traffic, background disruption notifications and an investor demo mode. It implements the "Further features" section of the [prototype ideas](../../docs/design/prototype_ideas.md) on top of the v2 features. The separate [interview scenario](demo.html) preserves the prepared, fictional Bus 412 exercise. The [scope and evidence trail](../../docs/product/mvp-scope-2026-10-20.md) links all 21 de-identified prototype interview records, the [v2 feature log](../../docs/product/mvp-v2-feature-log-2026-10-21.md) maps the earlier ideas, and the [v3 feature log](../../docs/product/mvp-v3-feature-log-2026-10-21.md) maps each v3 rule and feature to what was built and what remains untested.
+Reroute (formerly Plan B MVP; v3 plus the 2026-10-22 refinements) is a student prototype, run locally or from a prepared deployment configuration, that plans everyday trips with public transport first, shows the CO2 you avoid compared with driving, and helps a traveller choose a practical alternative when a public-transport journey is disrupted. It is an installable web app (PWA) with a Flask server, a dark editorial look taken from the [design system brief](../../docs/design/design-system.md), live Translink vehicle positions, in-app directions, weather, traffic, background disruption notifications and an investor demo mode. It implements the "Further features" section of the [prototype ideas](../../docs/design/prototype_ideas.md) on top of the v2 features, and the "Refinements" section at the end of the same document (the [refinements log](../../docs/product/reroute-refinements-log-2026-10-22.md) maps each one to what was built). The separate [interview scenario](demo.html) preserves the prepared, fictional Bus 412 exercise; it keeps the name Plan B because that is the version the interview material refers to. The [scope and evidence trail](../../docs/product/mvp-scope-2026-10-20.md) links all 21 de-identified prototype interview records, the [v2 feature log](../../docs/product/mvp-v2-feature-log-2026-10-21.md) maps the earlier ideas, and the [v3 feature log](../../docs/product/mvp-v3-feature-log-2026-10-21.md) maps each v3 rule and feature to what was built and what remains untested.
 
-**Status:** implemented on 2026-10-21 with Claude Code assistance for team review. No participant has tested v3, nothing has been deployed, and nothing here establishes adoption, live-data accuracy or willingness to pay.
+**Status:** implemented on 2026-10-21 (v3) and refined on 2026-10-22 (the rename to Reroute and the refinements) with Claude Code assistance for team review. No participant has tested it, nothing has been deployed, and nothing here establishes adoption, live-data accuracy or willingness to pay.
+
+## The name change: what keeps the old name
+
+The app is called Reroute everywhere a person can see it: the page title, the home-screen name, the logo wordmark, the install and share sheets, the push notification titles and text, toasts, the server start-up message and user-visible server errors, and the User-Agent sent to external services. These intentionally keep the old name so saved data, links and deployment configuration keep working: the folder `apps/plan-b-mvp/` and the `infra/plan-b-mvp/` folder, the `planb.*` localStorage keys (saved settings, trips and watches), the `PLANB_*` environment variables, the `planb-` prefix of the service-worker cache name (the cache itself is now `planb-reroute-1`), the Python module names and the internal `planb` extension key, the notification tag prefixes, the `mailto:planb-demo@example.invalid` default VAPID contact, and the fictional interview scenario (`demo.html`, `demo.js`, `styles.css`). The logo mark (a direct route broken by a disruption, with the route curving around it) is unchanged, so the favicon and icon files were not regenerated.
 
 ## Run locally
 
@@ -82,13 +86,15 @@ The mapping from each rule and feature to what was built is in the [v3 feature l
 
 - **Design system look:** dark-first editorial layout using the tokens in [`design-system.md`](../../docs/design/design-system.md) (surface layers, subtle 1 px borders, Inter, 16 and 24 px spacing, one accent), with Auto, Light and Dark themes in Settings. The fake phone hardware and status bar of v2 were removed.
 - **States and tactility:** pressed state (scale 0.98), accessible focus rings, 44 px minimum tap targets, shimmer skeletons instead of spinners, and fading success and error banners. Animations use only `transform` and `opacity`, and respect the reduced-motion setting.
+- **Clear buttons:** every text, search and address input (From and To, the Journey disrupted? fields, saved places, the place editor, the ride form and the alerts filter) shows a small x once it has text. It is a 44 by 44 px target around a smaller icon, has an accessible name such as "Clear To", keeps focus in the field, closes the suggestions and resets any stored place ID. One helper (`enhanceClear` and `clearInput` in `app.js`) provides it for all fields.
 - **Icons and loading:** one set of inline SVG icons instead of emojis; Leaflet is loaded the first time a map appears and the QR image is lazy-loaded.
 
 ### Planning and decision support
 
 - **Address suggestions:** every address field shows a dropdown of suggestions while typing, from Places API Autocomplete (New), plus the current location, saved places and recent choices. A chosen suggestion's Google place ID is sent to the Routes API. Requests wait until three characters, are debounced and use session tokens to limit billing.
-- **Plan B search:** real free-text origin and destination, "Current location" (browser geolocation), saved Home and Work/Uni places, departure time, an optional deadline and an optional "What was disrupted?" field.
-- **Plan a trip mode:** regular route viewing with an optional deadline and a default "Public transport first" sort.
+- **Trip search:** real free-text origin and destination, "Current location" (browser geolocation), saved places (Home, Work/Uni and any you add), departure time and an optional deadline.
+- **Plan a trip as the main action:** the home screen's single primary (accent-filled) button. Public transport comes first by default, the deadline is optional, and the sort chips re-rank by deadline fit, arrival, cost, walking or CO2. The old "My journey is disrupted" entry and its separate mode were removed; re-planning that avoids disrupted lines (from the in-app watch alert or a push notification) now opens these same results, sorted by best fit, with a note that routes using those lines are flagged.
+- **Home screen order:** a header row (logo and wordmark, the Impact button, settings), the hero, Plan a trip, Journey disrupted?, then a Right now group with the weather, Translink alerts and Refresh live data, then the impact summary, shared rides and install and share.
 - **Transparent ranking and plain-language cards:** sort chips with a one-line explanation, a trade-off sentence per card, a "vs driving" comparison, certainty cues (deadline buffer, live status) and effort cues (walking, climb, transfers). Card fields can be hidden in Settings.
 - **Elevation gain:** uphill and downhill metres for walking parts of public-transport options, from an elevation service rather than the Routes API.
 - **Driving cost, parking and traffic:** fuel plus the Google toll estimate plus parking, with car parks within 800 m of the destination. QLDTraffic events within 150 m of the driving route add an estimated delay (a closure on the route is flagged and blocks the option; a crash, hazard or flood adds 5 minutes; roadworks or a special event add 2; the total is capped at 20 and labelled as an estimate). Google's traffic-aware drive time already includes normal congestion.
@@ -101,16 +107,19 @@ The mapping from each rule and feature to what was built is in the [v3 feature l
 - **Exact lines from static GTFS:** each Google transit step is matched to Translink route IDs, stop IDs and, where TripUpdates allow, the exact trip, so alerts and delays match by route ID. The keyword matcher remains the fallback while the static data is loading or a step is unmatched.
 - **Live vehicles and delay status:** each transit step shows "On time", "N min late", "N min early", "Cancelled" or "No live data", refreshed every 15 seconds on the next-steps and directions screens, with the vehicle position on the map before boarding. "On time" and "early" are reported only for an exactly matched trip; otherwise only a route-wide median delay of a minute or more is shown.
 - **Live in-app directions:** a navigation screen follows the traveller's GPS along the chosen trip with the next maneuver and distance for walking and driving, boarding and alight countdowns for transit legs, a step list, optional voice prompts, a screen wake lock, skip step and re-centre, and a "Re-plan from here" prompt after about 10 seconds more than 60 m off a walking or driving step. "Open in Google Maps" stays as a secondary link.
-- **Panic mode:** a large button on the home screen that returns one recommendation using only options with no active Translink alert, on time first, public transport preferred, then least effort.
+- **Journey disrupted? (Panic mode):** a large button on the home screen, reworded from "Panic mode" to name journey disruption ("Get the fastest working way there now — one answer, no decisions."). It opens the screen that returns one recommendation using only options with no active Translink alert, on time first, public transport preferred, then least effort.
 - **Translink alerts and watch:** home-screen alerts, a line-filtered alerts sheet and, while the app is open, a once-a-minute check of the chosen trip with "See my alternatives".
-- **PWA install and background push monitoring:** the app has a manifest, icons and a service worker (offline app shell, network-first API reads). On a chosen trip, "Watch this trip in the background" asks for notification permission and sends a Web Push subscription and the trip's route IDs to the server. A server thread checks every 60 seconds and sends one push per new disruptive alert or cancellation on those routes; opening the notification re-plans the trip avoiding the disrupted lines. A watch expires 30 minutes after the deadline (3 hours with none). Settings and the home screen offer an "Install Plan B" button where the browser supports it, and on iPhone a sheet explains Share, then Add to Home Screen.
+- **PWA install and background push monitoring:** the app has a manifest, icons and a service worker (offline app shell, network-first API reads). On a chosen trip, "Watch this trip in the background" asks for notification permission and sends a Web Push subscription and the trip's route IDs to the server. A server thread checks every 60 seconds and sends one push per new disruptive alert or cancellation on those routes; opening the notification re-plans the trip avoiding the disrupted lines. A watch expires 30 minutes after the deadline (3 hours with none). Settings and the home screen offer an "Install Reroute" button where the browser supports it, and on iPhone a sheet explains Share, then Add to Home Screen.
 - **Refresh live data:** a home-screen button calls `POST /api/sync` to refresh alerts, vehicles and weather, shows a skeleton, then a success or error banner that dismisses after 3 seconds.
 
 ### Sharing and sustainability
 
 - **Share / QR:** a Share sheet shows a QR code (from `GET /qr.svg`, which encodes `PUBLIC_URL` or the address the request came to), the link, a copy button and the system share sheet where available.
 - **Ride board:** offer car seats or start a split Uber. Posts match when the start is within 2 km, the destination is within 2.5 km and departure is within 45 minutes. It stores only rounded points, no contact details, expires 30 minutes after departure and is visible only to people using the same server.
-- **CO2 and Impact Dashboard:** CO2 estimate on every option, a "Lowest CO2" sort and a dashboard comparing logged trips with driving the same route alone. History stays in the browser.
+- **CO2 focus on results:** each option card has a dedicated CO2 line (for example "1.2 kg CO2 less than driving", with the trip's own figure against the same journey driven alone), the lowest-CO2 option carries a "Lowest CO2" badge, and one sentence above the cards says how much the greenest option saves compared with driving. Everything derives from the per-option estimate, the driving baseline and the factors in Settings; the card field can be hidden in Settings.
+- **CO2 on next steps and logging:** the next-steps screen states the trip's CO2 saving, and logging the trip ("I'm taking this trip") changes it into a success state with the new monthly total against the goal.
+- **Impact button and Impact Dashboard:** a leaf button in the home header shows this month's CO2 avoided and goes straight to the dashboard. The dashboard has a hero total, a monthly CO2 goal with a progress ring (default 10 kg, editable in Settings), an "equivalent to N km not driven" line computed from your own car settings with the assumption stated, a weekly streak of trips with no driving of your own car, a breakdown by mode, the six-month charts and recent trips. All numbers come from the trips logged on this device. History stays in the browser.
+- **Saved places:** Home and Work/Uni can be edited, and up to 10 more can be added, edited and deleted in Settings (a name such as Gym or Mum's plus an address with the same autocomplete). They appear as quick-fill chips in From and To, as Journey disrupted? destination chips and in the suggestion list. Older saved Home and Work values are migrated automatically.
 
 ### Demo mode
 
@@ -118,7 +127,7 @@ A flask button on the home screen, or the Demo mode row in Settings, opens a men
 
 ### Settings
 
-A slide-in Settings panel covers theme (Auto, Light, Dark) and reduce motion; ways to travel; fuel use, fuel type and fuel price ("Live average" or manual); typical parking cost; a flat public-transport fare used when Google returns none (default $0.50, an assumption to check); default limits; toggles for each card field; saved places; watch-trip options; editable CO2 factors; demo mode; install; share; clearing the impact history; and a link to the fictional interview scenario.
+A slide-in Settings panel covers theme (Auto, Light, Dark) and reduce motion; ways to travel; fuel use, fuel type and fuel price ("Live average" or manual); typical parking cost; a flat public-transport fare used when Google returns none (default $0.50, an assumption to check); default limits; toggles for each card field; saved places (add, edit and delete up to 10 places beside Home and Work/Uni); watch-trip options; the monthly CO2 goal; editable CO2 factors; demo mode; install; share; clearing the impact history; and a link to the fictional interview scenario.
 
 ## Stack decision
 
@@ -130,7 +139,7 @@ The server is now Flask. The design-system brief ([`design-system.md`](../../doc
 | --- | --- |
 | `index.html`, `app.js`, `app.css` | v3 front end (design-system look, screens, navigation, demo mode) |
 | `manifest.webmanifest`, `sw.js`, `icons/` | PWA manifest, service worker (app shell, API caching, push handling) and icons |
-| `favicon.svg` | Plan B logo and favicon |
+| `favicon.svg` | Reroute logo and favicon (the broken-route mark, unchanged from Plan B) |
 | `server.py` | Flask app: API routes, PWA files, `/qr.svg`, Origin check and request limits |
 | `live_routes.py` | Planner: route building, limits, ranking, cost, CO2, weather and traffic attachment |
 | `google_api.py` | Google Routes, Places (New) and elevation requests, and the API cost price table |
@@ -147,6 +156,7 @@ The server is now Flask. The design-system brief ([`design-system.md`](../../doc
 | `demo.html`, `demo.js`, `styles.css` | Unchanged fictional Bus 412 interview scenario |
 | `test_live_routes.py`, `test_gtfs_rt.py`, `test_rides.py` | v2 offline tests |
 | `test_gtfs_static.py`, `test_plan_v3.py`, `test_push_limits.py`, `test_realtime_v3.py`, `test_server.py`, `test_weather_traffic.py` | v3 offline tests |
+| `test_branding.py` | Checks that the old product name stays out of the user-visible files |
 
 Deployment files (`Dockerfile`, `render.yaml`) are in [`infra/plan-b-mvp/`](../../infra/plan-b-mvp/README.md).
 
@@ -160,7 +170,7 @@ python -m unittest -v
 python -m py_compile server.py live_routes.py google_api.py gtfs_rt.py gtfs_static.py weather.py traffic.py push.py limits.py nav.py demo_mode.py rides.py
 ```
 
-The 242 tests make no network calls, so they cannot verify external data. During the build on 2026-10-21 the developer also checked the following against the real services and the team key: route IDs from the static GTFS matched the realtime feeds exactly for the checked trip; VehiclePositions returned about 800 to 1,000 vehicles; the public QLDTraffic key returned 570 events; Open-Meteo worked without a key; the Google Elevation API worked on the team key; and push was verified end to end only in headless Microsoft Edge, with a real subscription and a delivered test push. Those are developer checks, not participant evidence.
+The 250 tests make no network calls, so they cannot verify external data, and none of them exercises the front end (`app.js`), which was checked by driving the app in headless Microsoft Edge. During the build on 2026-10-21 the developer also checked the following against the real services and the team key: route IDs from the static GTFS matched the realtime feeds exactly for the checked trip; VehiclePositions returned about 800 to 1,000 vehicles; the public QLDTraffic key returned 570 events; Open-Meteo worked without a key; the Google Elevation API worked on the team key; and push was verified end to end only in headless Microsoft Edge, with a real subscription and a delivered test push. Those are developer checks, not participant evidence. The 2026-10-22 refinements were checked in headless Edge at 430 by 932 (dark and light), 360 and 1280 wide with no console errors: the home order, the Impact button, the clear buttons, adding, editing and deleting a saved place and using it as a destination chip, a real search showing the CO2 lines, badge and summary, next steps and trip logging, the dashboard with seeded fake trips, the Journey disrupted? screen, an avoid-line re-plan, the share sheet and the manifest name. The dashboard figures in that check came from fake trips seeded into localStorage for the screenshots only.
 
 Not verified: a real phone, iPhone and Safari (which require adding the app to the Home Screen before push works), an HTTPS deployment, the Dockerfile, the Render blueprint and the Cloudflare tunnel, real outdoor GPS directions, the wake lock, voice prompts, tapping a notification, and rotation of a bus marker by bearing.
 
@@ -168,7 +178,7 @@ For manual review, also check a known Australian transit trip, a driving trip, a
 
 ## Limitations
 
-- No participant has tested v3, and nothing has been deployed.
+- No participant has tested Reroute (v3 with the refinements), and nothing has been deployed.
 - Several things have not been tried: a real phone, iPhone and Safari, HTTPS hosting, the container and hosting configuration, real outdoor GPS directions, the wake lock, voice prompts, notification taps and bus bearing rotation.
 - Push was verified only in headless Edge. Background monitoring needs the server to be running, a secure origin and notification permission, and it stops when a free host sleeps.
 - The service worker serves the app shell cache-first, so `VERSION` in `sw.js` must be bumped for every deploy.
@@ -184,6 +194,10 @@ For manual review, also check a known Australian transit trip, a driving trip, a
 - The app does not show an Uber price. Rideshare cost is unknown unless a rider enters the estimate they saw on the ride board.
 - The ride board works on a single server, is unmoderated, and does not address identity, safety checks or moderation.
 - The impact history is stored per browser and is lost if browser data is cleared.
+- The 10 kg monthly CO2 goal is a default the team chose, not a recommended target. The "km not driven" figure is your logged CO2 saving divided by the emissions per km implied by your Settings (litres per 100 km times kg of CO2 per litre); it is an estimate, not a measurement. The weekly streak counts only trips logged in the app, treats Uber and shared rides as not driving your own car, and uses Monday to Sunday weeks in Brisbane time.
+- Added places are limited to 10 plus Home and Work/Uni. Deleting a place needs two taps. Places are stored only in this browser.
+- Renaming did not regenerate the logo or the icon files. The name Plan B remains in the interview scenario and in internal identifiers (see the name change section above).
+- The clear (x) buttons, saved-place editor and dashboard were not tried on a real phone or with a screen reader.
 - Google Routes estimates are not confirmed disruption notices, guaranteed arrival times or booking options. Verify services and directions before leaving.
 
 ## Prepared exercise values

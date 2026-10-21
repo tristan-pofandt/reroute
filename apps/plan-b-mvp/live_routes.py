@@ -1,4 +1,4 @@
-"""Validate a journey request and build honest, comparable Plan B options.
+"""Validate a journey request and build honest, comparable Reroute options.
 
 One search combines Google Routes (public transport and driving), live fuel prices and car parks
 from Places API (New), walking elevation, Translink GTFS-Realtime alerts and delays, CO2 estimates,
@@ -128,8 +128,10 @@ def validate(payload, now=None):
     destination = _place(payload.get("destination"), "destination")
     if origin.casefold() == destination.casefold():
         raise InputError("Choose different starting and destination places.")
-    purpose = payload.get("purpose", "planb")
-    if purpose not in ("planb", "regular", "panic"):
+    purpose = payload.get("purpose", "regular")
+    if purpose == "planb":  # Sent by app versions cached before the disrupted entry was removed; it is now a regular search.
+        purpose = "regular"
+    if purpose not in ("regular", "panic"):
         raise InputError("Unknown search type.")
 
     def local(name):
@@ -156,8 +158,6 @@ def validate(payload, now=None):
             raise InputError("Choose a departure from now to 100 days ahead.")
         departure = max(departure, now + timedelta(minutes=1))
     deadline = local("deadline")
-    if deadline is None and purpose == "planb":
-        raise InputError("Enter the time you need to arrive by.")
     if deadline is not None and deadline <= departure:
         raise InputError("The arrival deadline must be after departure.")
 

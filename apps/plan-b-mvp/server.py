@@ -1,4 +1,4 @@
-"""Run the Plan B app (Flask) and keep the Google Maps key on the server.
+"""Run the Reroute app (Flask; formerly Plan B) and keep the Google Maps key on the server.
 
 Local: `python server.py`. Production: `gunicorn -w 1 --threads 8 server:app` (one worker, because the
 background monitor threads and caches live in the process).
@@ -145,7 +145,7 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
                 response.headers["Retry-After"] = str(wait)
                 return response
         if cap and not caps[cap].take():
-            return failure("Plan B has reached its daily limit of live searches. Try again tomorrow.", 429)
+            return failure("Reroute has reached its daily limit of live searches. Try again tomorrow.", 429)
         return None
 
     def read_json(limit=8192, allow_empty=False):
@@ -456,6 +456,6 @@ if __name__ == "__main__":
     host, port = os.getenv("HOST", "127.0.0.1"), int(os.getenv("PORT", "8000"))
     if os.getenv("PLANB_QUIET") == "1":
         logging.getLogger("werkzeug").setLevel(logging.ERROR)
-    print(f"Plan B running at http://{host}:{port}")
+    print(f"Reroute running at http://{host}:{port}")
     print("Google Maps key: " + (f"loaded from {app.config['PLANB_KEY_SOURCE']}" if app.extensions["planb"]["key"] else "not found (live search disabled)"))
     app.run(host=host, port=port, threaded=True, use_reloader=False)

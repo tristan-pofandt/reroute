@@ -167,7 +167,7 @@ class Weather:
 
     @staticmethod
     def _download(url):
-        request = Request(url, headers={"User-Agent": "PlanB-student-MVP"})
+        request = Request(url, headers={"User-Agent": "Reroute-student-MVP"})
         with urlopen(request, timeout=10) as response:
             return json.load(response)
 

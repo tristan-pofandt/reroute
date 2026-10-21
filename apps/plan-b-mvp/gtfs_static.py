@@ -186,7 +186,7 @@ class Static:
 
     @staticmethod
     def _download(url):
-        request = Request(url, headers={"User-Agent": "PlanB-student-MVP"})
+        request = Request(url, headers={"User-Agent": "Reroute-student-MVP"})
         try:
             return urlopen(request, timeout=60)
         except (URLError, TimeoutError, OSError) as error:
