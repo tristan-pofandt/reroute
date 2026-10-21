@@ -13,8 +13,13 @@ import re
 from typing import Callable, Optional
 from urllib.parse import urlencode
 
+import demo_mode
 import google_api
 from google_api import RoutesError, ServiceError, decode_polyline, metres
+from gtfs_rt import delay_status, line_keys, realtime_object
+import nav
+import traffic as traffic_mod
+import weather as weather_mod
 
 try:
     from zoneinfo import ZoneInfo
@@ -28,11 +33,14 @@ TRANSIT_FIELDS = ",".join((
     "routes.legs.steps.travelMode", "routes.legs.steps.staticDuration", "routes.legs.steps.distanceMeters",
     "routes.legs.steps.polyline.encodedPolyline", "routes.legs.steps.navigationInstruction.instructions",
     "routes.legs.steps.transitDetails", "routes.travelAdvisory.transitFare",
+    "routes.legs.steps.navigationInstruction.maneuver", "routes.legs.steps.startLocation", "routes.legs.steps.endLocation",
 ))
 DRIVE_FIELDS = ",".join((
     "routes.duration", "routes.distanceMeters", "routes.polyline.encodedPolyline",
     "routes.legs.startLocation", "routes.legs.endLocation",
     "routes.legs.steps.navigationInstruction.instructions", "routes.legs.steps.staticDuration",
+    "routes.legs.steps.navigationInstruction.maneuver", "routes.legs.steps.startLocation", "routes.legs.steps.endLocation",
+    "routes.legs.steps.distanceMeters", "routes.legs.steps.polyline.encodedPolyline",
     "routes.travelAdvisory.tollInfo",
 ))
 
@@ -70,6 +78,9 @@ class Services:
     climb: Optional[Callable] = google_api.climb
     monitor: object = None
     board: object = None
+    static: object = None
+    weather: object = None
+    traffic: object = None
     extra: dict = field(default_factory=dict)
 
 
@@ -235,6 +246,12 @@ def _latlng(location):
     return None
 
 
+def _colour(value):
+    """A #RRGGBB colour from Google or GTFS, or None."""
+    text = (value or "").strip().lstrip("#")
+    return f"#{text.upper()}" if re.fullmatch(r"[0-9A-Fa-f]{6}", text) else None
+
+
 def _stamp(text):
     if not text:
         return None
@@ -275,6 +292,7 @@ def transit_option(route, index, journey):
     walking_seconds, itemized, all_timed = 0.0, 0.0, bool(steps)
     walking_known = bool(steps)
     details, segments, walk_paths, lines = [], [], [], []
+    nav_steps, transit_steps = [], []
     vehicle_km = {}
     # Scheduled times: Google's route duration can exclude a long wait for a later service,
     # so arrival is rebuilt from the first boarding and last alighting times when present.
@@ -314,6 +332,7 @@ def transit_option(route, index, journey):
             if points:
                 walk_paths.append(points)
                 segments.append({"kind": "walk", "points": points})
+            nav_steps.append(nav.nav_step(step, "walk"))
             continue
         transit = step.get("transitDetails") or {}
         _finish_walk(details, ((transit.get("stopDetails") or {}).get("departureStop") or {}).get("name"))
@@ -337,8 +356,26 @@ def transit_option(route, index, journey):
                         "stops": transit.get("stopCount"), "headsign": transit.get("headsign"),
                         "minutes": None if step_seconds is None else math.ceil(step_seconds / 60)})
         vehicle_km[category] = vehicle_km.get(category, 0) + distance_km
+        colour = _colour(line.get("color"))
+        segment = None
         if points:
-            segments.append({"kind": category, "points": points, "label": name})
+            segment = {"kind": category, "points": points, "label": name}
+            if colour:
+                segment["colour"] = colour
+            segments.append(segment)
+        item = nav.nav_step(step, "transit", title)
+        item["transit"] = {
+            "line": name, "name": line.get("name") or name, "vehicle": category, "headsign": transit.get("headsign"), "colour": colour,
+            "departure_stop": board, "arrival_stop": alight,
+            "departure_time": board_time.isoformat() if board_time else None, "arrival_time": alight_time.isoformat() if alight_time else None,
+            "stops": transit.get("stopCount"), "route_ids": [], "stop_id": None, "trip_id": None,
+            "realtime": realtime_object(), "live_query": None,
+        }
+        nav_steps.append(item)
+        transit_steps.append({"nav": item, "segment": segment, "category": category, "short": line.get("nameShort") or "", "long": line.get("name") or "",
+                              "headsign": transit.get("headsign"), "scheduled": board_time.timestamp() if board_time else None,
+                              "from": _latlng((stops.get("departureStop") or {}).get("location")),
+                              "to": _latlng((stops.get("arrivalStop") or {}).get("location"))})
     _finish_walk(details, None)
     if not details:
         details = [{"kind": "walk", "title": "Open the full directions in Google Maps", "minutes": None}]
@@ -371,6 +408,7 @@ def transit_option(route, index, journey):
         "steps": details, "segments": segments, "walk_paths": walk_paths,
         "other_minutes": math.ceil(max(0, total_seconds - itemized) / 60) if all_timed else None,
         "start": _latlng(leg.get("startLocation")), "end": _latlng(leg.get("endLocation")),
+        "nav": nav_steps, "_steps": transit_steps,
     }
 
 
@@ -403,6 +441,7 @@ def drive_option(route, index, journey):
         "segments": [{"kind": "car", "points": decode_polyline(encoded)}] if encoded else [],
         "walk_paths": [], "other_minutes": None,
         "start": _latlng(leg.get("startLocation")), "end": _latlng(leg.get("endLocation")),
+        "nav": [nav.nav_step(step, "drive") for step in steps],
     }
 
 
@@ -448,13 +487,61 @@ def _limits(option, journey):
     realtime = option.get("realtime") or {}
     if any(alert["disruptive"] for alert in realtime.get("alerts", [])):
         reasons.append({"limit": "disruption", "text": "A Translink alert affects this service"})
+    if any(((item.get("transit") or {}).get("realtime") or {}).get("status") == "cancelled" for item in option.get("nav", [])):
+        reasons.append({"limit": "disruption", "text": "A service on this route is cancelled"})
     if option.get("avoided"):
         reasons.append({"limit": "disruption", "text": "Uses the service you reported as disrupted"})
+    if (option.get("traffic") or {}).get("closure"):
+        reasons.append({"limit": "disruption", "text": "A road closure is on this route"})
     return reasons
 
 
+def _submit(pool, function, *args):
+    """Run `function` in the pool with the caller's Google cost tracker."""
+    return pool.submit(google_api.with_context(function), *args)
+
+
+def _live_query(record, item, match):
+    """The opaque query the app sends back to /api/live to refresh one transit step."""
+    names = list(dict.fromkeys(name for name in (item["line"], item["name"]) if name))
+    return {"v": 1, "route_ids": item["route_ids"], "stop_ids": match["dep_stop_ids"] if match else [], "trip_id": None,
+            "scheduled": int(record["scheduled"]) if record["scheduled"] else None, "names": names,
+            "category": record["category"], "line": item["line"], "sim": False}
+
+
+def _merge_status(statuses):
+    """The option-level realtime summary (alerts, delay, cancellations) from per-step lookups."""
+    alerts = {}
+    for status in statuses:
+        for alert in status["alerts"]:
+            alerts[alert["id"]] = {name: value for name, value in alert.items() if name != "route_ids"}
+    delays = [status["delay"] for status in statuses if status["delay"] is not None]
+    return {"alerts": list(alerts.values()), "delay": max(delays) if delays else None,
+            "cancelled": sum(status["cancelled"] for status in statuses), "checked": all(status["checked"] for status in statuses),
+            "error": next((status["error"] for status in statuses if status["error"]), None)}
+
+
+def _legacy_step_realtime(legacy, item):
+    """Per-step realtime derived from an option-level keyword lookup (monitors without exact step lookups)."""
+    keys = line_keys(item["line"]) | line_keys(item["name"])
+    alerts = [alert["id"] for alert in legacy["alerts"] if keys & set(alert["lines"])]
+    if not legacy["checked"]:
+        return realtime_object(alerts=alerts)
+    status, minutes = delay_status(None if legacy["delay"] is None else legacy["delay"] * 60)
+    return realtime_object(status, minutes, alerts=alerts)
+
+
 def plan(payload, key, services=None, now=None):
-    services = services or Services()
+    demo = demo_mode.parse(payload.get("demo") if isinstance(payload, dict) else None, InputError)
+    with google_api.tracking() as tracker:
+        result = _plan(payload, key, services or Services(), now, demo)
+    result["demo"] = demo is not None
+    if demo:
+        result["api_cost"] = tracker.summary()
+    return result
+
+
+def _plan(payload, key, services, now, demo):
     journey = validate(payload, now)
     now = now or datetime.now(BRISBANE)
     if not key:
@@ -473,8 +560,8 @@ def plan(payload, key, services=None, now=None):
 
     # Driving is always fetched: it is the baseline for cost and CO2 savings, and it powers rideshare.
     with ThreadPoolExecutor(max_workers=2) as pool:
-        transit_future = pool.submit(fetch, "transit") if journey["modes"]["transit"] else None
-        drive_routes = pool.submit(fetch, "drive").result()
+        transit_future = _submit(pool, fetch, "transit") if journey["modes"]["transit"] else None
+        drive_routes = _submit(pool, fetch, "drive").result()
         transit_routes = transit_future.result() if transit_future else []
 
     transit = []
@@ -502,7 +589,7 @@ def plan(payload, key, services=None, now=None):
     end = next((option["end"] for option in drives + transit if option.get("end")), None)
 
     # Enrich in parallel: fuel price near the start, car parks near the destination,
-    # walking elevation for public transport, and Translink realtime for each line.
+    # walking elevation for public transport, Translink realtime for each line, weather and road incidents.
     def get_fuel():
         if journey["fuel_price"] or not start or not services.fuel or not drives:
             return None
@@ -531,20 +618,91 @@ def plan(payload, key, services=None, now=None):
             return None
 
     def get_realtime(option):
+        """Match each transit step to GTFS ids (when the static index is ready) and look up its live status."""
+        statuses = []
+        for record in option["_steps"]:
+            item = record["nav"]["transit"]
+            match = services.static.match_transit(record["short"], record["long"], record["category"], record["headsign"],
+                                                  record["from"], record["to"]) if services.static else None
+            if match:
+                item["route_ids"], item["stop_id"] = match["route_ids"], match["stop_id"]
+                item["colour"] = match["colour"] or item["colour"]
+                if record["segment"] and item["colour"]:
+                    record["segment"]["colour"] = item["colour"]
+            query = item["live_query"] = _live_query(record, item, match)
+            if services.monitor and hasattr(services.monitor, "step_status"):
+                status = services.monitor.step_status(query)
+                trip_id = status["realtime"].pop("trip_id", None)
+                if trip_id:
+                    item["trip_id"] = query["trip_id"] = trip_id
+                item["realtime"] = status["realtime"]
+                statuses.append(status)
         if not services.monitor or not option["lines"]:
             return None
-        return services.monitor.status_for_lines([line["name"] for line in option["lines"]] + [line["full_name"] for line in option["lines"]])
+        if statuses:
+            return _merge_status(statuses)
+        legacy = services.monitor.status_for_lines([line["name"] for line in option["lines"]] + [line["full_name"] for line in option["lines"]])
+        for record in option["_steps"]:
+            record["nav"]["transit"]["realtime"] = _legacy_step_realtime(legacy, record["nav"]["transit"])
+        return legacy
+
+    def get_weather():
+        if not start:
+            return None
+        if demo and demo["weather"] != "live":
+            return weather_mod.simulate(demo["weather"], journey["departure"], now)
+        if not services.weather:
+            return None
+        return services.weather.forecast(start[0], start[1], journey["departure"], now)
+
+    def get_traffic(option):
+        points = option["segments"][0]["points"] if option["segments"] else []
+        if demo and demo["traffic"] != "live":
+            return traffic_mod.simulate(demo["traffic"], points)
+        if not services.traffic or not points:
+            return None
+        events, available = services.traffic.events()
+        if not available:
+            return traffic_mod.summarise([], available=False)
+        return traffic_mod.summarise(services.traffic.on_route(points, journey["departure"], events))
 
     with ThreadPoolExecutor(max_workers=8) as pool:
-        fuel_future = pool.submit(get_fuel)
-        parking_future = pool.submit(get_parking)
-        climb_futures = [pool.submit(get_climb, option) for option in transit]
-        realtime_futures = [pool.submit(get_realtime, option) for option in transit]
+        fuel_future = _submit(pool, get_fuel)
+        parking_future = _submit(pool, get_parking)
+        weather_future = _submit(pool, get_weather)
+        climb_futures = [_submit(pool, get_climb, option) for option in transit]
+        realtime_futures = [_submit(pool, get_realtime, option) for option in transit]
+        traffic_futures = [_submit(pool, get_traffic, option) for option in drives]
         fuel = fuel_future.result()
         parking = parking_future.result()
+        weather = weather_future.result()
         for option, climb_future, realtime_future in zip(transit, climb_futures, realtime_futures):
             option["elevation"] = climb_future.result()
             option["realtime"] = realtime_future.result()
+        for option, traffic_future in zip(drives, traffic_futures):
+            option["traffic"] = traffic_future.result()
+
+    # Demo mode: mark the first option that uses the chosen kind of service (or every option for "all") as disrupted.
+    if demo and demo["disrupted"] != "none":
+        hit = False
+        for option in transit:
+            records = [record for record in option["_steps"] if demo_mode.applies(demo, record["category"])]
+            for record in records:
+                item = record["nav"]["transit"]
+                alert = demo_mode.simulated_alert(item["line"], record["category"], demo["late_min"], item["route_ids"])
+                item["realtime"] = demo_mode.apply_realtime(item["realtime"], alert, demo["late_min"])
+                item["live_query"]["sim"] = True
+                summary = option.get("realtime") or {"alerts": [], "delay": None, "cancelled": 0, "checked": False, "error": None}
+                summary = {**summary, "alerts": summary["alerts"] + [alert]}
+                if item["realtime"]["status"] == "late":
+                    summary["delay"] = max(summary["delay"] or 0, item["realtime"]["delay_min"])
+                option["realtime"] = summary
+            if records:
+                hit = True
+                if demo["disrupted"] != "all":
+                    break
+        if not hit:
+            notes.append(f"Demo mode: no option uses {demo['disrupted']}, so nothing was marked as disrupted.")
 
     # Public transport: realtime adjustment and avoided services.
     for option in transit:
@@ -591,6 +749,10 @@ def plan(payload, key, services=None, now=None):
             option["walking_minutes"] = park_walk
             option["arrival_dt"] += timedelta(minutes=park_walk)
             option["steps"].append({"kind": "walk", "title": f"Park at {nearest_park['name']} and walk about {nearest_park['distance_m']} m", "minutes": park_walk})
+        incidents = (option.get("traffic") or {}).get("added_delay_min", 0)
+        if incidents:
+            option["scheduled_arrival_dt"] = option["arrival_dt"]
+            option["arrival_dt"] += timedelta(minutes=incidents)
         option["parking_note"] = ("No car parks are listed near the destination" if parking is not None and not parking["count"]
                                   else f"{parking['count']} car park{'s' if parking['count'] != 1 else ''} listed within {parking['radius_m']} m"
                                   + (" · paid" if parking["any_paid"] else "") + (" · free options" if parking["any_free"] else "")
@@ -606,7 +768,9 @@ def plan(payload, key, services=None, now=None):
         km = baseline["km"]
         options.append({
             "id": "rideshare-0", "mode": "rideshare", "kind": "rideshare", "title": "Uber", "subtitle": "Rideshare",
-            "duration_minutes": baseline["duration_minutes"], "arrival_dt": journey["departure"] + timedelta(seconds=baseline["drive_seconds"]),
+            "duration_minutes": baseline["duration_minutes"],
+            "arrival_dt": journey["departure"] + timedelta(seconds=baseline["drive_seconds"],
+                                                           minutes=(baseline.get("traffic") or {}).get("added_delay_min", 0)),
             "walking_minutes": 0, "transfers": 0, "lines": [], "distance_km": baseline["distance_km"],
             "cost": None, "cost_known": False, "cost_label": "Live price shown in Uber",
             "cost_breakdown": [], "cost_unknown_text": "Price and pickup wait are shown in Uber",
@@ -614,7 +778,7 @@ def plan(payload, key, services=None, now=None):
             "steps": [{"kind": "rideshare", "title": "Open Uber to see the live price and pickup time", "minutes": None},
                       {"kind": "rideshare", "title": f"Ride about {baseline['duration_minutes']} min ({baseline['distance_km']} km)", "minutes": baseline["duration_minutes"]}],
             "segments": baseline["segments"], "walk_paths": [], "other_minutes": None,
-            "start": baseline["start"], "end": baseline["end"], "pickup_unknown": True,
+            "start": baseline["start"], "end": baseline["end"], "pickup_unknown": True, "nav": [],
             "uber_url": uber_link(start, end, journey["origin"], journey["destination"]),
         })
 
@@ -622,6 +786,7 @@ def plan(payload, key, services=None, now=None):
         option["reasons"] = _limits(option, journey)
         option["fits"] = not option["reasons"]
         option["maps_url"] = maps_link(journey["origin"], journey["destination"], option["mode"])
+        option["weather_warning"] = weather_mod.walking_warning((weather or {}).get("kind"), (weather or {}).get("warning"), option["walking_minutes"])
         if baseline and option is not baseline:
             option["vs_drive"] = {
                 "minutes": round((option["arrival_dt"] - baseline["arrival_dt"]).total_seconds() / 60),
@@ -638,7 +803,7 @@ def plan(payload, key, services=None, now=None):
             matches = []
 
     def public(option):
-        hidden = {"arrival_dt", "scheduled_arrival_dt", "leave_dt", "walk_paths", "drive_seconds", "km", "tolls"}
+        hidden = {"arrival_dt", "scheduled_arrival_dt", "leave_dt", "walk_paths", "drive_seconds", "km", "tolls", "_steps"}
         result = {key: value for key, value in option.items() if key not in hidden}
         result["arrival"] = option["arrival_dt"].isoformat()
         leave = option.get("leave_dt")
@@ -658,7 +823,7 @@ def plan(payload, key, services=None, now=None):
         "baseline": {"co2_kg": baseline["co2_kg"], "cost": baseline["cost"], "cost_known": baseline["cost_known"],
                      "minutes": baseline["duration_minutes"], "distance_km": baseline["distance_km"]} if baseline else None,
         "fuel": fuel if not journey["fuel_price"] else {"price": journey["fuel_price"], "stations": 0, "manual": True, "fuel_type": journey["fuel_type"]},
-        "parking": parking, "rides": matches,
+        "parking": parking, "rides": matches, "weather": weather_mod.public(weather),
         "errors": errors, "notes": sorted(set(notes)),
         "queried_at": now.isoformat(), "purpose": journey["purpose"],
         "origin": journey["origin"], "destination": journey["destination"], "start": start, "end": end,
@@ -666,6 +831,51 @@ def plan(payload, key, services=None, now=None):
         "deadline": journey["deadline"].isoformat() if journey["deadline"] else None,
         "factors": journey["factors"],
     }
+
+
+def clean_query(value):
+    """Validate one opaque live_query sent back by the app before it reaches the feed lookups."""
+    if not isinstance(value, dict):
+        raise InputError("Send the live queries the search returned.")
+
+    def strings(name, count, size):
+        items = value.get(name) or []
+        if not isinstance(items, list) or len(items) > count or not all(isinstance(item, str) and 0 < len(item) <= size for item in items):
+            raise InputError("A live query is not valid.")
+        return items
+
+    trip_id, scheduled = value.get("trip_id"), value.get("scheduled")
+    if trip_id is not None and not (isinstance(trip_id, str) and len(trip_id) <= 120):
+        raise InputError("A live query is not valid.")
+    if scheduled is not None and (isinstance(scheduled, bool) or not isinstance(scheduled, (int, float)) or not 0 < scheduled < 4_000_000_000):
+        raise InputError("A live query is not valid.")
+    category = value.get("category")
+    if category not in (None, "bus", "rail", "tram", "ferry"):
+        raise InputError("A live query is not valid.")
+    line = value.get("line") or ""
+    if not isinstance(line, str) or len(line) > 60:
+        raise InputError("A live query is not valid.")
+    return {"v": 1, "route_ids": strings("route_ids", 80, 40), "stop_ids": strings("stop_ids", 12, 40), "trip_id": trip_id or None,
+            "scheduled": int(scheduled) if scheduled else None, "names": strings("names", 4, 80), "category": category,
+            "line": line, "sim": value.get("sim") is True}
+
+
+def live(payload, services, now=None):
+    """Refresh the realtime status of up to eight transit steps (POST /api/live). Never calls Google."""
+    if not isinstance(payload, dict) or not isinstance(payload.get("queries"), list) or not 0 < len(payload["queries"]) <= 8:
+        raise InputError("Send between one and eight live queries.")
+    demo = demo_mode.parse(payload.get("demo"), InputError)
+    monitor = services.monitor
+    results = []
+    for raw in payload["queries"]:
+        query = clean_query(raw)
+        realtime = monitor.step_status(query)["realtime"] if monitor and hasattr(monitor, "step_status") else realtime_object()
+        realtime.setdefault("trip_id", None)
+        if demo and query["sim"] and demo_mode.applies(demo, query["category"]):
+            alert = demo_mode.simulated_alert(query["line"], query["category"], demo["late_min"], query["route_ids"])
+            realtime = demo_mode.apply_realtime(realtime, alert, demo["late_min"])
+        results.append(realtime)
+    return {"results": results, "fetched_at": (now or datetime.now(BRISBANE)).isoformat()}
 
 
 def recommend(options, journey):

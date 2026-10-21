@@ -1,18 +1,21 @@
-# Plan B MVP (v2)
+# Plan B MVP (v3)
 
-Plan B MVP v2 is a local student prototype that helps a traveller choose a practical alternative when a public-transport journey is disrupted, and also lets them view routes regularly in a "Plan a trip" mode. It reuses the iOS-style look of [Prototype 6](../prototype-6-2026-09-23/description.md) and implements the "Re-evaluated ideas" section of the [prototype ideas](../../docs/design/prototype_ideas.md). The separate [interview scenario](demo.html) preserves the prepared, fictional Bus 412 exercise. The [scope and evidence trail](../../docs/product/mvp-scope-2026-10-20.md) links all 21 de-identified prototype interview records, and the [v2 feature log](../../docs/product/mvp-v2-feature-log-2026-10-21.md) maps each idea to what was built and what remains untested.
+Plan B MVP v3 is a student prototype, run locally or from a prepared deployment configuration, that helps a traveller choose a practical alternative when a public-transport journey is disrupted, and also lets them view routes regularly in a "Plan a trip" mode. v3 is an installable web app (PWA) with a Flask server, a dark editorial look taken from the [design system brief](../../docs/design/design-system.md), live Translink vehicle positions, in-app directions, weather, traffic, background disruption notifications and an investor demo mode. It implements the "Further features" section of the [prototype ideas](../../docs/design/prototype_ideas.md) on top of the v2 features. The separate [interview scenario](demo.html) preserves the prepared, fictional Bus 412 exercise. The [scope and evidence trail](../../docs/product/mvp-scope-2026-10-20.md) links all 21 de-identified prototype interview records, the [v2 feature log](../../docs/product/mvp-v2-feature-log-2026-10-21.md) maps the earlier ideas, and the [v3 feature log](../../docs/product/mvp-v3-feature-log-2026-10-21.md) maps each v3 rule and feature to what was built and what remains untested.
 
-**Status:** implemented on 2026-10-21 with Claude Code assistance for team review. No participant has tested v2, and nothing here establishes adoption, live-data accuracy or willingness to pay.
+**Status:** implemented on 2026-10-21 with Claude Code assistance for team review. No participant has tested v3, nothing has been deployed, and nothing here establishes adoption, live-data accuracy or willingness to pay.
 
 ## Run locally
 
-Prerequisites: Python 3.12 or newer and a Google Cloud API key. The server uses only the Python standard library, there is no build step and there are no packages to install. From this directory:
+Prerequisites: Python 3.13 and a Google Cloud API key. v3 is no longer standard-library only: it needs Flask, pywebpush (with `cryptography`), segno and gunicorn, listed in `requirements.txt`. There is still no build step for the front end. From this directory:
 
 ```bash
+pip install -r requirements.txt
 python server.py
 ```
 
-Then open `http://127.0.0.1:8000`. The optional `PORT` environment variable changes the port, and the server listens only on `127.0.0.1`. On desktop the app appears inside a phone frame; on a phone-sized screen it fills the screen. Windows no longer needs the `tzdata` package because Brisbane time falls back to a fixed UTC+10 offset.
+Then open `http://127.0.0.1:8000`. The optional `HOST` and `PORT` environment variables change where it listens (default `127.0.0.1` and `8000`). On a phone-sized screen the app fills the screen with safe-area insets; on desktop it is a centred column up to 480 px wide. On Windows, `python` must be a real Python install: the Microsoft Store shortcut that Windows puts on the PATH by default does not run scripts, so use the full path to your `python.exe` (or `py`) if `python server.py` prints a Store message instead of starting the server.
+
+Install and Web Push need a secure origin: `http://localhost` and `http://127.0.0.1` work on the same machine, but a phone needs HTTPS (see [`infra/plan-b-mvp/README.md`](../../infra/plan-b-mvp/README.md)). The first start downloads the Translink static GTFS zip (about 37 MB) in a background thread and builds a cached index of about 1.3 MB (1,211 routes and 12,861 stops at the check on 2026-10-21); this took about 20 seconds on the developer machine, and searches never wait for it. The cache is stored in `data/`, which is git-ignored.
 
 ### API key lookup
 
@@ -22,123 +25,165 @@ The server looks for the Google key in this order and uses the first one it find
 2. a `.env` file in `apps/plan-b-mvp/`;
 3. a `.env` file in `apps/prototype-6-2026-09-23/` (the team's existing key).
 
-`.env` files are git-ignored. Keep the key on the server, never paste it into the browser and never commit it. Without a key the Google-powered features (routes, places, fuel prices, car parks) are unavailable, but the Translink alerts, ride board, settings, impact dashboard and the fictional `demo.html` do not need it.
+`.env` files are git-ignored. Keep the key on the server, never paste it into the browser and never commit it. Without a key the Google-powered features (routes, places, fuel prices, car parks, elevation) are unavailable, but the Translink alerts and vehicles, weather, traffic, ride board, settings, impact dashboard and the fictional `demo.html` do not need it.
 
 ### Google APIs
 
 | API | Needed for | Status on the team key (checked 2026-10-21) |
 | --- | --- | --- |
-| Routes API | Public-transport and driving routes, walking steps, tolls, map geometry | Required; enabled and verified |
+| Routes API | Public-transport and driving routes, walking steps, tolls, map geometry, step-by-step maneuvers for in-app directions | Required; enabled and verified |
 | Places API (New) | Address suggestions while typing (Autocomplete), local average fuel price and nearby car parks | Required for suggestions, fuel price and parking; enabled and verified (suggestions, fuel prices and car parks returned for Brisbane) |
-| Elevation API | Uphill and downhill metres for walking sections | Optional; not enabled on the team key, so the app falls back to Open-Meteo. If the team enables it, it is used automatically |
+| Elevation API | Uphill and downhill metres for walking sections | Optional; it worked on the team key during v3 testing (a first search made four Elevation requests), so the v2 statement that it was not enabled is no longer correct. Open-Meteo elevation is still the fallback if it is not enabled |
 
 Google bills requests per API. Set a suitable quota or budget in Google Cloud before shared use. See Google's [Routes API setup](https://developers.google.com/maps/documentation/routes/get-api-key), [transit routing](https://developers.google.com/maps/documentation/routes/transit-route), [usage and billing](https://developers.google.com/maps/documentation/routes/usage-and-billing) and [attribution policy](https://developers.google.com/maps/documentation/routes/policies).
+
+### Environment variables
+
+The deployment settings are documented in [`infra/plan-b-mvp/README.md`](../../infra/plan-b-mvp/README.md). The ones that matter locally are:
+
+| Variable | Meaning |
+| --- | --- |
+| `MAPS_API_KEY` | Google key, see the lookup order above |
+| `HOST`, `PORT` | Bind address (default `127.0.0.1`) and port (default `8000`) |
+| `PUBLIC_URL` | The address people use; encoded by `/qr.svg` and accepted by the Origin check |
+| `VAPID_PRIVATE_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT` | Web Push keys and contact. If both keys are unset, one pair is generated into `data/vapid.json` |
+| `QLDTRAFFIC_API_KEY` | Optional own QLDTraffic key; otherwise the public key published on the Queensland Government open data portal is used |
+| `PLANB_PLAN_LIMIT_PER_HOUR` | Searches per visitor address per hour, default 40 |
+| `PLANB_DAILY_GOOGLE_CAP` | Searches per Brisbane day for everyone together, default 1500 |
+| `PLANB_DATA_DIR` | Where the ride board, push subscriptions, VAPID keys and GTFS cache are written, default `data/` here |
 
 ## Data sources and what is sent where
 
 | Service | What it provides | What is sent |
 | --- | --- | --- |
-| Google Routes API (via this server) | Transit and driving routes, durations, tolls, fares when returned, route geometry | Origin, destination and departure time for each search |
+| Google Routes API (via this server) | Transit and driving routes, durations, tolls, fares when returned, route and step geometry, maneuvers | Origin, destination and departure time for each search |
 | Google Places API (New) (via this server) | Address suggestions, fuel prices near the start and car parks within 800 m of the destination | The partly typed address with a random session token and an approximate bias location (current location or Brisbane), and coordinates near the start and the destination |
-| Translink SEQ GTFS-Realtime (`gtfsrt.api.translink.com.au`, no key) | Service alerts and trip updates (delays and cancellations), cached for 60 seconds | A plain feed request from this server; no trip details are sent |
+| Google Elevation API (via this server) | Elevation for walking sections, when enabled on the key | Sampled coordinates along walking paths |
+| Translink SEQ static GTFS (`gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip`, no key) | Routes, trips and stops, used to map each Google transit step to exact route IDs, stop IDs and (where possible) trip IDs | A plain download request from this server, at start and when the cache is older than 7 days |
+| Translink SEQ GTFS-Realtime alerts and trip updates (no key) | Service alerts, delays and cancellations, cached for 60 seconds (trip updates 30 seconds) | A plain feed request from this server; no trip details are sent |
+| Translink SEQ GTFS-Realtime VehiclePositions (no key) | Vehicle locations (about 800 to 1,000 vehicles in the developer check; bearing is usually absent), cached for 15 seconds | A plain feed request from this server |
+| Open-Meteo forecast API (no key) | Weather for the home widget and walking warnings, cached for 10 minutes per cell of about 1 km | Coordinates of the start rounded to three decimals (about 100 m), from this server |
 | Open-Meteo elevation API (fallback) | Elevation from a 90 m Copernicus terrain model | Sampled coordinates along walking paths |
+| QLDTraffic open data events API (public key) | Road events used to estimate driving delays, cached for 5 minutes (570 events at the check on 2026-10-21) | A plain request from this server; no trip details are sent |
+| Browser push services (the endpoint of each browser, for example Google, Mozilla or Apple) via Web Push | Delivery of background disruption notifications | An encrypted payload (title, text and a link) from this server to the subscription endpoint, only for travellers who turn on background alerts |
+| segno (library, no external service) | The QR code at `/qr.svg` | Nothing leaves the server |
 | Uber universal deep link (`m.uber.com/ul`) | Opens Uber with pickup and dropoff filled in | Pickup and dropoff coordinates, only when the traveller opens the link |
-| Google Maps directions link | Hands the chosen trip to Google Maps for turn-by-turn directions | The entered places, only when the traveller opens the link |
-| OpenStreetMap tiles with Leaflet | Map background | Standard tile requests from the browser |
+| Google Maps directions link | Secondary hand-off for the chosen trip | The entered places, only when the traveller opens the link |
+| Google Fonts (`fonts.googleapis.com`, `fonts.gstatic.com`) | The Inter typeface used by the design system | Standard font and stylesheet requests from the browser |
+| OpenStreetMap tiles with Leaflet (cdnjs) | Map background; Leaflet is loaded the first time a map appears | Standard tile and script requests from the browser |
 
-The browser stores settings, saved places and the impact history in `localStorage` on that device only. The ride board is stored on the server in `data/rides.json`, which is git-ignored.
+The browser stores settings, saved places, demo settings, watch details and the impact history in `localStorage` on that device only. The server stores the ride board, push subscriptions, VAPID keys and the GTFS index in `data/`, which is git-ignored.
 
 ## Features
 
-The mapping from each idea to what was built is in the [v2 feature log](../../docs/product/mvp-v2-feature-log-2026-10-21.md). In summary:
+The mapping from each rule and feature to what was built is in the [v3 feature log](../../docs/product/mvp-v3-feature-log-2026-10-21.md) (v2 features are in the [v2 feature log](../../docs/product/mvp-v2-feature-log-2026-10-21.md)). In summary:
+
+### Look and feel (design system)
+
+- **Design system look:** dark-first editorial layout using the tokens in [`design-system.md`](../../docs/design/design-system.md) (surface layers, subtle 1 px borders, Inter, 16 and 24 px spacing, one accent), with Auto, Light and Dark themes in Settings. The fake phone hardware and status bar of v2 were removed.
+- **States and tactility:** pressed state (scale 0.98), accessible focus rings, 44 px minimum tap targets, shimmer skeletons instead of spinners, and fading success and error banners. Animations use only `transform` and `opacity`, and respect the reduced-motion setting.
+- **Icons and loading:** one set of inline SVG icons instead of emojis; Leaflet is loaded the first time a map appears and the QR image is lazy-loaded.
 
 ### Planning and decision support
 
-- **Address suggestions:** every address field (from, to, Panic mode and the saved Home and Work/Uni places) shows a dropdown of suggestions while typing, from Places API Autocomplete (New), plus the current location, saved places and recent choices. Arrow keys and Enter select a suggestion. A chosen suggestion's Google place ID is sent to the Routes API, so the route goes to exactly that place instead of a re-geocoded address. Requests wait until three characters, are debounced and use session tokens to limit billing.
+- **Address suggestions:** every address field shows a dropdown of suggestions while typing, from Places API Autocomplete (New), plus the current location, saved places and recent choices. A chosen suggestion's Google place ID is sent to the Routes API. Requests wait until three characters, are debounced and use session tokens to limit billing.
 - **Plan B search:** real free-text origin and destination, "Current location" (browser geolocation), saved Home and Work/Uni places, departure time, an optional deadline and an optional "What was disrupted?" field.
-- **Plan a trip mode:** regular route viewing with an optional deadline and a default "Public transport first" sort, so public transport is emphasised.
-- **Transparent ranking:** sort chips with a one-line explanation of the order. There is no opaque score.
-- **Plain-language cards:** each route card has a trade-off sentence, a "vs driving" comparison (money saved, CO2 avoided, extra minutes), certainty cues (deadline buffer, live service status) and effort cues (walking, climb, transfers). Fields can be hidden in Settings to reduce clutter.
-- **Elevation gain:** uphill and downhill metres for the walking parts of public-transport options, shown as "Flat walk", "Gentle climb +X m" or "Uphill walk +X m". This comes from an elevation service, not from the Routes API.
-- **Driving cost and parking:** fuel (distance × L/100 km × fuel price) plus the Google toll estimate plus parking. Car parks within 800 m of the destination are listed with paid or free flags, the nearest is drawn on the map, and its walk is added to driving arrival time and walking. Google does not provide parking prices, so the traveller sets a typical parking cost; driving cost is marked incomplete when paid parking exists and no cost is set. The list shows car parks that Google lists, not live space availability.
-- **Uber:** a deep link opens Uber with pickup and dropoff filled in, where the live price and pickup time are shown. The app does not show an Uber price itself and labels rideshare cost as unknown.
-- **Map:** Leaflet with OpenStreetMap tiles (darkened in dark mode), zoom buttons, fit route, full-screen expand, scroll-wheel zoom, colour-coded segments (walking is dashed), start and destination pins, car-park pins for driving and an overview map of all routes.
-- **Next steps:** the chosen trip shows simplified steps (consecutive walking steps are merged into "Walk about N min to a stop") with turn-by-turn directions in the detail view, and a Google Maps directions handoff.
+- **Plan a trip mode:** regular route viewing with an optional deadline and a default "Public transport first" sort.
+- **Transparent ranking and plain-language cards:** sort chips with a one-line explanation, a trade-off sentence per card, a "vs driving" comparison, certainty cues (deadline buffer, live status) and effort cues (walking, climb, transfers). Card fields can be hidden in Settings.
+- **Elevation gain:** uphill and downhill metres for walking parts of public-transport options, from an elevation service rather than the Routes API.
+- **Driving cost, parking and traffic:** fuel plus the Google toll estimate plus parking, with car parks within 800 m of the destination. QLDTraffic events within 150 m of the driving route add an estimated delay (a closure on the route is flagged and blocks the option; a crash, hazard or flood adds 5 minutes; roadworks or a special event add 2; the total is capped at 20 and labelled as an estimate). Google's traffic-aware drive time already includes normal congestion.
+- **Uber:** a deep link opens Uber with pickup and dropoff filled in. The app does not show an Uber price and labels rideshare cost as unknown.
+- **Map:** Leaflet with OpenStreetMap tiles (darkened in dark mode), zoom buttons, fit route, full-screen expand, colour-coded segments (GTFS route colours when matched, dashed walking), pins, car-park pins, traffic incident pins and an overview map of all routes.
 
-### Disruption handling
+### Live data and disruption handling
 
-- **Panic mode:** a large button on the home screen. It uses the current location (or a typed place), a destination from saved places or the last destination, and an optional "need to be there by" time. It returns one recommendation: only options with no active Translink alert, on time first, public transport preferred, then least effort (walking minutes plus 8 minutes per change). It shows leave-by time, arrival, the reason and simplified steps, with "Start directions" (Google Maps) and "See other options".
-- **Translink alerts and delays:** the home screen shows live alerts, and an alerts sheet can be filtered by line. Active disruptive alerts flag affected routes, the median current delay per line shifts arrival, and cancellations are shown. Bus lines match by number; train lines match by Translink route codes or keywords, which is approximate.
-- **Watch for disruptions:** on a chosen trip the app checks every minute while it is open and shows an in-app alert with "See my alternatives", which re-plans avoiding that line. There are no push notifications and no monitoring while the app is closed.
+- **Weather widget and walking warning:** the start screen shows current weather and the next hours from the Open-Meteo forecast. Bad weather (precipitation chance of 50% or more or 0.5 mm per hour or more, thunderstorm or heavy rain codes, apparent temperature of 35 degrees or more, or gusts of 50 km/h or more) adds a warning, and an option with 5 or more walking minutes shows a walking-in-the-weather warning. The widget uses Brisbane weather unless location access was already granted.
+- **Exact lines from static GTFS:** each Google transit step is matched to Translink route IDs, stop IDs and, where TripUpdates allow, the exact trip, so alerts and delays match by route ID. The keyword matcher remains the fallback while the static data is loading or a step is unmatched.
+- **Live vehicles and delay status:** each transit step shows "On time", "N min late", "N min early", "Cancelled" or "No live data", refreshed every 15 seconds on the next-steps and directions screens, with the vehicle position on the map before boarding. "On time" and "early" are reported only for an exactly matched trip; otherwise only a route-wide median delay of a minute or more is shown.
+- **Live in-app directions:** a navigation screen follows the traveller's GPS along the chosen trip with the next maneuver and distance for walking and driving, boarding and alight countdowns for transit legs, a step list, optional voice prompts, a screen wake lock, skip step and re-centre, and a "Re-plan from here" prompt after about 10 seconds more than 60 m off a walking or driving step. "Open in Google Maps" stays as a secondary link.
+- **Panic mode:** a large button on the home screen that returns one recommendation using only options with no active Translink alert, on time first, public transport preferred, then least effort.
+- **Translink alerts and watch:** home-screen alerts, a line-filtered alerts sheet and, while the app is open, a once-a-minute check of the chosen trip with "See my alternatives".
+- **PWA install and background push monitoring:** the app has a manifest, icons and a service worker (offline app shell, network-first API reads). On a chosen trip, "Watch this trip in the background" asks for notification permission and sends a Web Push subscription and the trip's route IDs to the server. A server thread checks every 60 seconds and sends one push per new disruptive alert or cancellation on those routes; opening the notification re-plans the trip avoiding the disrupted lines. A watch expires 30 minutes after the deadline (3 hours with none). Settings and the home screen offer an "Install Plan B" button where the browser supports it, and on iPhone a sheet explains Share, then Add to Home Screen.
+- **Refresh live data:** a home-screen button calls `POST /api/sync` to refresh alerts, vehicles and weather, shows a skeleton, then a success or error banner that dismisses after 3 seconds.
 
 ### Sharing and sustainability
 
-- **Ride board:** offer car seats or start a split Uber. Posts match when the start is within 2 km, the destination is within 2.5 km and departure is within 45 minutes. A traveller joins with a nickname, sees the per-person cost split and the CO2 avoided by sharing. Posts store only rounded points (about 100 m), no contact details, expire 30 minutes after departure and show a safety notice. It is visible to everyone using the same local server, so it is a local prototype and not a multi-user service.
-- **CO2 on every option:** transit uses per-mode kg CO2e per passenger-km × distance (defaults: bus 0.105, train 0.035, light rail 0.029, ferry 0.019, approximate values adapted from UK government averages and editable in Settings). Car uses litres × 2.31 kg/L for petrol or 2.68 kg/L for diesel, and Uber assumes 7 L/100 km. A "Lowest CO2" sort is available.
-- **Impact Dashboard:** trips logged with "I'm taking this trip" are compared with driving the same route alone. It shows CO2 avoided, money saved, low-car trips and the percentage of trips not driving, month-by-month bar charts for the last six months (with hover tooltips and a table view) and recent trips. Data stays in the browser only.
+- **Share / QR:** a Share sheet shows a QR code (from `GET /qr.svg`, which encodes `PUBLIC_URL` or the address the request came to), the link, a copy button and the system share sheet where available.
+- **Ride board:** offer car seats or start a split Uber. Posts match when the start is within 2 km, the destination is within 2.5 km and departure is within 45 minutes. It stores only rounded points, no contact details, expires 30 minutes after departure and is visible only to people using the same server.
+- **CO2 and Impact Dashboard:** CO2 estimate on every option, a "Lowest CO2" sort and a dashboard comparing logged trips with driving the same route alone. History stays in the browser.
+
+### Demo mode
+
+A flask button on the home screen, or the Demo mode row in Settings, opens a menu for an investor walkthrough: weather (Live, Clear, Rain, Storm, Heatwave), disrupted mode (None, Train, Bus, Ferry, Light rail, All public transport), traffic (Live, Heavy, Crash on route), running late (0, 5, 10 or 20 minutes added), start point (current location or a preset Taringa Station to UQ St Lucia trip), a simulated journey that plays the directions back at 25 times speed instead of using GPS, and "Send test disruption push in 10 s". A Demo mode pill stays visible, and every simulated value is labelled "Simulated". **Only in demo mode**, each search shows the Google API requests it made and an approximate cost in US dollars, calculated from list prices in `google_api.py` (checked 2026-10-21, before Google's free monthly usage caps). In the developer check, a first demo search cost about US$0.10.
 
 ### Settings
 
-A slide-in Settings panel replaces on-screen mode selection:
-
-- theme (Auto, Light or Dark) and reduce motion;
-- ways to travel: public transport (bus, train, light rail and ferry chips), own car and Uber;
-- fuel use in L/100 km, fuel type, and fuel price as either "Live average" from Places API (New) fuel prices near the start or a manual price;
-- typical parking cost;
-- a flat public-transport fare used when Google returns no fare (default $0.50, an assumption to check, because Google returned no Translink fares in testing);
-- default limits;
-- toggles for each card field: buffer, cost, walking, transfers, elevation, CO2, parking and live status;
-- saved places (Home and Work/Uni), watch-trip options and editable CO2 factors;
-- clear impact history;
-- a link to the fictional interview scenario.
-
-### Motion and look
-
-The home screen has a banner with the Plan B logo (a broken direct route with Plan B curving around it, also used as `favicon.svg`), a time-of-day greeting, live Translink and impact chips, and a route illustration that draws itself, with a bus moving along it (hidden when motion is reduced). Prototype 6 styling, spring toggles, sliding segmented controls, a slide-in settings panel, bottom sheets, push transitions, rising cards and toasts. All of these respect the reduced-motion setting.
+A slide-in Settings panel covers theme (Auto, Light, Dark) and reduce motion; ways to travel; fuel use, fuel type and fuel price ("Live average" or manual); typical parking cost; a flat public-transport fare used when Google returns none (default $0.50, an assumption to check); default limits; toggles for each card field; saved places; watch-trip options; editable CO2 factors; demo mode; install; share; clearing the impact history; and a link to the fictional interview scenario.
 
 ## Stack decision
 
-The front end stays as plain HTML, CSS and JavaScript (`index.html`, `app.js`, `app.css`) served by a Python standard-library server, with no build step and no new dependencies. Streamlit was considered and rejected because it cannot reproduce Prototype 6's app look, page push transitions, bottom sheets and spring animations. The v1 files `live.js` and `live.css` were removed because `app.js` and `app.css` replace them.
+The server is now Flask. The design-system brief ([`design-system.md`](../../docs/design/design-system.md)) specified Flask, production deployment needs a proper WSGI server (gunicorn) rather than the standard-library development server, and Flask removes the hand-written routing and header handling that v2 needed. The front end stays plain HTML, CSS and JavaScript (`index.html`, `app.js`, `app.css`) with no build step. The v2 reasons for rejecting Streamlit still apply. Production runs `gunicorn -w 1 --threads 8 server:app`, with one worker because the push monitor thread, the static GTFS loader and the feed caches live inside the process. `python server.py` still works for local development.
 
 ## Files
 
 | File | Purpose |
 | --- | --- |
-| `index.html`, `app.js`, `app.css` | v2 front end |
-| `server.py` | Local HTTP server and API routes |
-| `live_routes.py` | Planner: route building, limits, ranking, cost and CO2 |
-| `google_api.py` | Google Routes, Places (New) and elevation requests |
-| `gtfs_rt.py` | Translink GTFS-Realtime alert and trip-update decoder (no protobuf library) |
+| `index.html`, `app.js`, `app.css` | v3 front end (design-system look, screens, navigation, demo mode) |
+| `manifest.webmanifest`, `sw.js`, `icons/` | PWA manifest, service worker (app shell, API caching, push handling) and icons |
+| `favicon.svg` | Plan B logo and favicon |
+| `server.py` | Flask app: API routes, PWA files, `/qr.svg`, Origin check and request limits |
+| `live_routes.py` | Planner: route building, limits, ranking, cost, CO2, weather and traffic attachment |
+| `google_api.py` | Google Routes, Places (New) and elevation requests, and the API cost price table |
+| `nav.py` | Turns Google steps into the `nav` list used by in-app directions |
+| `gtfs_static.py` | Translink static GTFS download, index and step-to-route matching |
+| `gtfs_rt.py` | GTFS-Realtime decoder (alerts, trip updates, vehicle positions; no protobuf library) and delay status |
+| `weather.py` | Open-Meteo forecast, bad-weather rules and simulated weather |
+| `traffic.py` | QLDTraffic events, delay estimates and simulated traffic |
+| `push.py` | Web Push subscriptions, VAPID keys and the background watch thread |
+| `limits.py` | Per-visitor hourly limits and the daily Google cap |
+| `demo_mode.py` | Demo option validation and simulated disruptions |
 | `rides.py` | Shared ride board storage and matching |
+| `requirements.txt` | Python packages (Flask, pywebpush, cryptography, segno, gunicorn) |
 | `demo.html`, `demo.js`, `styles.css` | Unchanged fictional Bus 412 interview scenario |
-| `test_live_routes.py`, `test_gtfs_rt.py`, `test_rides.py` | Offline tests |
+| `test_live_routes.py`, `test_gtfs_rt.py`, `test_rides.py` | v2 offline tests |
+| `test_gtfs_static.py`, `test_plan_v3.py`, `test_push_limits.py`, `test_realtime_v3.py`, `test_server.py`, `test_weather_traffic.py` | v3 offline tests |
+
+Deployment files (`Dockerfile`, `render.yaml`) are in [`infra/plan-b-mvp/`](../../infra/plan-b-mvp/README.md).
 
 ## Develop and check
 
 Run the offline tests from this directory:
 
 ```bash
+pip install -r requirements.txt
 python -m unittest -v
-python -m py_compile server.py live_routes.py google_api.py gtfs_rt.py rides.py
+python -m py_compile server.py live_routes.py google_api.py gtfs_rt.py gtfs_static.py weather.py traffic.py push.py limits.py nav.py demo_mode.py rides.py
 ```
 
-The 82 tests in `test_live_routes.py`, `test_gtfs_rt.py` and `test_rides.py` make no network calls, so they cannot verify external data. On 2026-10-21 the app was also driven end to end in headless Microsoft Edge with the team key: home, settings, Plan B search, the detail sheet with map, next steps, trip logging, dashboard, ride board, panic mode, dark mode and regular trip mode all rendered with no console errors. That browser run is a developer check, not participant evidence.
+The 242 tests make no network calls, so they cannot verify external data. During the build on 2026-10-21 the developer also checked the following against the real services and the team key: route IDs from the static GTFS matched the realtime feeds exactly for the checked trip; VehiclePositions returned about 800 to 1,000 vehicles; the public QLDTraffic key returned 570 events; Open-Meteo worked without a key; the Google Elevation API worked on the team key; and push was verified end to end only in headless Microsoft Edge, with a real subscription and a delivered test push. Those are developer checks, not participant evidence.
 
-Fixes found during that testing: arrival times now use scheduled board and alight times because Google's transit duration can exclude a long wait for a later service (v1 could under-state arrival); consecutive walking steps are merged; and duplicate transit routes are removed.
+Not verified: a real phone, iPhone and Safari (which require adding the app to the Home Screen before push works), an HTTPS deployment, the Dockerfile, the Render blueprint and the Cloudflare tunnel, real outdoor GPS directions, the wake lock, voice prompts, tapping a notification, and rotation of a bus marker by bearing.
 
-For manual review, also check a known Australian transit trip, a driving trip, an invalid deadline, an API error, a route without a fare, a train line alert, selection, dark mode, reduced motion, keyboard navigation and narrow mobile layouts. Before any public deployment, provide the Terms of Use and Privacy Policy required by Google's Routes API policy, review key restrictions, and arrange hosting, moderation and quota controls. This local server is a development server, not a deployment configuration.
+For manual review, also check a known Australian transit trip, a driving trip, an invalid deadline, an API error, a route without a fare, a train line alert, bad weather, a road closure, demo mode, keyboard navigation, dark and light themes, reduced motion and narrow mobile layouts. After changing front-end files, bump `VERSION` in `sw.js`, because the app shell is cached first and is refreshed in the background, so visitors would otherwise keep seeing the old files for one visit. Before any public deployment, provide the Terms of Use and Privacy Policy required by Google's Routes API policy, review key restrictions and quotas, and follow [`infra/plan-b-mvp/README.md`](../../infra/plan-b-mvp/README.md). Nothing has been deployed.
 
 ## Limitations
 
-- No participant has tested v2.
-- Matching of train lines to GTFS-Realtime data is approximate, and the accuracy of live data and adoption are not established.
+- No participant has tested v3, and nothing has been deployed.
+- Several things have not been tried: a real phone, iPhone and Safari, HTTPS hosting, the container and hosting configuration, real outdoor GPS directions, the wake lock, voice prompts, notification taps and bus bearing rotation.
+- Push was verified only in headless Edge. Background monitoring needs the server to be running, a secure origin and notification permission, and it stops when a free host sleeps.
+- The service worker serves the app shell cache-first, so `VERSION` in `sw.js` must be bumped for every deploy.
+- Very short Google walking steps can clutter the step list.
+- The vehicle marker shows before boarding but not while riding. Bearing is usually missing from Translink's vehicle feed.
+- "On time" and "early" appear only for an exactly matched trip; otherwise live status is "No live data" unless the route as a whole is late. Matching of train lines remains imperfect.
+- The weather widget uses Brisbane weather unless location access was already granted.
+- Traffic delay is an estimate from QLDTraffic events; the numbers (5 minutes, 2 minutes, 20-minute cap) are team design assumptions.
+- API costs shown in demo mode are list-price estimates before free monthly usage, and are shown only in demo mode.
+- A Terms of Use and Privacy Policy are still required before public deployment. The rate limits (`PLANB_PLAN_LIMIT_PER_HOUR` default 40 and `PLANB_DAILY_GOOGLE_CAP` default 1500) reduce but do not remove the risk of Google charges.
 - The CO2 factors and the $0.50 flat fare are assumptions, not verified values.
 - Parking is the list of car parks Google returns, not live space availability, and parking prices are not available from Google.
 - The app does not show an Uber price. Rideshare cost is unknown unless a rider enters the estimate they saw on the ride board.
-- The ride board works on a single local server, is unmoderated, and does not address identity, safety checks or moderation.
+- The ride board works on a single server, is unmoderated, and does not address identity, safety checks or moderation.
 - The impact history is stored per browser and is lost if browser data is cleared.
-- Watching for disruptions only works while the app is open.
-- Elevation falls back to Open-Meteo's 90 m terrain model while the Google Elevation API is not enabled.
 - Google Routes estimates are not confirmed disruption notices, guaranteed arrival times or booking options. Verify services and directions before leaving.
 
 ## Prepared exercise values

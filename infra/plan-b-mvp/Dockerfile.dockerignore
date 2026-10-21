@@ -1,0 +1,8 @@
+# Used automatically by BuildKit for infra/plan-b-mvp/Dockerfile: send only the app, never keys or local data.
+*
+!apps/plan-b-mvp
+apps/plan-b-mvp/.env
+apps/plan-b-mvp/.env.*
+apps/plan-b-mvp/data
+apps/plan-b-mvp/**/__pycache__
+apps/plan-b-mvp/test_*.py

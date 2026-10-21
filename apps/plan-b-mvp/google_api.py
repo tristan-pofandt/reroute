@@ -4,6 +4,8 @@ Every function takes the API key as an argument so the key never reaches the bro
 Results that do not change minute to minute (fuel prices, car parks, elevations) are cached.
 """
 
+from contextlib import contextmanager
+import contextvars
 import json
 import math
 import threading
@@ -19,6 +21,67 @@ GOOGLE_ELEVATION_URL = "https://maps.googleapis.com/maps/api/elevation/json"
 OPEN_METEO_ELEVATION_URL = "https://api.open-meteo.com/v1/elevation"
 
 FUEL_TYPES = {"SP91": "Unleaded 91", "SP91_E10": "E10", "SP95": "Premium 95", "SP98": "Premium 98", "DIESEL": "Diesel", "LPG": "LPG"}
+
+
+# Approximate Google Maps Platform list prices in USD per 1,000 billable requests, before the free
+# monthly usage caps. Open-Meteo, Translink and QLDTraffic are free. Re-check before relying on them.
+PRICES_CHECKED = "2026-10-21"
+PRICES = {
+    ("Routes API", "Compute Routes Essentials"): 5.00,
+    ("Routes API", "Compute Routes Pro"): 10.00,
+    ("Places API (New)", "Autocomplete Request"): 2.83,
+    ("Places API (New)", "Nearby Search Pro"): 32.00,
+    ("Places API (New)", "Nearby Search Enterprise"): 35.00,
+    ("Elevation API", "Elevation"): 5.00,
+}
+COST_NOTE = (f"Approximate Google list prices in USD per 1,000 requests, checked {PRICES_CHECKED}, before Google's free monthly usage caps. "
+             "Drive requests with TRAFFIC_AWARE are priced as Pro; the SKU assignment is an estimate. Open-Meteo, Translink and QLDTraffic are free. Only successful, uncached requests are counted.")
+
+
+class CostTracker:
+    """Counts the real Google requests made while a search runs (cache hits never reach it)."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self.counts = {}
+
+    def record(self, api, sku):
+        with self._lock:
+            self.counts[(api, sku)] = self.counts.get((api, sku), 0) + 1
+
+    def summary(self):
+        with self._lock:
+            counts = dict(self.counts)
+        items = []
+        for (api, sku), count in sorted(counts.items()):
+            unit = PRICES[(api, sku)]
+            items.append({"api": api, "sku": sku, "count": count, "unit_usd_per_1000": unit, "usd": round(count * unit / 1000, 5)})
+        return {"items": items, "total_usd": round(sum(item["usd"] for item in items), 5), "note": COST_NOTE}
+
+
+_tracker = contextvars.ContextVar("planb_google_cost_tracker", default=None)
+
+
+@contextmanager
+def tracking():
+    tracker = CostTracker()
+    token = _tracker.set(tracker)
+    try:
+        yield tracker
+    finally:
+        _tracker.reset(token)
+
+
+def record_request(api, sku):
+    tracker = _tracker.get()
+    if tracker:
+        tracker.record(api, sku)
+
+
+def with_context(function):
+    """Wrap `function` so a worker thread sees the caller's cost tracker (one copy per call)."""
+    context = contextvars.copy_context()
+    return lambda *args, **kwargs: context.run(function, *args, **kwargs)
 
 
 class RoutesError(Exception):
@@ -112,7 +175,9 @@ def resample(points, spacing=40):
 
 def compute_routes(key, body, field_mask):
     try:
-        return _post_json(ROUTES_URL, key, body, field_mask).get("routes", [])
+        data = _post_json(ROUTES_URL, key, body, field_mask)
+        record_request("Routes API", "Compute Routes Pro" if body.get("routingPreference") == "TRAFFIC_AWARE" else "Compute Routes Essentials")
+        return data.get("routes", [])
     except HTTPError as error:
         raise RoutesError(f"Google Routes returned HTTP {error.code}. Check the key, billing, quota and Routes API access.") from error
     except (URLError, TimeoutError, OSError) as error:
@@ -143,6 +208,7 @@ def autocomplete(key, text, session, lat=-27.4698, lng=153.0251):
             data = _post_json(PLACES_AUTOCOMPLETE_URL, key, body,
                               "suggestions.placePrediction.placeId,suggestions.placePrediction.text,"
                               "suggestions.placePrediction.structuredFormat,suggestions.placePrediction.types", timeout=8)
+            record_request("Places API (New)", "Autocomplete Request")
         except (HTTPError, URLError, TimeoutError, OSError, ValueError) as error:
             raise ServiceError("Address suggestions are unavailable.") from error
         results = []
@@ -172,6 +238,7 @@ def fuel_price(key, lat, lng, fuel_type="SP91"):
                 "includedTypes": ["gas_station"], "maxResultCount": 20,
                 "locationRestriction": {"circle": {"center": {"latitude": lat, "longitude": lng}, "radius": 5000}},
             }, "places.fuelOptions")
+            record_request("Places API (New)", "Nearby Search Enterprise")
         except (HTTPError, URLError, TimeoutError, OSError, ValueError) as error:
             raise ServiceError("Places API fuel prices are unavailable.") from error
         prices, updated = [], []
@@ -197,6 +264,7 @@ def parking_near(key, lat, lng, radius=800):
                 "includedTypes": ["parking"], "maxResultCount": 10, "rankPreference": "DISTANCE",
                 "locationRestriction": {"circle": {"center": {"latitude": lat, "longitude": lng}, "radius": radius}},
             }, "places.displayName,places.location,places.parkingOptions")
+            record_request("Places API (New)", "Nearby Search Pro")
         except (HTTPError, URLError, TimeoutError, OSError, ValueError) as error:
             raise ServiceError("Places API car-park search is unavailable.") from error
         parks = []
@@ -236,6 +304,7 @@ def _google_elevations(key, points):
     if data.get("status") != "OK":
         _google_elevation_denied_until = time.time() + 600
         return None
+    record_request("Elevation API", "Elevation")
     return [result.get("elevation") for result in data.get("results", [])]
 
 

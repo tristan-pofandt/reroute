@@ -3,48 +3,40 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#F2F2F7">
+  <meta name="theme-color" content="#090A0F">
+  <meta name="color-scheme" content="dark light">
   <meta name="description" content="Plan B finds a practical way to your destination when public transport is disrupted, and helps you choose lower-emission journeys every day.">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Plan B">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <title>Plan B</title>
   <script>
-    // Apply the saved theme before first paint to avoid a light flash in dark mode.
+    // Apply the saved theme before first paint (default Dark) so there is no flash. app.js keeps the same rules in applyTheme().
     try {
       const saved = JSON.parse(localStorage.getItem("planb.settings") || "{}");
-      const theme = saved.theme === "light" || saved.theme === "dark" ? saved.theme : (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      const theme = saved.theme === "light" || (saved.theme === "system" && !matchMedia("(prefers-color-scheme: dark)").matches) ? "light" : "dark";
       document.documentElement.dataset.theme = theme;
+      document.querySelector('meta[name="theme-color"]').content = theme === "light" ? "#EEF0F5" : "#090A0F";
       if (saved.motion === "reduced") document.documentElement.dataset.motion = "reduced";
-    } catch { document.documentElement.dataset.theme = "light"; }
+    } catch { document.documentElement.dataset.theme = "dark"; }
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@700;800&display=swap">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
-  <div class="stage">
-    <div class="phone">
-      <span class="side-btn left" style="top:108px;height:28px"></span>
-      <span class="side-btn left" style="top:162px;height:58px"></span>
-      <span class="side-btn left" style="top:232px;height:58px"></span>
-      <span class="side-btn right" style="top:190px;height:88px"></span>
-      <div class="screen" id="screen">
-        <div class="status-bar">
-          <span class="status-time" id="status-time">9:41</span>
-          <span class="island" aria-hidden="true"></span>
-          <span class="status-icons" aria-hidden="true">
-            <span class="bars"><i></i><i></i><i></i><i></i></span>
-            <svg width="15" height="12" viewBox="0 0 15 12" fill="none"><path d="M7.5 9.5a1 1 0 1 0 0 2 1 1 0 0 0 0-2z" fill="currentColor"/><path d="M4.5 7.5C5.4 6.4 6.4 5.8 7.5 5.8s2.1.6 3 1.7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M2 5C3.7 3.1 5.5 2 7.5 2s3.8 1.1 5.5 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".5"/></svg>
-            <span class="battery"><span></span></span>
-          </span>
-        </div>
-        <main class="viewport" id="viewport" aria-live="polite"></main>
-        <div class="home-indicator" aria-hidden="true"><span></span></div>
-      </div>
+  <div class="app" id="app" data-screen="home">
+    <main class="viewport" id="viewport"></main>
+    <div class="demo-pill" id="demo-pill" hidden>
+      <button class="demo-edit" data-action="open-demo" aria-label="Demo mode: edit settings"><span class="demo-dot"></span>Demo mode</button>
+      <button class="demo-exit" data-action="demo-exit" aria-label="Exit demo mode"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
     </div>
   </div>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

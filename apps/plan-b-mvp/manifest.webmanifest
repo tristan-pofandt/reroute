@@ -1,0 +1,22 @@
+{
+  "name": "Plan B",
+  "short_name": "Plan B",
+  "description": "Finds a practical way to your destination when public transport is disrupted, and helps you choose lower-emission journeys every day.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#090A0F",
+  "theme_color": "#090A0F",
+  "lang": "en-AU",
+  "categories": ["travel", "navigation", "utilities"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Panic mode", "short_name": "Panic", "description": "One answer, no decisions.", "url": "/?panic=1", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }] }
+  ]
+}

@@ -1,0 +1,37 @@
+# Render Blueprint for Plan B MVP. In the Render dashboard choose New > Blueprint and point it at this repository
+# (Render reads render.yaml from the repository root by default; for this path, set the Blueprint file path to
+# infra/plan-b-mvp/render.yaml). Values marked sync: false are entered in the dashboard and are never committed.
+services:
+  - type: web
+    name: plan-b-mvp
+    runtime: docker
+    # Free instances sleep after 15 minutes without traffic, which stops the push monitor and reloads the GTFS index
+    # on every wake-up. Use starter or higher on demo day.
+    plan: starter
+    region: singapore
+    dockerfilePath: ./infra/plan-b-mvp/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/status
+    autoDeploy: false
+    envVars:
+      - key: MAPS_API_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: PUBLIC_URL
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
+      - key: PLANB_TRUST_PROXY
+        value: "1"
+      - key: PLANB_PLAN_LIMIT_PER_HOUR
+        value: "40"
+      - key: PLANB_DAILY_GOOGLE_CAP
+        value: "300"
+    # Optional, paid: keep the ride board, push subscriptions and the GTFS index across deploys.
+    # disk:
+    #   name: planb-data
+    #   mountPath: /app/data
+    #   sizeGB: 1
