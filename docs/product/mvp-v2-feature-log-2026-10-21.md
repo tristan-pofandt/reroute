@@ -53,6 +53,15 @@ These are tasks for the team to plan and record. They do not report results.
 7. Try the app on real phones and with keyboard and screen-reader use, and check reduced-motion behaviour.
 8. Record any participant observations in approved de-identified interview records, using participant codes and documented consent, before any learning card is updated.
 
+## Product and evidence records updated
+
+The reasons for v2 were carried into the team's product records on 2026-10-21, keeping evidence separate from proposals:
+
+- The [hypothesis register](../discovery/assumptions/hypothesis.md#plan-b-mvp-v2-hypotheses) has five new untested solution hypotheses, H-P14 to H-P18 (Panic mode, true driving cost and parking, walking elevation, ride sharing and impact tracking). Each lists its supporting records, counterevidence and a proposed test. H-P03 notes that v2 makes an alert test possible. No test or learning cards exist yet for H-P14 to H-P18.
+- The [Value Proposition Canvas](value-propositions/value-proposition-canvas.md) adds pains and gains backed by records (parking, uphill walks, switching apps, environmental values, sharing costs), v2 products, pain relievers, gain creators and assumptions marked "v2", and a draft statement extension.
+- The [Business Model Canvas](business-model-canvas.md) adds v2 value propositions, a retention decision, a ride-board channel, data providers, activities, resources, a revenue hypothesis and per-request API costs.
+- The [Feature List](Feature%20List.md) adds a v2 status table without changing the original priorities.
+
 ## Related
 
 - [Prototype ideas, including the re-evaluated ideas](../design/prototype_ideas.md)
