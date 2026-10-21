@@ -24,6 +24,8 @@ coverage/
 private/
 docs/discovery/interviews/private/
 docs/discovery/interviews/recordings/
+# New raw transcripts are ignored by default. De-identified transcripts already tracked in
+# docs/discovery/interviews/raw transcripts/ stay in Git; add a new one deliberately with `git add -f`.
 docs/discovery/interviews/raw-transcripts/
 docs/discovery/interviews/raw transcripts/
 
