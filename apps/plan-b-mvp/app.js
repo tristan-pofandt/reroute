@@ -67,6 +67,7 @@ const DEFAULT_SETTINGS = {
   budget: 10, walking: 15,
   show: { buffer: true, cost: true, walking: true, transfers: true, elevation: true, co2: true, parking: true, realtime: true },
   places: { home: "", work: "The University of Queensland, St Lucia QLD 4072" },
+  place_ids: { home: null, work: null },
   watch: true,
   factors: { bus: 0.105, rail: 0.035, tram: 0.029, ferry: 0.019 },
 };
@@ -74,7 +75,7 @@ const DEFAULT_SETTINGS = {
 function loadSettings() {
   const saved = store.get("settings", {});
   const merged = { ...DEFAULT_SETTINGS, ...saved };
-  for (const key of ["modes", "transit_modes", "show", "places", "factors"]) merged[key] = { ...DEFAULT_SETTINGS[key], ...(saved[key] || {}) };
+  for (const key of ["modes", "transit_modes", "show", "places", "place_ids", "factors"]) merged[key] = { ...DEFAULT_SETTINGS[key], ...(saved[key] || {}) };
   return merged;
 }
 
@@ -146,19 +147,69 @@ function segmented(name, value, choices, action = "segment") {
 // Screens
 // ══════════════════════════════════════════════════════════════════════════════
 
+// The Plan B mark: the direct route is broken, Plan B curves around it.
+function logo(size = 40, id = "lg") {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 64 64" aria-hidden="true">
+    <defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2F95FF"/><stop offset=".55" stop-color="#0A6CFF"/><stop offset="1" stop-color="#5E3BE6"/></linearGradient></defs>
+    <rect width="64" height="64" rx="15" fill="url(#${id})"/>
+    <path d="M16 48 L48 16" fill="none" stroke="#fff" stroke-opacity=".38" stroke-width="4" stroke-linecap="round" stroke-dasharray="1 7"/>
+    <path d="M28.5 31.5l7 7M35.5 31.5l-7 7" stroke="#FF6B5E" stroke-width="3.6" stroke-linecap="round"/>
+    <path d="M16 48 C16 30 27 18 45 18" fill="none" stroke="#fff" stroke-width="5.2" stroke-linecap="round"/>
+    <circle cx="16" cy="48" r="5" fill="#34C759" stroke="#fff" stroke-width="2.6"/>
+    <circle cx="47" cy="17" r="6" fill="#fff"/><circle cx="47" cy="17" r="2.6" fill="#0A6CFF"/></svg>`;
+}
+
+function greeting() {
+  const hour = Number(new Intl.DateTimeFormat("en-AU", { timeZone: "Australia/Brisbane", hour: "numeric", hour12: false }).format(new Date())) % 24;
+  return hour < 5 ? "Late night" : hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+}
+
+function homeBanner(alertCount, impact) {
+  const reduced = document.documentElement.dataset.motion === "reduced" || matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const detour = "M238 150 C238 104 262 74 314 72";
+  const streets = [[0, 40, 360, 22], [0, 96, 360, 118], [0, 150, 360, 176], [60, 0, 84, 190], [150, 0, 128, 190], [262, 0, 290, 190]]
+    .map(([x1, y1, x2, y2]) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`).join("");
+  const live = state.alertsError ? `<span class="banner-chip">${I.signal(12)}Live alerts unavailable</span>`
+    : !state.alerts ? `<span class="banner-chip">${I.signal(12)}Checking Translink…</span>`
+    : `<button class="banner-chip" data-action="open-alerts"><span class="live-dot"></span>Translink live · ${plural(alertCount, "alert")}</button>`;
+  return `
+    <section class="home-banner" aria-labelledby="banner-title">
+      <svg class="banner-art" viewBox="0 0 360 200" preserveAspectRatio="xMaxYMid slice" aria-hidden="true">
+        <g class="streets">${streets}</g>
+        <path class="river" d="M-10 196 C80 170 120 120 210 132 S330 110 380 70"/>
+        <path class="direct" d="M238 150 L314 72"/>
+        <path class="broken" d="M270 105l11 11M281 105l-11 11"/>
+        <path class="detour-glow" d="${detour}"/>
+        <path class="detour" d="${detour}" pathLength="1"/>
+        <circle class="start" cx="238" cy="150" r="7"/>
+        <circle class="dest-ping" cx="314" cy="72" r="9"/>
+        <circle class="dest" cx="314" cy="72" r="8"/><circle class="dest-core" cx="314" cy="72" r="3.4"/>
+        ${reduced ? "" : `<g class="bus-dot"><circle r="6.5"/><animateMotion dur="5.5s" begin="1.6s" repeatCount="indefinite" path="${detour}" keyPoints="0;1" keyTimes="0;1" calcMode="spline" keySplines=".45 0 .55 1"/></g>`}
+      </svg>
+      <div class="banner-top">
+        <span class="banner-brand">${logo(38, "lg-banner")}<span class="wordmark">Plan<span>B</span></span></span>
+        <button class="banner-gear" data-action="open-settings" aria-label="Settings">${I.gear(19)}</button>
+      </div>
+      <div class="banner-copy">
+        <p class="greet">${greeting()}</p>
+        <h1 id="banner-title">When your journey<br>goes wrong, <em>what now?</em></h1>
+      </div>
+      <div class="banner-chips">
+        ${live}
+        ${impact.co2 > 0 ? `<button class="banner-chip" data-action="go" data-screen="dashboard">${I.leaf(12)}${kg(impact.co2)} CO₂ avoided this month</button>`
+          : `<button class="banner-chip" data-action="start" data-purpose="regular">${I.leaf(12)}Plan a greener trip</button>`}
+      </div>
+    </section>`;
+}
+
 function homeScreen() {
   const live = state.status?.live_available;
   const alerts = (state.alerts?.alerts || []).filter((a) => a.disruptive);
   const impact = impactTotals(thisMonthTrips());
   const myRides = state.rides.mine.length;
   return `
-    ${navbar("", null, gearButton())}
-    <div class="scroll" style="padding-top:6px">
-      <div class="hero">
-        <div class="app-icon">${I.bus(38)}</div>
-        <h1 class="brand">Plan B</h1>
-        <p class="tagline">When your journey goes wrong, what now?</p>
-      </div>
+    <div class="scroll" style="padding-top:12px">
+      ${homeBanner(alerts.length, impact)}
       <button class="panic-btn" data-action="go" data-screen="panic">
         <span class="panic-icon">${I.bolt(24)}</span>
         <span><strong>Panic mode</strong><small>Get me there now. One answer, no decisions.</small></span>
@@ -217,9 +268,9 @@ function journeyScreen() {
       <p class="subtitle">${planB ? "Tell us your deadline. We'll find what still gets you there, using live Translink alerts." : "Public transport options come first, with the true cost of driving alongside."}</p>
       <p class="section-header">Journey</p>
       <div class="group"><div class="group-card">
-        <div class="row field-row"><span class="row-icon" style="background:var(--green)">${I.walk(15)}</span><div class="place-input"><label for="f-origin">From</label><input id="f-origin" type="text" data-field="origin" value="${esc(f.origin)}" placeholder="Address, stop or place" autocomplete="off"></div></div>
+        <div class="row field-row"><span class="row-icon" style="background:var(--green)">${I.walk(15)}</span><div class="place-input"><label for="f-origin">From</label><input id="f-origin" type="text" data-field="origin" ${acAttrs("form.origin")} value="${esc(f.origin)}" placeholder="Address, stop or place" autocomplete="off"></div></div>
         ${placeChips("origin")}
-        <div class="row field-row"><span class="row-icon" style="background:var(--red)">${I.pin(15)}</span><div class="place-input"><label for="f-destination">To</label><input id="f-destination" type="text" data-field="destination" value="${esc(f.destination)}" placeholder="Address or place" autocomplete="off"></div></div>
+        <div class="row field-row"><span class="row-icon" style="background:var(--red)">${I.pin(15)}</span><div class="place-input"><label for="f-destination">To</label><input id="f-destination" type="text" data-field="destination" ${acAttrs("form.destination")} value="${esc(f.destination)}" placeholder="Address or place" autocomplete="off"></div></div>
         ${placeChips("destination")}
       </div></div>
       <p class="section-header">When</p>
@@ -584,8 +635,8 @@ function panicScreen() {
   return `${top}<div class="scroll">
     <h1>Where do you need to be?</h1>
     <p class="lead">${pm.coords ? "Using your current location." : pm.locating ? "Finding your location…" : "Location unavailable. Type where you are."}</p>
-    ${pm.coords ? "" : `<input class="panic-input" data-panic="origin" placeholder="Where are you now?" value="${esc(pm.origin || "")}" aria-label="Where are you now">`}
-    <input class="panic-input" data-panic="dest" placeholder="Destination" value="${esc(pm.dest)}" aria-label="Destination">
+    ${pm.coords ? "" : `<input class="panic-input" data-panic="origin" ${acAttrs("panic.origin")} placeholder="Where are you now?" value="${esc(pm.origin || "")}" aria-label="Where are you now">`}
+    <input class="panic-input" data-panic="dest" ${acAttrs("panic.dest")} placeholder="Destination" value="${esc(pm.dest)}" aria-label="Destination">
     ${chips.length ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${chips.map(([k, l]) => `<button class="panic-chip" data-action="panic-place" data-place="${k}">${esc(l)}</button>`).join("")}</div>` : ""}
     <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:18px;font-size:16px;color:rgba(255,255,255,.8)">Need to be there by <input class="panic-input" style="width:140px;margin:0" type="time" data-panic="by" value="${esc(pm.by)}" aria-label="Deadline (optional)"></label>
     ${pm.error ? notice(esc(pm.error), "error") + '<div style="height:12px"></div>' : ""}
@@ -801,8 +852,8 @@ function settingsContent() {
 
       <p class="section-header">Saved places</p>
       <div class="group"><div class="group-card">
-        <div class="row"><span class="row-icon" style="background:var(--blue)">${I.home(15)}</span><input type="text" data-setting-text="places.home" value="${esc(s.places.home)}" placeholder="Home address" aria-label="Home address"></div>
-        <div class="row"><span class="row-icon" style="background:var(--orange)">${I.pin(15)}</span><input type="text" data-setting-text="places.work" value="${esc(s.places.work)}" placeholder="Work or uni" aria-label="Work or uni address"></div>
+        <div class="row"><span class="row-icon" style="background:var(--blue)">${I.home(15)}</span><input type="text" data-setting-text="places.home" ${acAttrs("places.home")} value="${esc(s.places.home)}" placeholder="Home address" aria-label="Home address"></div>
+        <div class="row"><span class="row-icon" style="background:var(--orange)">${I.pin(15)}</span><input type="text" data-setting-text="places.work" ${acAttrs("places.work")} value="${esc(s.places.work)}" placeholder="Work or uni" aria-label="Work or uni address"></div>
       </div><p class="group-footer">Used by Panic mode and the quick-fill buttons. Stored only on this device.</p></div>
 
       <p class="section-header">Live disruptions</p>
@@ -1066,6 +1117,7 @@ function payload(extra = {}) {
   const f = state.form;
   return {
     origin: f.origin.trim(), destination: f.destination.trim(), purpose: state.purpose,
+    origin_place_id: f.originPlaceId || null, destination_place_id: f.destinationPlaceId || null,
     leave_now: f.leave_now, departure: f.departure, deadline: f.deadline || null,
     budget: f.budget, walking: f.walking,
     modes: settings.modes, transit_modes: settings.transit_modes,
@@ -1096,6 +1148,7 @@ async function search(extra = {}) {
   try {
     state.plan = await postJSON("/api/plan", payload(extra));
     store.set("lastDestination", f.destination.trim());
+    store.set("lastDestinationPlaceId", f.destinationPlaceId || null);
     state.sort = state.purpose === "regular" ? "pt" : "best";
     state.loading = false;
     if (state.screen === "results") rerender(); else { rerender(); navigate("results"); }
@@ -1147,7 +1200,9 @@ function freshForm() {
   const now = brisbaneNowLocal();
   return {
     origin: store.get("lastOrigin", "Taringa Station, Brisbane QLD"),
+    originPlaceId: store.get("lastOriginPlaceId", null),
     destination: store.get("lastDestination", "") || settings.places.work || "",
+    destinationPlaceId: store.get("lastDestination", "") ? store.get("lastDestinationPlaceId", null) : settings.place_ids.work || null,
     leave_now: true, departure: addMinutes(now, 10), deadline: state.purpose === "planb" ? addMinutes(now, 60) : "",
     budget: settings.budget, walking: settings.walking, avoid: "",
   };
@@ -1180,7 +1235,7 @@ const actions = {
     state.error = null;
     navigate("journey");
   },
-  search: () => { store.set("lastOrigin", state.form.origin.trim()); search(); },
+  search: () => { store.set("lastOrigin", state.form.origin.trim()); store.set("lastOriginPlaceId", state.form.originPlaceId || null); search(); },
   step: (el) => {
     const field = el.dataset.field;
     const delta = Number(el.dataset.delta);
@@ -1202,12 +1257,16 @@ const actions = {
   "use-location": (el) => {
     el.innerHTML = `${I.locate(13)}Locating…`;
     locate((coords) => {
-      if (coords) state.form.origin = `${coords[0].toFixed(6)},${coords[1].toFixed(6)}`;
+      if (coords) { state.form.origin = `${coords[0].toFixed(6)},${coords[1].toFixed(6)}`; state.form.originPlaceId = null; state.biasCoords = coords; }
       else state.error = "Location is unavailable. Type your starting point instead.";
       rerender();
     });
   },
-  "fill-place": (el) => { state.form[el.dataset.field] = settings.places[el.dataset.place]; rerender(); },
+  "fill-place": (el) => {
+    state.form[el.dataset.field] = settings.places[el.dataset.place];
+    state.form[`${el.dataset.field}PlaceId`] = settings.place_ids[el.dataset.place] || null;
+    rerender();
+  },
   sort: (el) => { state.sort = el.dataset.value; rerender(); currentPage.querySelector(`[data-action="sort"][data-value="${state.sort}"]`)?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" }); },
   "open-sheet": (el) => { const o = findOption(el.dataset.id); if (o) { state.sheetId = o.id; openSheet(sheetContent(o)); } },
   "close-sheet": () => closeSheet(),
@@ -1277,6 +1336,7 @@ const actions = {
   "exit-panic": () => { state.panic.phase = "ask"; navigate(state.stack.length > 1 ? state.stack[state.stack.length - 2] : "home", "down"); },
   "panic-place": (el) => {
     state.panic.dest = el.dataset.place === "last" ? store.get("lastDestination", "") : settings.places[el.dataset.place];
+    state.panic.destPlaceId = el.dataset.place === "last" ? store.get("lastDestinationPlaceId", null) : settings.place_ids[el.dataset.place] || null;
     rerender();
   },
   "panic-go": async () => {
@@ -1293,7 +1353,8 @@ const actions = {
     pm.error = null;
     rerender();
     state.purpose = "panic";
-    state.form = { ...freshForm(), origin, destination: pm.dest.trim(), leave_now: true, deadline: deadline || "", budget: 200, walking: 60 };
+    state.form = { ...freshForm(), origin, destination: pm.dest.trim(), leave_now: true, deadline: deadline || "", budget: 200, walking: 60,
+      originPlaceId: pm.coords ? null : pm.originPlaceId || null, destinationPlaceId: pm.destPlaceId || null };
     try {
       state.plan = await postJSON("/api/plan", payload({ purpose: "panic" }));
       store.set("lastDestination", pm.dest.trim());
@@ -1373,9 +1434,14 @@ document.addEventListener("click", (event) => {
 
 document.addEventListener("input", (event) => {
   const t = event.target;
-  if (t.dataset.field && state.form) { state.form[t.dataset.field] = t.value; state.error = null; }
-  if (t.dataset.panic) state.panic[t.dataset.panic] = t.value;
-  if (t.dataset.settingText) { setPath(settings, t.dataset.settingText, t.value.slice(0, 200)); saveSettings(); }
+  if (t.dataset.field && state.form) { state.form[t.dataset.field] = t.value; state.form[`${t.dataset.field}PlaceId`] = null; state.error = null; }
+  if (t.dataset.panic) { state.panic[t.dataset.panic] = t.value; state.panic[`${t.dataset.panic}PlaceId`] = null; }
+  if (t.dataset.settingText) {
+    setPath(settings, t.dataset.settingText, t.value.slice(0, 200));
+    if (t.dataset.settingText.startsWith("places.")) settings.place_ids[t.dataset.settingText.slice(7)] = null;
+    saveSettings();
+  }
+  if (t.dataset.ac) autocomplete.onInput(t);
   if (t.dataset.settingNumber) {
     const v = t.value === "" ? null : Number(t.value);
     if (v === null || Number.isFinite(v)) { setPath(settings, t.dataset.settingNumber, v); saveSettings(); }
@@ -1430,6 +1496,184 @@ async function boot() {
   loadAlerts();
   setInterval(loadAlerts, 60000);
   setInterval(updateChrome, 30000);
+}
+
+// ── Address suggestions (Places API Autocomplete) ────────────────────────────
+
+const autocomplete = (() => {
+  let input = null, list = null, items = [], active = -1, timer = null, session = null, requestId = 0;
+  const newSession = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`).replace(/[^A-Za-z0-9-]/g, "").slice(0, 64);
+  const recent = () => store.get("recentPlaces", []);
+  const isOrigin = (el) => /origin$/.test(el.dataset.ac);
+
+  function bias() {
+    const c = state.panic.coords || state.biasCoords || state.plan?.start;
+    return c ? `&lat=${c[0]}&lng=${c[1]}` : "";
+  }
+
+  // Current location, saved places and recent choices shown before (and alongside) Google's suggestions.
+  function local(text) {
+    const q = text.trim().toLowerCase();
+    const entries = [];
+    if (input && isOrigin(input) && !q) entries.push({ kind: "location", main: "Current location", secondary: "Use this device's location" });
+    [["home", "Home"], ["work", "Work/Uni"]].forEach(([k, label]) => {
+      const saved = settings.places[k];
+      if (saved && input && !input.dataset.ac.startsWith("places.") && (!q || saved.toLowerCase().includes(q) || label.toLowerCase().startsWith(q))) {
+        entries.push({ kind: "saved", main: label, secondary: saved, text: saved, place_id: settings.place_ids[k] });
+      }
+    });
+    recent().filter((r) => !q || r.text.toLowerCase().includes(q)).slice(0, q ? 2 : 4)
+      .forEach((r) => { if (!entries.some((e) => e.text === r.text)) entries.push({ ...r, kind: "recent" }); });
+    return entries;
+  }
+
+  function bolded(item) {
+    if (!item.matches?.length) return esc(item.main);
+    let out = "", last = 0;
+    item.matches.forEach(([a, b]) => { out += esc(item.main.slice(last, a)) + `<b>${esc(item.main.slice(a, b))}</b>`; last = b; });
+    return out + esc(item.main.slice(last));
+  }
+
+  const ICON = { transit: () => I.bus(16), street: () => I.route(16), place: () => I.pin(16), saved: () => I.home(16), recent: () => I.clock(16), location: () => I.locate(16) };
+
+  function render(loading = false) {
+    if (!input) return;
+    if (!list) {
+      list = document.createElement("div");
+      list.className = "ac-list";
+      list.id = "ac-list";
+      list.setAttribute("role", "listbox");
+      list.addEventListener("mousedown", (e) => e.preventDefault());
+      list.addEventListener("click", (e) => { const opt = e.target.closest("[data-ac-index]"); if (opt) choose(Number(opt.dataset.acIndex)); });
+      viewport.appendChild(list);
+    }
+    list.classList.toggle("on-dark", !!input.closest(".panic"));
+    const hasGoogle = items.some((i) => !["saved", "recent", "location"].includes(i.kind));
+    list.innerHTML = `${items.map((item, i) => `
+      <div class="ac-item${i === active ? " active" : ""}" id="ac-opt-${i}" role="option" aria-selected="${i === active}" data-ac-index="${i}" style="animation-delay:${i * 28}ms">
+        <span class="ac-icon ${item.kind}">${(ICON[item.kind] || ICON.place)()}</span>
+        <span class="ac-text"><span class="ac-main">${bolded(item)}</span>${item.secondary ? `<span class="ac-sub">${esc(item.secondary)}</span>` : ""}</span>
+      </div>`).join("")}
+      ${loading ? `<div class="ac-loading" aria-label="Loading suggestions"><span class="ac-dot"></span><span class="ac-dot"></span><span class="ac-dot"></span></div>` : ""}
+      ${hasGoogle ? `<div class="ac-foot">Suggestions by <span translate="no">Google</span></div>` : ""}`;
+    list.hidden = !(items.length || loading);
+    position();
+    input.setAttribute("aria-expanded", String(!list.hidden));
+    if (active >= 0) input.setAttribute("aria-activedescendant", `ac-opt-${active}`); else input.removeAttribute("aria-activedescendant");
+  }
+
+  function position() {
+    if (!list || !input) return;
+    const host = viewport.getBoundingClientRect();
+    const anchor = (input.closest(".row") || input).getBoundingClientRect();
+    const below = host.bottom - anchor.bottom;
+    list.style.left = `${anchor.left - host.left + 6}px`;
+    list.style.width = `${anchor.width - 12}px`;
+    if (below < 240 && anchor.top - host.top > below) {
+      list.style.top = ""; list.style.bottom = `${host.bottom - anchor.top + 4}px`; list.classList.add("above");
+    } else {
+      list.style.bottom = ""; list.style.top = `${anchor.bottom - host.top + 4}px`; list.classList.remove("above");
+    }
+  }
+
+  async function fetchSuggestions(text) {
+    const id = ++requestId;
+    try {
+      const r = await fetch(`/api/autocomplete?q=${encodeURIComponent(text)}&session=${session}${bias()}`);
+      const data = await r.json();
+      if (id !== requestId || !input) return;
+      const mine = local(text);
+      const google = r.ok ? data.suggestions : [];
+      items = [...mine, ...google.filter((g) => !mine.some((l) => l.text === g.text))].slice(0, 7);
+      active = -1;
+      render();
+    } catch {
+      if (id === requestId && input) { items = local(text); render(); }
+    }
+  }
+
+  function open(el) {
+    if (input !== el) { input = el; session = newSession(); }
+    if (el.value.trim().length >= 3) return onInput(el);
+    items = local(el.value);
+    active = -1;
+    render();
+  }
+
+  function onInput(el) {
+    if (input !== el) { input = el; session = newSession(); }
+    clearTimeout(timer);
+    const text = el.value.trim();
+    items = local(text);
+    active = -1;
+    if (text.length < 3 || !state.status?.live_available) return render();
+    render(true);
+    timer = setTimeout(() => fetchSuggestions(text), 220);
+  }
+
+  function close() {
+    clearTimeout(timer);
+    requestId++;
+    if (input) { input.setAttribute("aria-expanded", "false"); input.removeAttribute("aria-activedescendant"); }
+    if (list) { const old = list; list = null; old.classList.add("closing"); setTimeout(() => old.remove(), 160); }
+    input = null; items = []; active = -1;
+  }
+
+  function apply(path, text, placeId) {
+    const [scope, field] = path.split(".");
+    if (scope === "form") { state.form[field] = text; state.form[`${field}PlaceId`] = placeId || null; state.error = null; }
+    else if (scope === "panic") { state.panic[field] = text; state.panic[`${field}PlaceId`] = placeId || null; }
+    else { settings.places[field] = text; settings.place_ids[field] = placeId || null; saveSettings(); }
+  }
+
+  function choose(index) {
+    const item = items[index];
+    const el = input;
+    if (!item || !el) return;
+    const path = el.dataset.ac;
+    if (item.kind === "location") {
+      close();
+      el.value = "Locating…";
+      locate((coords) => {
+        if (coords) {
+          state.biasCoords = coords;
+          apply(path, `${coords[0].toFixed(6)},${coords[1].toFixed(6)}`, null);
+          if (path.startsWith("panic")) state.panic.coords = coords;
+        } else { apply(path, "", null); toast("Location is unavailable. Type the address instead."); }
+        rerender();
+      });
+      return;
+    }
+    el.value = item.text;
+    apply(path, item.text, item.place_id);
+    if (item.place_id) store.set("recentPlaces", [{ text: item.text, main: item.main, secondary: item.secondary, place_id: item.place_id }, ...recent().filter((r) => r.text !== item.text)].slice(0, 6));
+    close();
+    const inputs = [...(el.closest(".scroll, .settings-scroll")?.querySelectorAll("[data-ac]") || [])];
+    const after = inputs[inputs.indexOf(el) + 1];
+    if (after && !after.value.trim()) after.focus(); else el.blur();
+  }
+
+  function onKey(event) {
+    if (!input || event.target !== input || !list || list.hidden || !items.length) {
+      if (input && event.target === input && event.key === "Escape") close();
+      return;
+    }
+    if (event.key === "ArrowDown") { active = (active + 1) % items.length; render(); event.preventDefault(); }
+    else if (event.key === "ArrowUp") { active = (active - 1 + items.length) % items.length; render(); event.preventDefault(); }
+    else if (event.key === "Enter" && active >= 0) { choose(active); event.preventDefault(); }
+    else if (event.key === "Escape") { close(); event.stopPropagation(); }
+  }
+
+  document.addEventListener("focusin", (e) => { if (e.target.dataset?.ac) open(e.target); });
+  document.addEventListener("focusout", (e) => { if (e.target === input) setTimeout(() => { if (document.activeElement !== input) close(); }, 120); });
+  document.addEventListener("keydown", onKey, true);
+  viewport.addEventListener("scroll", position, true);
+  window.addEventListener("resize", position);
+  return { onInput, close };
+})();
+
+function acAttrs(path) {
+  return `data-ac="${path}" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="ac-list" autocomplete="off" spellcheck="false"`;
 }
 
 // Panic mode locates immediately when opened.

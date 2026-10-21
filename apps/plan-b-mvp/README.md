@@ -29,7 +29,7 @@ The server looks for the Google key in this order and uses the first one it find
 | API | Needed for | Status on the team key (checked 2026-10-21) |
 | --- | --- | --- |
 | Routes API | Public-transport and driving routes, walking steps, tolls, map geometry | Required; enabled and verified |
-| Places API (New) | Local average fuel price and nearby car parks | Required for fuel price and parking; enabled and verified (fuel prices and car parks returned for Brisbane) |
+| Places API (New) | Address suggestions while typing (Autocomplete), local average fuel price and nearby car parks | Required for suggestions, fuel price and parking; enabled and verified (suggestions, fuel prices and car parks returned for Brisbane) |
 | Elevation API | Uphill and downhill metres for walking sections | Optional; not enabled on the team key, so the app falls back to Open-Meteo. If the team enables it, it is used automatically |
 
 Google bills requests per API. Set a suitable quota or budget in Google Cloud before shared use. See Google's [Routes API setup](https://developers.google.com/maps/documentation/routes/get-api-key), [transit routing](https://developers.google.com/maps/documentation/routes/transit-route), [usage and billing](https://developers.google.com/maps/documentation/routes/usage-and-billing) and [attribution policy](https://developers.google.com/maps/documentation/routes/policies).
@@ -39,7 +39,7 @@ Google bills requests per API. Set a suitable quota or budget in Google Cloud be
 | Service | What it provides | What is sent |
 | --- | --- | --- |
 | Google Routes API (via this server) | Transit and driving routes, durations, tolls, fares when returned, route geometry | Origin, destination and departure time for each search |
-| Google Places API (New) (via this server) | Fuel prices near the start and car parks within 800 m of the destination | Coordinates near the start and the destination |
+| Google Places API (New) (via this server) | Address suggestions, fuel prices near the start and car parks within 800 m of the destination | The partly typed address with a random session token and an approximate bias location (current location or Brisbane), and coordinates near the start and the destination |
 | Translink SEQ GTFS-Realtime (`gtfsrt.api.translink.com.au`, no key) | Service alerts and trip updates (delays and cancellations), cached for 60 seconds | A plain feed request from this server; no trip details are sent |
 | Open-Meteo elevation API (fallback) | Elevation from a 90 m Copernicus terrain model | Sampled coordinates along walking paths |
 | Uber universal deep link (`m.uber.com/ul`) | Opens Uber with pickup and dropoff filled in | Pickup and dropoff coordinates, only when the traveller opens the link |
@@ -54,6 +54,7 @@ The mapping from each idea to what was built is in the [v2 feature log](../../do
 
 ### Planning and decision support
 
+- **Address suggestions:** every address field (from, to, Panic mode and the saved Home and Work/Uni places) shows a dropdown of suggestions while typing, from Places API Autocomplete (New), plus the current location, saved places and recent choices. Arrow keys and Enter select a suggestion. A chosen suggestion's Google place ID is sent to the Routes API, so the route goes to exactly that place instead of a re-geocoded address. Requests wait until three characters, are debounced and use session tokens to limit billing.
 - **Plan B search:** real free-text origin and destination, "Current location" (browser geolocation), saved Home and Work/Uni places, departure time, an optional deadline and an optional "What was disrupted?" field.
 - **Plan a trip mode:** regular route viewing with an optional deadline and a default "Public transport first" sort, so public transport is emphasised.
 - **Transparent ranking:** sort chips with a one-line explanation of the order. There is no opaque score.
@@ -93,7 +94,7 @@ A slide-in Settings panel replaces on-screen mode selection:
 
 ### Motion and look
 
-Prototype 6 styling, spring toggles, sliding segmented controls, a slide-in settings panel, bottom sheets, push transitions, rising cards and toasts. All of these respect the reduced-motion setting.
+The home screen has a banner with the Plan B logo (a broken direct route with Plan B curving around it, also used as `favicon.svg`), a time-of-day greeting, live Translink and impact chips, and a route illustration that draws itself, with a bus moving along it (hidden when motion is reduced). Prototype 6 styling, spring toggles, sliding segmented controls, a slide-in settings panel, bottom sheets, push transitions, rising cards and toasts. All of these respect the reduced-motion setting.
 
 ## Stack decision
 

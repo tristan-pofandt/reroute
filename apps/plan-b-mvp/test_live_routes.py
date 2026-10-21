@@ -153,6 +153,16 @@ class RequestBodyTests(unittest.TestCase):
         self.assertEqual(body["destination"], {"address": PAYLOAD["destination"]})
         self.assertEqual(body["travelMode"], "DRIVE")
 
+    def test_chosen_suggestion_place_id_is_used_instead_of_the_address(self):
+        journey = validate({**PAYLOAD, "destination_place_id": "ChIJexamplePlaceId_123"}, NOW)
+        body = request_body(journey, "transit")
+        self.assertEqual(body["destination"], {"placeId": "ChIJexamplePlaceId_123"})
+        self.assertEqual(body["origin"], {"address": PAYLOAD["origin"]})
+
+    def test_malformed_place_id_is_rejected(self):
+        with self.assertRaises(InputError):
+            validate({**PAYLOAD, "origin_place_id": "bad id with spaces"}, NOW)
+
     def test_each_mode_is_requested_with_its_own_travel_mode(self):
         routes = FakeRoutes()
         run({"modes": {"transit": True, "drive": True}}, routes=routes)

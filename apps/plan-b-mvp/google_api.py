@@ -14,6 +14,7 @@ from urllib.request import Request, urlopen
 
 ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes"
 PLACES_NEARBY_URL = "https://places.googleapis.com/v1/places:searchNearby"
+PLACES_AUTOCOMPLETE_URL = "https://places.googleapis.com/v1/places:autocomplete"
 GOOGLE_ELEVATION_URL = "https://maps.googleapis.com/maps/api/elevation/json"
 OPEN_METEO_ELEVATION_URL = "https://api.open-meteo.com/v1/elevation"
 
@@ -126,6 +127,41 @@ def _money(value):
     if not isinstance(value, dict):
         return None
     return int(value.get("units", 0) or 0) + int(value.get("nanos", 0) or 0) / 1_000_000_000
+
+
+TRANSIT_TYPES = {"transit_station", "bus_station", "bus_stop", "train_station", "subway_station", "light_rail_station", "ferry_terminal"}
+
+
+def autocomplete(key, text, session, lat=-27.4698, lng=153.0251):
+    """Place suggestions for partly typed text, biased to around the traveller (Australia only)."""
+    def compute():
+        body = {"input": text, "includedRegionCodes": ["au"], "languageCode": "en-AU",
+                "locationBias": {"circle": {"center": {"latitude": lat, "longitude": lng}, "radius": 50000}}}
+        if session:
+            body["sessionToken"] = session
+        try:
+            data = _post_json(PLACES_AUTOCOMPLETE_URL, key, body,
+                              "suggestions.placePrediction.placeId,suggestions.placePrediction.text,"
+                              "suggestions.placePrediction.structuredFormat,suggestions.placePrediction.types", timeout=8)
+        except (HTTPError, URLError, TimeoutError, OSError, ValueError) as error:
+            raise ServiceError("Address suggestions are unavailable.") from error
+        results = []
+        for suggestion in data.get("suggestions", []):
+            prediction = suggestion.get("placePrediction") or {}
+            structured = prediction.get("structuredFormat") or {}
+            main = (structured.get("mainText") or {})
+            secondary = (structured.get("secondaryText") or {}).get("text", "")
+            full = (prediction.get("text") or {}).get("text") or ", ".join(part for part in (main.get("text"), secondary) if part)
+            if not prediction.get("placeId") or not full:
+                continue
+            types = set(prediction.get("types") or [])
+            results.append({
+                "place_id": prediction["placeId"], "text": full, "main": main.get("text") or full, "secondary": secondary,
+                "matches": [[m.get("startOffset", 0), m.get("endOffset", 0)] for m in main.get("matches", [])],
+                "kind": "transit" if types & TRANSIT_TYPES else "street" if types & {"route", "street_address", "premise"} else "place",
+            })
+        return results[:6]
+    return cached(("autocomplete", text.casefold(), round(lat, 1), round(lng, 1)), 300, compute)
 
 
 def fuel_price(key, lat, lng, fuel_type="SP91"):

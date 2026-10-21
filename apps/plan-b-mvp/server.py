@@ -5,6 +5,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 from pathlib import Path
+import re
 import threading
 from urllib.parse import parse_qs, urlsplit
 
@@ -83,6 +84,23 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 return self.send_json(200, MONITOR.alerts())
             except FeedError as error:
+                return self.send_json(502, {"error": str(error)})
+        if path == "/api/autocomplete":
+            if not KEY:
+                return self.send_json(503, {"error": "Address suggestions need the Google Maps API key."})
+            query = self.query()
+            text = " ".join(query.get("q", "").split())
+            session = query.get("session", "")
+            if not 2 <= len(text) <= 120 or any(ord(char) < 32 for char in text) or not re.fullmatch(r"[A-Za-z0-9-]{0,64}", session):
+                return self.send_json(400, {"error": "Type at least two characters."})
+            try:
+                lat, lng = float(query.get("lat", "-27.4698")), float(query.get("lng", "153.0251"))
+                if not (-45 < lat < -9 and 110 < lng < 155):
+                    lat, lng = -27.4698, 153.0251
+                return self.send_json(200, {"suggestions": google_api.autocomplete(KEY, text, session, lat, lng)})
+            except ValueError:
+                return self.send_json(400, {"error": "Enter a valid location."})
+            except ServiceError as error:
                 return self.send_json(502, {"error": str(error)})
         if path == "/api/fuel":
             if not KEY:

@@ -1,4 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Plan B">
-  <rect width="64" height="64" rx="16" fill="#0e7664"/>
-  <path d="M17 47 45 19M30 19h15v15" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2F95FF"/>
+      <stop offset=".55" stop-color="#0A6CFF"/>
+      <stop offset="1" stop-color="#5E3BE6"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#bg)"/>
+  <!-- The planned direct route, broken by a disruption -->
+  <path d="M16 48 L48 16" fill="none" stroke="#fff" stroke-opacity=".38" stroke-width="4" stroke-linecap="round" stroke-dasharray="1 7"/>
+  <path d="M28.5 31.5l7 7M35.5 31.5l-7 7" stroke="#FF6B5E" stroke-width="3.6" stroke-linecap="round"/>
+  <!-- Plan B: the route that curves around it -->
+  <path d="M16 48 C16 30 27 18 45 18" fill="none" stroke="#fff" stroke-width="5.2" stroke-linecap="round"/>
+  <circle cx="16" cy="48" r="5" fill="#34C759" stroke="#fff" stroke-width="2.6"/>
+  <circle cx="47" cy="17" r="6" fill="#fff"/>
+  <circle cx="47" cy="17" r="2.6" fill="#0A6CFF"/>
 </svg>

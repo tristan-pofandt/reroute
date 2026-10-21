@@ -53,6 +53,7 @@ VEHICLE_CATEGORY = {
     "FERRY": "ferry",
 }
 TRANSIT_MODE_FILTER = {"bus": ["BUS"], "train": ["TRAIN", "RAIL", "SUBWAY"], "tram": ["LIGHT_RAIL"]}
+PLACE_ID = re.compile(r"^[A-Za-z0-9_-]{10,400}$")
 LATLNG = re.compile(r"^\s*(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)\s*$")
 
 
@@ -171,8 +172,16 @@ def validate(payload, now=None):
     avoid = payload.get("avoid_lines") or []
     if not isinstance(avoid, list) or len(avoid) > 10 or not all(isinstance(line, str) and 0 < len(line.strip()) <= 30 for line in avoid):
         raise InputError("List up to 10 disrupted services.")
+    place_ids = {}
+    for name in ("origin", "destination"):
+        value = payload.get(f"{name}_place_id")
+        if value not in (None, ""):
+            if not isinstance(value, str) or not PLACE_ID.match(value):
+                raise InputError("That suggested place is no longer valid. Type the address again.")
+            place_ids[name] = value
     return {
         "origin": origin, "destination": destination, "purpose": purpose,
+        "origin_place_id": place_ids.get("origin"), "destination_place_id": place_ids.get("destination"),
         "departure": departure, "deadline": deadline,
         "budget": _number(payload, "budget", 0, 500, 20),
         "walking": _number(payload, "walking", 0, 120, 15, whole=True),
@@ -191,7 +200,9 @@ def validate(payload, now=None):
 
 # ── Route requests ──────────────────────────────────────────────────────────────
 
-def waypoint(text):
+def waypoint(text, place_id=None):
+    if place_id:
+        return {"placeId": place_id}
     match = LATLNG.match(text)
     if match:
         return {"location": {"latLng": {"latitude": float(match[1]), "longitude": float(match[2])}}}
@@ -200,7 +211,8 @@ def waypoint(text):
 
 def request_body(journey, mode):
     body = {
-        "origin": waypoint(journey["origin"]), "destination": waypoint(journey["destination"]),
+        "origin": waypoint(journey["origin"], journey.get("origin_place_id")),
+        "destination": waypoint(journey["destination"], journey.get("destination_place_id")),
         "travelMode": "TRANSIT" if mode == "transit" else "DRIVE",
         "departureTime": journey["departure"].isoformat(),
         "languageCode": "en-AU", "units": "METRIC", "computeAlternativeRoutes": True,
