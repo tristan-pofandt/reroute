@@ -202,9 +202,36 @@ class RequestBodyTests(unittest.TestCase):
         self.assertEqual({item["id"] for item in result["options"]}, {"scooter-0", "ebike-0", "bicycle-0"})
         bicycle_request = next(call[1] for call in routes.calls if call[1]["travelMode"] == "BICYCLE")
         self.assertEqual(bicycle_request["travelMode"], "BICYCLE")
-        self.assertTrue(all(not item["cost_known"] for item in result["options"]))
         self.assertTrue(all(item["duration_minutes"] > 0 for item in result["options"]))
-        self.assertTrue(all("not checked" in item["cost_unknown_text"].lower() for item in result["options"]))
+        # Shared e-scooters and e-bikes get an estimated hire cost; the push bike (your own bike) stays unchecked.
+        self.assertTrue(option(result, "scooter-0")["cost_known"] and option(result, "ebike-0")["cost_known"])
+        self.assertFalse(option(result, "bicycle-0")["cost_known"])
+        self.assertIn("not checked", option(result, "bicycle-0")["cost_unknown_text"].lower())
+
+    def test_hire_cost_is_the_unlock_fee_plus_the_assumed_riding_minutes(self):
+        result = run({"modes": self.CYCLE_MODES}, routes=FakeRoutes(drive=[self.cycle_route(metres=4000)]))
+        scooter, ebike = option(result, "scooter-0"), option(result, "ebike-0")
+        # 4 km at 15 km/h is 16 min and at 20 km/h is 12 min; the defaults are $1 to unlock and 45c a minute.
+        self.assertEqual(scooter["cost"], round(1 + 0.45 * 16, 2))
+        self.assertEqual(ebike["cost"], round(1 + 0.45 * 12, 2))
+        self.assertTrue(scooter["cost_estimated"])
+        self.assertEqual([item["amount"] for item in scooter["cost_breakdown"]], [1.0, round(0.45 * 16, 2)])
+        self.assertIn("assumed", scooter["cost_label"])
+        self.assertEqual(scooter["hire_providers"], ["Lime", "Neuron"])
+        self.assertNotIn("hire_providers", option(result, "bicycle-0"))
+
+    def test_hire_prices_from_settings_are_used_and_checked(self):
+        prices = {"scooter": {"unlock": 0, "per_min": 0.5}, "ebike": {"unlock": 2, "per_min": 0.3}}
+        result = run({"modes": self.CYCLE_MODES, "hire_prices": prices}, routes=FakeRoutes(drive=[self.cycle_route(metres=4000)]))
+        self.assertEqual(option(result, "scooter-0")["cost"], 8.0)
+        self.assertEqual(option(result, "ebike-0")["cost"], 5.6)
+        odd = validate({**PAYLOAD, "hire_prices": {"scooter": {"unlock": 50, "per_min": "x"}}}, NOW)["hire"]["scooter"]
+        self.assertEqual(odd, {"unlock": 1.0, "per_min": 0.45})  # out of range or unreadable: the default is used
+
+    def test_a_hire_cost_over_the_budget_is_flagged(self):
+        result = run({"modes": self.CYCLE_MODES, "budget": 7}, routes=FakeRoutes(drive=[self.cycle_route(metres=4000)]))  # scooter $8.20, e-bike $6.40
+        self.assertIn("cost", limits(option(result, "scooter-0")))
+        self.assertNotIn("cost", limits(option(result, "ebike-0")))
 
     def test_cycle_options_report_zero_tailpipe_co2_with_an_honest_note(self):
         result = run({"modes": {**self.CYCLE_MODES, "drive": True}}, routes=FakeRoutes(drive=[self.cycle_route()]))

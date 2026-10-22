@@ -57,6 +57,11 @@ CYCLE_PROFILES = {"scooter": ("E-scooter", 15), "ebike": ("E-bike", 20), "bicycl
 PUSH_BIKE_ASSUMED_KMH = 12  # only used if Google returns no cycling duration
 PUSH_BIKE_MAX_KM = 5
 UNCHECKED_MODES = ("rideshare",) + CYCLE_MODES  # no price or availability check, so never the panic-mode recommendation
+# Shared e-scooter and e-bike hire (Lime and Neuron in Brisbane): an unlock fee plus a price per minute, times the assumed-speed riding time.
+# Neither operator publishes current Brisbane prices outside its app, so these defaults are assumptions within the range of older published
+# Brisbane rates ($1 unlock, 30 to 45 cents a minute); the traveller can change them in Settings. Not a quote, and passes are not modelled.
+HIRE_DEFAULTS = {"scooter": (1.00, 0.45), "ebike": (1.00, 0.45)}
+HIRE_PROVIDERS = "Lime or Neuron"
 
 # CO2 per litre burned (kg). Combustion-only factors; upstream fuel production is excluded.
 FUEL_CO2_PER_L = {"DIESEL": 2.68, "LPG": 1.51}
@@ -128,6 +133,14 @@ def _number(payload, name, low, high, default=None, whole=False):
     return int(value) if whole else value
 
 
+def _hire_price(prices, name, high, default):
+    """A hire price from Settings; a missing or out-of-range value falls back to the default rather than failing the whole search."""
+    try:
+        return _number(prices, name, 0, high, default)
+    except InputError:
+        return default
+
+
 def _place(value, label):
     if not isinstance(value, str) or not 3 <= len(value.strip()) <= 200 or any(ord(char) < 32 for char in value):
         raise InputError(f"Enter a {label} of 3–200 characters.")
@@ -197,6 +210,11 @@ def validate(payload, now=None):
     avoid = payload.get("avoid_lines") or []
     if not isinstance(avoid, list) or len(avoid) > 10 or not all(isinstance(line, str) and 0 < len(line.strip()) <= 30 for line in avoid):
         raise InputError("List up to 10 disrupted services.")
+    given = payload.get("hire_prices") if isinstance(payload.get("hire_prices"), dict) else {}
+    hire = {}
+    for mode, (unlock, per_minute) in HIRE_DEFAULTS.items():
+        prices = given.get(mode) if isinstance(given.get(mode), dict) else {}
+        hire[mode] = {"unlock": _hire_price(prices, "unlock", 10, unlock), "per_min": _hire_price(prices, "per_min", 3, per_minute)}
     place_ids = {}
     for name in ("origin", "destination"):
         value = payload.get(f"{name}_place_id")
@@ -220,6 +238,7 @@ def validate(payload, now=None):
         "avoid_lines": {line.strip().upper() for line in avoid},
         "want_elevation": payload.get("want_elevation", True) is not False,
         "ride_tokens": [token for token in (payload.get("ride_tokens") or [])[:20] if isinstance(token, str)],
+        "hire": hire,
     }
 
 
@@ -492,6 +511,17 @@ def bicycle_option(route, index, journey, mode):
     notice = ("This is a Google Maps cycling route, not a route checked for scooter or bike access. " + timing
               + " Check local rules, path access and conditions before travelling.")
     guidance = [item for item in (nav.nav_step(step, mode) for step in steps) if item["start"] and item["end"] and len(item["polyline"]) > 1]
+    cost = {"cost": None, "cost_known": False, "cost_label": "Hire and equipment costs not checked", "cost_breakdown": [],
+            "cost_unknown_text": "Availability and hire prices are not checked"}
+    price = (journey.get("hire") or {}).get(mode)
+    if price:
+        riding = round(price["per_min"] * duration_minutes, 2)
+        cost = {"cost": round(price["unlock"] + riding, 2), "cost_known": True, "cost_estimated": True,
+                "cost_label": f"Estimated hire: ${price['unlock']:.2f} unlock + ${price['per_min']:.2f} a minute for {duration_minutes} min (assumed prices; "
+                              f"{HIRE_PROVIDERS} show the real price in their app)",
+                "cost_breakdown": [{"label": "Unlock fee (assumed)", "amount": round(price["unlock"], 2)},
+                                   {"label": f"{duration_minutes} min at ${price['per_min']:.2f} a minute (assumed)", "amount": riding}],
+                "hire_providers": ["Lime", "Neuron"]}
     return {
         "id": f"{mode}-{index}", "mode": mode, "kind": mode,
         "title": label + (f" · route {index + 1}" if index else ""),
@@ -500,8 +530,7 @@ def bicycle_option(route, index, journey, mode):
         "arrival_dt": journey["departure"] + timedelta(minutes=duration_minutes),
         "walking_minutes": 0, "transfers": 0, "lines": [],
         "distance_km": round(distance_km, 1),
-        "cost": None, "cost_known": False, "cost_label": "Hire and equipment costs not checked",
-        "cost_breakdown": [], "cost_unknown_text": "Availability and hire prices are not checked",
+        **cost,
         "co2_kg": 0.0, "co2_note": "No tailpipe emissions; " + ("manufacturing not counted" if mode == "bicycle" else "charging and manufacturing not counted"),
         "notice": notice,
         "steps": details[:25] or [{"kind": mode, "title": "Open the full directions in Google Maps", "minutes": duration_minutes}],

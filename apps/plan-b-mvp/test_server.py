@@ -149,6 +149,48 @@ class ReadOnlyRouteTests(unittest.TestCase):
         self.assertEqual(self.client.get("/api/weather").status_code, 400)
         self.assertEqual(self.client.get("/api/weather?lat=-27.47&lng=153.03&demo=snow").status_code, 400)
 
+    def test_weather_page_detail_live_and_demo(self):
+        class Detailed(FakeWeather):
+            def details(self, lat, lng, now=None):
+                return weather_mod.detail(forecast(hours=48), now=NOW)
+
+        _, client = make_app(weather=Detailed())
+        live = client.get("/api/weather?lat=-27.47&lng=153.03&detail=1").get_json()
+        self.assertEqual((len(live["hourly"]), live["simulated"]), (24, False))
+        self.assertNotIn("kind", live)
+        demo = client.get("/api/weather?lat=-27.47&lng=153.03&detail=1&demo=heat").get_json()
+        self.assertEqual((demo["simulated"], len(demo["days"])), (True, 7))
+        self.assertNotIn("hourly", client.get("/api/weather?lat=-27.47&lng=153.03").get_json())
+
+    def test_place_lookup_for_the_map_picker(self):
+        calls = []
+        original = server.google_api.place_details
+        server.google_api.place_details = lambda key, place_id: calls.append(place_id) or (
+            {"place_id": place_id, "name": "Great Court", "address": "St Lucia QLD 4067, Australia", "location": [-27.4975, 153.0137]} if place_id != "ChIJmissing00" else None)
+        self.addCleanup(setattr, server.google_api, "place_details", original)
+        found = self.client.get("/api/place?id=ChIJ1234567890")
+        self.assertEqual((found.status_code, found.get_json()["name"]), (200, "Great Court"))
+        self.assertEqual(self.client.get("/api/place?id=ChIJmissing00").status_code, 404)
+        self.assertEqual(self.client.get("/api/place?id=bad id").status_code, 400)
+        self.assertEqual(self.client.get("/api/place").status_code, 400)
+        self.assertEqual(calls, ["ChIJ1234567890", "ChIJmissing00"])
+        _, keyless = make_app(key=None)
+        self.assertEqual(keyless.get("/api/place?id=ChIJ1234567890").status_code, 503)
+
+    def test_place_details_reads_googles_answer_and_asks_for_only_four_fields(self):
+        seen = {}
+
+        def fake_get(url, timeout=15, headers=None):
+            seen.update(url=url, headers=headers)
+            return {"id": "ChIJabcdefghij", "displayName": {"text": "Great Court"}, "formattedAddress": "St Lucia QLD 4067, Australia",
+                    "location": {"latitude": -27.4975, "longitude": 153.0137}}
+
+        with patch.object(server.google_api, "_get_json", fake_get):
+            found = server.google_api.place_details("k", "ChIJabcdefghij")
+        self.assertEqual(found, {"place_id": "ChIJabcdefghij", "name": "Great Court", "address": "St Lucia QLD 4067, Australia", "location": [-27.4975, 153.0137]})
+        self.assertEqual(seen["headers"]["X-Goog-FieldMask"], "id,displayName,formattedAddress,location")
+        self.assertTrue(seen["url"].startswith("https://places.googleapis.com/v1/places/ChIJabcdefghij?"))
+
     def test_weather_unavailable_is_a_502_with_a_message(self):
         class Down:
             def forecast(self, *args, **kwargs):
@@ -421,6 +463,15 @@ class AbuseProtectionTests(unittest.TestCase):
         self.assertEqual([c.status_code for c in codes], [200, 429])
         self.assertIn("address suggestions", codes[1].get_json()["error"])
         self.assertNotIn("live searches", codes[1].get_json()["error"])
+
+    def test_place_lookups_share_the_daily_address_cap(self):
+        self.with_env(PLANB_DAILY_AUTOCOMPLETE_CAP=1)
+        original = server.google_api.place_details
+        server.google_api.place_details = lambda *args: {"place_id": "x", "name": "Somewhere", "address": "", "location": None}
+        self.addCleanup(setattr, server.google_api, "place_details", original)
+        _, client = make_app()
+        codes = [client.get("/api/place?id=ChIJ1234567890", environ_overrides=PUBLIC).status_code for _ in range(2)]
+        self.assertEqual(codes, [200, 429])
 
     def test_autocomplete_and_fuel_are_limited_per_ip(self):
         self.with_env(PLANB_AUTOCOMPLETE_LIMIT_PER_HOUR=1, PLANB_FUEL_LIMIT_PER_HOUR=1)

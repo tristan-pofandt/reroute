@@ -104,6 +104,55 @@ class BuildTests(unittest.TestCase):
         self.assertNotIn("kind", weather.public(weather.simulate("rain", now=NOW)))
 
 
+def with_days(raw, days=7):
+    """Adds Open-Meteo daily series (each day the same) and the extra current fields the weather page uses."""
+    dates = [(datetime(2026, 10, 21) + timedelta(days=n)).strftime("%Y-%m-%d") for n in range(days)]
+    raw["daily"] = {"time": dates, "weather_code": [61] * days, "temperature_2m_max": [26.0] * days, "temperature_2m_min": [17.0] * days,
+                    "precipitation_sum": [2.4] * days, "precipitation_probability_max": [70] * days, "wind_speed_10m_max": [22.0] * days,
+                    "wind_gusts_10m_max": [41.0] * days, "wind_direction_10m_dominant": [135] * days, "uv_index_max": [9.1] * days,
+                    "sunrise": [f"{d}T05:10" for d in dates], "sunset": [f"{d}T18:05" for d in dates]}
+    raw["current"].update({"relative_humidity_2m": 64, "wind_direction_10m": 350})
+    return raw
+
+
+class WeatherPageTests(unittest.TestCase):
+    def test_detail_adds_24_hours_seven_days_humidity_and_wind_direction(self):
+        result = weather.detail(with_days(forecast(hours=48)), now=NOW)
+        self.assertEqual(len(result["hours"]), 6)  # the home widget's part is unchanged
+        self.assertEqual(len(result["hourly"]), 24)
+        self.assertEqual(result["hourly"][0]["time"], "2026-10-21T08:00:00+10:00")
+        self.assertEqual(set(result["hourly"][0]), {"time", "temp_c", "precip_prob", "precip_mm", "wind_kmh", "gust_kmh", "code", "icon"})
+        self.assertEqual(len(result["days"]), 7)
+        day = result["days"][0]
+        self.assertEqual((day["date"], day["label"], day["icon"], day["max_c"], day["min_c"]), ("2026-10-21", "Light rain", "rain", 26.0, 17.0))
+        self.assertEqual((day["precip_prob"], day["wind_from"], day["uv"], day["sunrise"]), (70, "SE", 9.1, "2026-10-21T05:10"))
+        self.assertEqual((result["current"]["humidity"], result["current"]["wind_from"]), (64, "N"))
+
+    def test_detail_copes_without_daily_data_and_near_the_end_of_the_forecast(self):
+        result = weather.detail(forecast(hours=12), now=NOW)
+        self.assertEqual(result["days"], [])
+        self.assertEqual(len(result["hourly"]), 4)
+        self.assertIsNone(result["current"]["humidity"])
+
+    def test_compass_points(self):
+        self.assertEqual([weather.compass(d) for d in (0, 44, 46, 180, 315, 359, 360)], ["N", "NE", "NE", "S", "NW", "N", "N"])
+        self.assertIsNone(weather.compass(None))
+
+    def test_simulated_detail_is_flagged(self):
+        result = weather.simulate_detail("storm", now=NOW)
+        self.assertTrue(result["simulated"] and result["bad"])
+        self.assertEqual((len(result["hourly"]), len(result["days"])), (24, 7))
+        self.assertEqual(result["days"][0]["label"], "Thunderstorm")
+
+    def test_the_request_asks_for_seven_days_and_the_extra_fields(self):
+        urls = []
+        Weather(fetch=lambda url: urls.append(url) or with_days(forecast(hours=48))).details(-27.47, 153.02, now=NOW)
+        self.assertIn("forecast_days=7", urls[0])
+        self.assertIn("uv_index_max", urls[0])
+        self.assertIn("relative_humidity_2m", urls[0])
+        self.assertIsNone(Weather(fetch=lambda url: {"unexpected": 1}).details(-27.47, 153.02, now=NOW))
+
+
 class WeatherClientTests(unittest.TestCase):
     def test_forecast_is_cached_for_ten_minutes_per_kilometre_cell(self):
         calls, clock = [], [0.0]

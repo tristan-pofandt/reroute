@@ -16,7 +16,10 @@ URL = "https://api.open-meteo.com/v1/forecast"
 CACHE_SECONDS = 600
 BRISBANE = timezone(timedelta(hours=10), "AEST")
 HOURLY = "temperature_2m,apparent_temperature,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,is_day"
-CURRENT = "temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,is_day"
+CURRENT = "temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,is_day,relative_humidity_2m,wind_direction_10m"
+DAILY = ("weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,"
+         "wind_gusts_10m_max,wind_direction_10m_dominant,uv_index_max,sunrise,sunset")
+COMPASS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
 
 LABELS = {0: "Clear sky", 1: "Mostly clear", 2: "Partly cloudy", 3: "Overcast", 45: "Fog", 48: "Freezing fog",
           51: "Light drizzle", 53: "Drizzle", 55: "Heavy drizzle", 56: "Freezing drizzle", 57: "Freezing drizzle",
@@ -149,6 +152,70 @@ def simulate(kind, at=None, now=None):
             "source": "Simulated", "fetched_at": now.isoformat()}
 
 
+def compass(degrees):
+    """Eight-point compass name for a wind direction in degrees (the direction the wind comes from)."""
+    if degrees is None:
+        return None
+    return COMPASS[round((degrees % 360) / 45) % 8]
+
+
+def detail(raw, now=None):
+    """The weather page: the home widget's object plus humidity, wind direction, the next 24 hours and up to 7 days."""
+    now = now or datetime.now(BRISBANE)
+    base = build(raw, None, now)
+    if base is None:
+        return None
+    times = raw["hourly"]["time"]
+    index = int((now - _hour(times[0])).total_seconds() // 3600)
+    hourly = []
+    for position in range(max(0, index), min(index + 24, len(times))):
+        item = _slot(raw, position)
+        code = item["code"] if item["code"] is not None else 0
+        hourly.append({"time": _hour(item["time"]).isoformat(), "temp_c": item["temp_c"], "precip_prob": item["precip_prob"], "precip_mm": item["precip_mm"],
+                       "wind_kmh": item["wind_kmh"], "gust_kmh": item["gust_kmh"], "code": code,
+                       "icon": icon_for(code, item["is_day"], item["apparent_c"], item["gust_kmh"])})
+    daily = raw.get("daily") or {}
+
+    def day_value(name, position):
+        series = daily.get(name) or []
+        return series[position] if position < len(series) else None
+
+    days = []
+    for position, date in enumerate((daily.get("time") or [])[:7]):
+        code = day_value("weather_code", position)
+        code = code if code is not None else 0
+        direction = day_value("wind_direction_10m_dominant", position)
+        days.append({"date": date, "code": code, "label": LABELS.get(code, "Unknown"), "icon": icon_for(code, True, None, day_value("wind_gusts_10m_max", position)),
+                     "max_c": day_value("temperature_2m_max", position), "min_c": day_value("temperature_2m_min", position),
+                     "precip_mm": day_value("precipitation_sum", position), "precip_prob": day_value("precipitation_probability_max", position),
+                     "wind_kmh": day_value("wind_speed_10m_max", position), "gust_kmh": day_value("wind_gusts_10m_max", position),
+                     "wind_dir": direction, "wind_from": compass(direction), "uv": day_value("uv_index_max", position),
+                     "sunrise": day_value("sunrise", position), "sunset": day_value("sunset", position)})
+    current = dict(base["current"])
+    cur = raw.get("current") or {}
+    current["humidity"] = cur.get("relative_humidity_2m")
+    current["wind_dir"] = cur.get("wind_direction_10m")
+    current["wind_from"] = compass(cur.get("wind_direction_10m"))
+    return {**base, "current": current, "hourly": hourly, "days": days}
+
+
+def simulate_detail(kind, now=None):
+    """The weather page for demo mode: the simulated forecast held for 24 hours and 7 days, flagged as simulated."""
+    now = now or datetime.now(BRISBANE)
+    base = simulate(kind, None, now)
+    preset = SIMULATED[kind]
+    start = now.replace(minute=0, second=0, microsecond=0)
+    icon = base["current"]["icon"]
+    hourly = [{"time": (start + timedelta(hours=offset)).isoformat(), "temp_c": preset["temp"], "precip_prob": preset["prob"], "precip_mm": preset["mm"],
+               "wind_kmh": preset["wind"], "gust_kmh": preset["gust"], "code": preset["code"], "icon": icon} for offset in range(24)]
+    days = [{"date": (start + timedelta(days=offset)).date().isoformat(), "code": preset["code"], "label": LABELS[preset["code"]], "icon": icon,
+             "max_c": preset["temp"] + 2, "min_c": preset["temp"] - 6, "precip_mm": round(preset["mm"] * 6, 1), "precip_prob": preset["prob"],
+             "wind_kmh": preset["wind"], "gust_kmh": preset["gust"], "wind_dir": 135, "wind_from": "SE", "uv": 8, "sunrise": None, "sunset": None}
+            for offset in range(7)]
+    current = {**base["current"], "humidity": 85 if preset["prob"] >= 50 else 50, "wind_dir": 135, "wind_from": "SE"}
+    return {**base, "current": current, "hourly": hourly, "days": days}
+
+
 def public(weather):
     """The weather object without internal fields."""
     if weather is None:
@@ -177,8 +244,8 @@ class Weather:
             hit = self._cache.get(key)
             if hit and not force and self._clock() - hit[0] < CACHE_SECONDS:
                 return hit[1]
-        query = urlencode({"latitude": f"{lat:.3f}", "longitude": f"{lng:.3f}", "current": CURRENT, "hourly": HOURLY,
-                           "forecast_days": 4, "timezone": "Australia/Brisbane", "wind_speed_unit": "kmh"})
+        query = urlencode({"latitude": f"{lat:.3f}", "longitude": f"{lng:.3f}", "current": CURRENT, "hourly": HOURLY, "daily": DAILY,
+                           "forecast_days": 7, "timezone": "Australia/Brisbane", "wind_speed_unit": "kmh"})
         try:
             data = self._fetch(f"{URL}?{query}")
         except (URLError, TimeoutError, OSError, ValueError):
@@ -196,5 +263,15 @@ class Weather:
             return None
         try:
             return build(data, at, now)
+        except (KeyError, ValueError, TypeError, IndexError):
+            return None
+
+    def details(self, lat, lng, now=None):
+        """The weather page object (24 hours and the week ahead), or None when Open-Meteo is unavailable."""
+        data = self.raw(lat, lng)
+        if not data:
+            return None
+        try:
+            return detail(data, now)
         except (KeyError, ValueError, TypeError, IndexError):
             return None

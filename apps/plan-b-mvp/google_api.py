@@ -17,6 +17,7 @@ from urllib.request import Request, urlopen
 ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes"
 PLACES_NEARBY_URL = "https://places.googleapis.com/v1/places:searchNearby"
 PLACES_AUTOCOMPLETE_URL = "https://places.googleapis.com/v1/places:autocomplete"
+PLACES_DETAILS_URL = "https://places.googleapis.com/v1/places/"
 GOOGLE_ELEVATION_URL = "https://maps.googleapis.com/maps/api/elevation/json"
 OPEN_METEO_ELEVATION_URL = "https://api.open-meteo.com/v1/elevation"
 
@@ -30,6 +31,7 @@ PRICES = {
     ("Routes API", "Compute Routes Essentials"): 5.00,
     ("Routes API", "Compute Routes Pro"): 10.00,
     ("Places API (New)", "Autocomplete Request"): 2.83,
+    ("Places API (New)", "Place Details Pro"): 17.00,
     ("Places API (New)", "Nearby Search Pro"): 32.00,
     ("Places API (New)", "Nearby Search Enterprise"): 35.00,
     ("Elevation API", "Elevation"): 5.00,
@@ -116,8 +118,8 @@ def _post_json(url, key, body, field_mask, timeout=18):
         return json.load(response)
 
 
-def _get_json(url, timeout=15):
-    request = Request(url, headers={"User-Agent": "Reroute-student-MVP"})
+def _get_json(url, timeout=15, headers=None):
+    request = Request(url, headers={"User-Agent": "Reroute-student-MVP", **(headers or {})})
     with urlopen(request, timeout=timeout) as response:
         return json.load(response)
 
@@ -228,6 +230,28 @@ def autocomplete(key, text, session, lat=-27.4698, lng=153.0251):
             })
         return results[:6]
     return cached(("autocomplete", text.casefold(), round(lat, 1), round(lng, 1)), 300, compute)
+
+
+def place_details(key, place_id):
+    """Name, address and position of one place (a place icon tapped on the map). displayName makes this a Place Details Pro request."""
+    def compute():
+        try:
+            data = _get_json(f"{PLACES_DETAILS_URL}{place_id}?{urlencode({'languageCode': 'en-AU'})}", timeout=8,
+                             headers={"X-Goog-Api-Key": key, "X-Goog-FieldMask": "id,displayName,formattedAddress,location"})
+            record_request("Places API (New)", "Place Details Pro")
+        except HTTPError as error:
+            if error.code == 404:
+                return None
+            raise ServiceError("Place details are unavailable.") from error
+        except (URLError, TimeoutError, OSError, ValueError) as error:
+            raise ServiceError("Place details are unavailable.") from error
+        location = data.get("location") or {}
+        name = (data.get("displayName") or {}).get("text") or ""
+        if not name and not data.get("formattedAddress"):
+            return None
+        return {"place_id": data.get("id") or place_id, "name": name or data["formattedAddress"], "address": data.get("formattedAddress") or "",
+                "location": [location["latitude"], location["longitude"]] if "latitude" in location and "longitude" in location else None}
+    return cached(("place", place_id), 86400, compute)
 
 
 def fuel_price(key, lat, lng, fuel_type="SP91"):

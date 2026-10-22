@@ -23,7 +23,7 @@ from google_api import RoutesError, ServiceError
 from gtfs_rt import FeedError, Monitor
 from gtfs_static import Static
 from limits import DailyCap, RateLimiter, is_loopback
-from live_routes import BRISBANE, InputError, Services, live, plan
+from live_routes import BRISBANE, PLACE_ID, InputError, Services, live, plan
 from push import Push, PushError
 from rides import Board, RideError
 from traffic import Traffic
@@ -123,6 +123,7 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
     limiter = RateLimiter(clock)
     plan_limit, autocomplete_limit, fuel_limit = (_int("PLANB_PLAN_LIMIT_PER_HOUR", 40), _int("PLANB_AUTOCOMPLETE_LIMIT_PER_HOUR", 400),
                                                   _int("PLANB_FUEL_LIMIT_PER_HOUR", 120))
+    place_limit = _int("PLANB_PLACE_LIMIT_PER_HOUR", 60)
     caps = {"plan": DailyCap(_int("PLANB_DAILY_GOOGLE_CAP", 50), clock), "autocomplete": DailyCap(_int("PLANB_DAILY_AUTOCOMPLETE_CAP", 500), clock)}
     maps_browser_key = os.getenv("MAPS_BROWSER_API_KEY", "").strip() or None
     warning = shared_key_warning(key, maps_browser_key)
@@ -295,6 +296,25 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
         except ServiceError as error:
             return failure(str(error), 502)
 
+    # Choose on map: the name and address of a place icon the traveller tapped. Counts towards the daily address-lookup cap.
+    @app.get("/api/place")
+    def place_api():
+        if not key:
+            return failure("Place names need the Google Maps API key.", 503)
+        place_id = request.args.get("id", "")
+        if not PLACE_ID.match(place_id):
+            return failure("Choose the place on the map again.", 400)
+        blocked = guard("place", place_limit, "autocomplete")
+        if blocked:
+            return blocked
+        try:
+            found = google_api.place_details(key, place_id)
+        except ServiceError as error:
+            return failure(str(error), 502)
+        if not found:
+            return failure("Google has no details for that place.", 404)
+        return reply(found)
+
     @app.get("/api/fuel")
     def fuel():
         if not key:
@@ -323,7 +343,10 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
         demo = request.args.get("demo", "live")
         if demo not in ("live", "clear", "rain", "storm", "heat"):
             return failure("Demo weather must be live, clear, rain, storm or heat.", 400)
-        found = weather_mod.simulate(demo) if demo != "live" else weather.forecast(lat, lng)
+        if request.args.get("detail") == "1":
+            found = weather_mod.simulate_detail(demo) if demo != "live" else weather.details(lat, lng)
+        else:
+            found = weather_mod.simulate(demo) if demo != "live" else weather.forecast(lat, lng)
         if not found:
             return failure("Weather is unavailable right now.", 502)
         return reply(weather_mod.public(found))

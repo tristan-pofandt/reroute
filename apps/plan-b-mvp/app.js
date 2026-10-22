@@ -89,6 +89,17 @@ const I = {
   edit: (s) => svg('<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/>', s),
   trash: (s) => svg('<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>', s),
   flame: (s) => svg('<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>', s),
+  // Menu, profile, map picker and the weather page
+  chevronDown: (s = 14) => svg('<polyline points="6 9 12 15 18 9"/>', s),
+  user: (s) => svg('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>', s),
+  info: (s) => svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>', s),
+  shield: (s) => svg('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>', s),
+  file: (s) => svg('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>', s),
+  map: (s) => svg('<polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>', s),
+  droplet: (s) => svg('<path d="M12 2.7 6.3 8.4a8 8 0 1 0 11.4 0z"/>', s),
+  sunrise: (s) => svg('<path d="M17 18a5 5 0 0 0-10 0M12 2v7M4.22 10.22l1.42 1.42M1 18h2M21 18h2M18.36 11.64l1.42-1.42M23 22H1M8 6l4-4 4 4"/>', s),
+  sunset: (s) => svg('<path d="M17 18a5 5 0 0 0-10 0M12 9V2M4.22 10.22l1.42 1.42M1 18h2M21 18h2M18.36 11.64l1.42-1.42M23 22H1M16 5l-4 4-4-4"/>', s),
+  pause: (s) => svg('<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>', s),
 };
 const WX_ICON = { sun: I.sun, moon: I.moon, "cloud-sun": I.cloudSun, cloud: I.cloud, fog: I.fog, drizzle: I.drizzle, rain: I.rain, storm: I.storm, snow: I.snow, wind: I.wind, heat: I.heat };
 const WX_TONE = { sun: "var(--warning)", moon: "var(--violet)", "cloud-sun": "var(--warning)", cloud: "var(--text-muted)", fog: "var(--text-muted)", drizzle: "var(--accent)", rain: "var(--accent)", storm: "var(--violet)", snow: "var(--teal)", wind: "var(--teal)", heat: "var(--error)" };
@@ -124,6 +135,8 @@ const DEFAULT_SETTINGS = {
   watch: true, voice: false,
   factors: { bus: 0.105, rail: 0.035, tram: 0.029, ferry: 0.019 },
   co2_goal_kg: 10,
+  // Assumed shared-hire prices (unlock fee and per minute). Lime and Neuron show the real Brisbane price only in their apps; keep in step with HIRE_DEFAULTS in live_routes.py.
+  hire: { scooter: { unlock: 1, per_min: 0.45 }, ebike: { unlock: 1, per_min: 0.45 } },
 };
 
 // Saved places: Home and Work/Uni always exist (edit the address, cannot be deleted); up to MAX_CUSTOM_PLACES more can be added.
@@ -152,6 +165,7 @@ function loadSettings() {
   const saved = store.get("settings", {});
   const merged = { ...DEFAULT_SETTINGS, ...saved };
   for (const key of ["modes", "transit_modes", "show", "factors"]) merged[key] = { ...DEFAULT_SETTINGS[key], ...(saved[key] || {}) };
+  merged.hire = Object.fromEntries(Object.entries(DEFAULT_SETTINGS.hire).map(([mode, price]) => [mode, { ...price, ...(saved.hire?.[mode] || {}) }]));
   merged.saved_places = migratePlaces(saved);
   delete merged.places;
   delete merged.place_ids;
@@ -210,6 +224,10 @@ const saveDemo = () => store.set("demo", state.demo);
 const demoBody = () => (demoOn() ? { weather: state.demo.weather, disrupted: state.demo.disrupted, traffic: state.demo.traffic, late_min: state.demo.late_min } : undefined);
 const DEMO_PRESET = { origin: "Taringa Station, Brisbane QLD", destination: "The University of Queensland, St Lucia QLD 4072" };
 const BRISBANE = [-27.4698, 153.0251];
+// Trip fields can hold coordinates behind a readable label ("Current location", a dropped pin); the server receives "lat,lng".
+const CURRENT_PLACE = "Current location";
+const coordText = (c) => `${Number(c[0]).toFixed(6)},${Number(c[1]).toFixed(6)}`;
+const pinLabel = (c) => `Dropped pin (${Number(c[0]).toFixed(5)}, ${Number(c[1]).toFixed(5)})`;
 
 // Geometry for live directions: distances in metres on a local flat approximation, fine at city scale.
 const RAD = Math.PI / 180;
@@ -241,12 +259,11 @@ function pointAlong(line, fraction) {
 // ── Shared components ────────────────────────────────────────────────────────
 
 // Every page with a Back button also gets the Home button, so it slides with the page instead of floating above it.
+// The Back button always says "Back" (naming the previous screen read oddly next to Home). Settings is reached from the home screen's side menu.
 function navbar(back, right = "") {
-  const backBtn = back ? `<button class="nav-back" data-action="back" aria-label="Back to ${esc(back)}">${I.chevronLeft(20)}<span>${esc(back)}</span></button>` : "";
+  const backBtn = back ? `<button class="nav-back" data-action="back" aria-label="Back">${I.chevronLeft(20)}<span>Back</span></button>` : "";
   return `<header class="navbar"><div class="side">${backBtn}</div><div class="side end">${back ? homeButton() : ""}${right}</div></header>`;
 }
-const legalBack = () => ({ terms: "Terms", privacy: "Privacy", sources: "About" })[state.stack[state.stack.length - 2]] || "Home";
-const gearButton = () => `<button class="icon-btn" data-action="open-settings" aria-label="Settings">${I.gear(20)}</button>`;
 const homeButton = () => `<button class="home-btn" data-action="go-home" aria-label="Go straight to the home screen" title="Home">${I.home(18)}<span>Home</span></button>`;
 // Sheets and Settings sit over the current screen, so they show the Home button only away from the home screen.
 const homeIfAway = () => (state.screen !== "home" ? homeButton() : "");
@@ -322,14 +339,15 @@ function weatherInner() {
   const c = w.current;
   const warn = w.bad && w.warning ? `<div class="wx-warn" role="alert">${I.alert(18)}<div><b>${esc(w.warning)}${simTag(w.simulated)}</b><span>Allow extra time if your trip includes walking between stops.</span></div></div>` : "";
   const hours = (w.hours || []).slice(0, 6).map((h) => `<div class="wx-hour"><span>${hourOf(h.time)}</span>${wxIcon(h.icon, 20)}<b>${Math.round(h.temp_c)}°</b><i>${h.precip_prob >= 20 ? `${h.precip_prob}%` : ""}</i></div>`).join("");
-  return `<div class="wx-head"><p class="eyebrow">${I.cloud(14)}Weather · ${esc(state.weatherPlace)}</p>${w.simulated ? `<span class="badge info">Simulated</span>` : ""}</div>
+  return `<div class="wx-head"><p class="eyebrow">${I.cloud(14)}Weather · ${esc(state.weatherPlace)}</p><span class="wx-more">${w.simulated ? `<span class="badge info">Simulated</span>` : ""}<span class="wx-open">Details${I.chevronRight(14)}</span></span></div>
     <div class="wx-main"><div class="wx-temp">${Math.round(c.temp_c)}<sup>°</sup></div>
       <div class="wx-now"><strong>${esc(c.label)}</strong><span>Feels like ${Math.round(c.apparent_c)}° · Wind ${Math.round(c.wind_kmh)} km/h${c.gust_kmh > c.wind_kmh + 10 ? `, gusts ${Math.round(c.gust_kmh)}` : ""}${c.precip_mm > 0 ? ` · ${c.precip_mm} mm rain` : ""}</span></div>
       <span class="wx-icon" style="--tone:${WX_TONE[c.icon] || "var(--accent)"}">${wxIcon(c.icon, 28)}</span></div>
     ${warn}${hours ? `<div class="wx-hours" aria-label="Next hours">${hours}</div>` : ""}
     <p class="fine wx-foot">${esc(w.source)}${w.simulated ? "" : ` · updated ${timeOf(w.fetched_at)}`}</p>`;
 }
-const weatherCard = () => `<section class="wx" data-wx aria-label="Weather">${weatherInner()}</section>`;
+// The whole widget opens the weather page (week ahead, wind, rain radar).
+const weatherCard = () => `<button class="wx wx-btn" data-wx data-action="go" data-screen="weather" aria-describedby="wx-hint">${weatherInner()}</button><span class="visually-hidden" id="wx-hint">Opens the weather page with the week ahead, wind and the rain radar.</span>`;
 const renderWeather = () => { const el = currentPage?.querySelector("[data-wx]"); if (el) el.innerHTML = weatherInner(); };
 
 // ── Live status ──────────────────────────────────────────────────────────────
@@ -468,6 +486,109 @@ function impactButton(impact) {
   return `<button class="impact-btn" data-action="go" data-screen="dashboard" aria-label="Impact Dashboard: ${kgShort(impact.co2)} CO₂ avoided this month">${I.leaf(18)}<span>${kgShort(impact.co2)}</span></button>`;
 }
 
+// Header profile button: a blank default picture. Accounts are not built yet, so both items only say so (a template for later work).
+function profileButton() {
+  return `<div class="profile-wrap"><button class="avatar-btn" data-action="toggle-profile" aria-label="Profile" aria-haspopup="menu" aria-expanded="false" aria-controls="profile-menu">
+      <svg class="avatar" width="36" height="36" viewBox="0 0 36 36" aria-hidden="true"><defs><clipPath id="avatar-clip"><circle cx="18" cy="18" r="18"/></clipPath></defs>
+        <g clip-path="url(#avatar-clip)"><rect width="36" height="36" class="avatar-bg"/><circle cx="18" cy="14" r="6.5" class="avatar-fg"/><circle cx="18" cy="37" r="13.5" class="avatar-fg"/></g></svg></button>
+    <div class="profile-menu" id="profile-menu" role="menu" aria-label="Profile" hidden>
+      <button role="menuitem" data-action="account-feature">${I.user(18)}Account details</button>
+      <button role="menuitem" data-action="account-feature">${I.edit(18)}Edit profile</button>
+    </div></div>`;
+}
+function toggleProfileMenu(force) {
+  const wrap = currentPage?.querySelector(".profile-wrap");
+  if (!wrap) return;
+  const menu = wrap.querySelector(".profile-menu"), open = force ?? menu.hidden;
+  if (open) { menu.hidden = false; requestAnimationFrame(() => menu.classList.add("open")); }
+  else { menu.classList.remove("open"); setTimeout(() => { if (!menu.classList.contains("open")) menu.hidden = true; }, 180); }
+  wrap.querySelector(".avatar-btn").setAttribute("aria-expanded", String(open));
+  if (open) menu.querySelector("button")?.focus({ preventScroll: true });
+}
+const profileOpen = () => !!currentPage?.querySelector(".profile-menu.open");
+
+// Side menu: opened by tapping the logo on the home screen. It slides in from the left like Settings slides in from the right,
+// and closes with the backdrop, Escape, the close button or a swipe to the left.
+let menuEl = null;
+function menuContent() {
+  const impact = impactTotals(thisMonthTrips());
+  const item = (attrs, icon, tone, label, hint = "", value = "") => `<button class="row" ${attrs}><span class="row-icon" style="--tone:${tone}">${icon}</span><span class="row-label">${label}${hint ? `<small>${hint}</small>` : ""}</span>${value}<span class="chev">${I.chevronRight()}</span></button>`;
+  const go = (screen) => `data-action="menu-go" data-screen="${screen}"`, open = (what) => `data-action="menu-open" data-open="${what}"`;
+  return `
+    <div class="menu-head"><span class="brand">${logo(36, "lg-menu")}<span class="wordmark"><span>Re</span>route</span></span><button class="icon-btn" data-action="close-menu" aria-label="Close menu">${I.x(18)}</button></div>
+    <div class="menu-scroll">
+      <p class="section-header">Go to</p>
+      <div class="group"><div class="group-card">
+        ${item(go("dashboard"), I.leaf(18), "var(--success)", "Impact Dashboard", `${kgShort(impact.co2)} CO₂ avoided this month`)}
+        ${item(go("weather"), I.cloud(18), "var(--accent)", "Weather", "The week ahead, wind and the rain radar")}
+        ${item(open("alerts"), I.signal(18), "var(--error)", "Translink alerts", "Live disruptions, searchable by line")}
+        ${item(go("rides"), I.users(18), "var(--teal)", "Shared rides", "Share a car or split an Uber")}
+      </div></div>
+      <p class="section-header">App</p>
+      <div class="group"><div class="group-card">
+        ${item(open("settings"), I.gear(18), "var(--text-muted)", "Settings", "Ways to travel, your car, saved places and more")}
+        ${item(open("demo"), I.flask(18), "var(--violet)", "Demo mode", "Simulate weather, disruptions and traffic", valueSpan(demoOn() ? "On" : "Off"))}
+        ${item(open("share"), I.qr(18), "var(--teal)", "Share this app", "QR code and link")}
+        ${canInstall() ? item(open("install"), I.download(18), "var(--accent)", "Install Reroute", "Add it to your home screen") : ""}
+      </div></div>
+      <p class="section-header">Information</p>
+      <div class="group"><div class="group-card">
+        ${item(go("sources"), I.info(18), "var(--accent)", "About / Data Sources")}
+        ${item(go("terms"), I.file(18), "var(--text-muted)", "Terms of Use")}
+        ${item(go("privacy"), I.shield(18), "var(--text-muted)", "Privacy Policy")}
+      </div></div>
+      <p class="fine">Reroute is a student prototype. Estimates only, always check before you travel.</p>
+    </div>`;
+}
+function openMenu() {
+  if (menuEl) return;
+  toggleProfileMenu(false);
+  menuEl = document.createElement("div");
+  menuEl.className = "menu-backdrop";
+  menuEl.dataset.action = "menu-backdrop";
+  menuEl.innerHTML = `<div class="menu-panel" role="dialog" aria-modal="true" aria-label="Reroute menu">${menuContent()}</div>`;
+  viewport.appendChild(menuEl);
+  dragToClose(menuEl, ".menu-panel", ".menu-panel", "x", () => closeMenu());
+  currentPage?.querySelector('[data-action="open-menu"]')?.setAttribute("aria-expanded", "true");
+  requestAnimationFrame(() => requestAnimationFrame(() => menuEl?.classList.add("open")));
+  menuEl.querySelector('[data-action="close-menu"]').focus({ preventScroll: true });
+}
+// Closes the menu; `then` runs once it has mostly slid away, so Settings or a sheet does not open on top of it.
+function closeMenu(then, restoreFocus = !then) {
+  if (!menuEl) return then?.();
+  const el = menuEl;
+  menuEl = null;
+  el.classList.remove("open");
+  setTimeout(() => el.remove(), 360);
+  const brand = currentPage?.querySelector('[data-action="open-menu"]');
+  brand?.setAttribute("aria-expanded", "false");
+  if (restoreFocus) brand?.focus({ preventScroll: true });
+  if (then) setTimeout(then, 240);
+}
+
+// A small centred message box (used for template features that are not built yet).
+let dialogEl = null;
+function showDialog(title, text, returnTo = document.activeElement) {
+  closeDialog();
+  const before = returnTo;
+  dialogEl = document.createElement("div");
+  dialogEl.className = "dialog-backdrop";
+  dialogEl.dataset.action = "dialog-backdrop";
+  dialogEl.innerHTML = `<div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-text"><span class="dialog-icon">${I.info(22)}</span><h3 id="dialog-title">${esc(title)}</h3><p id="dialog-text">${esc(text)}</p><button class="btn btn-primary" data-action="close-dialog">OK</button></div>`;
+  dialogEl._before = before;
+  viewport.appendChild(dialogEl);
+  requestAnimationFrame(() => requestAnimationFrame(() => dialogEl?.classList.add("open")));
+  dialogEl.querySelector("button").focus({ preventScroll: true });
+}
+function closeDialog() {
+  if (!dialogEl) return;
+  const el = dialogEl;
+  dialogEl = null;
+  el.classList.remove("open");
+  setTimeout(() => el.remove(), 220);
+  el._before?.focus?.({ preventScroll: true });
+}
+
 function homeScreen() {
   const live = state.status?.live_available;
   const alerts = (state.alerts?.alerts || []).filter((a) => a.disruptive);
@@ -475,7 +596,11 @@ function homeScreen() {
   const myRides = state.rides.mine.length;
   return `
     <div class="scroll tight">
-      <div class="home-top"><span class="brand">${logo(36, "lg-home")}<span class="wordmark"><span>Re</span>route</span></span>${impactButton(impact)}<div class="home-actions"><button class="icon-btn${demoOn() ? " on" : ""}" data-action="open-demo" aria-label="Demo mode">${I.flask(20)}</button>${gearButton()}</div></div>
+      <div class="home-top">
+        <button class="brand brand-btn" data-action="open-menu" aria-label="Open the Reroute menu" aria-haspopup="dialog" aria-expanded="false">${logo(36, "lg-home")}<span class="wordmark"><span>Re</span>route</span><span class="brand-chev">${I.chevronDown(14)}</span></button>
+        ${impactButton(impact)}
+        <div class="home-actions">${profileButton()}</div>
+      </div>
       ${homeHero(alerts.length)}
       <button class="interactive-element primary trip-btn" data-action="start" data-purpose="regular">
         <span class="trip-icon">${I.route(24)}</span>
@@ -526,38 +651,40 @@ function homeScreen() {
 }
 
 function termsScreen() {
-  return `${navbar(legalBack())}<div class="scroll legal-content">
+  return `${navbar(true)}<div class="scroll legal-content">
     <p class="eyebrow">Reroute</p><h1 class="large-title">Terms of Use</h1>
     <p class="subtitle">A student prototype for exploring journey options. It is not an official transport service or a substitute for your own judgement.</p>
     <h2>Estimates, not guarantees</h2>
-    <p>Route times, fares, parking availability, fuel costs, weather, live vehicle positions and disruption information can be incomplete, delayed or wrong. E-scooter and e-bike times use a Google Maps cycling route with an assumed average speed (15 and 20 km/h), not a measured one. Push-bike times use Google's own cycling estimate, and the push bike is only offered for trips up to ${PUSH_BIKE_MAX_KM} km. The app does not check hire availability, hire prices, local access rules or safe paths for any of them. The CO₂ shown for them counts tailpipe emissions only, so charging and manufacturing are not counted. Check current signs, services, fares, prices and conditions before leaving.</p>
+    <p>Route times, fares, parking availability, fuel costs, weather, live vehicle positions and disruption information can be incomplete, delayed or wrong. E-scooter and e-bike times use a Google Maps cycling route with an assumed average speed (15 and 20 km/h), not a measured one, and their hire cost is an estimate from assumed prices (an unlock fee plus a price per minute, editable in Settings), not a quote from Lime or Neuron. Push-bike times use Google's own cycling estimate, and the push bike is only offered for trips up to ${PUSH_BIKE_MAX_KM} km. The app does not check hire availability, real hire prices, local access rules or safe paths for any of them. The rain radar shows the last two hours of radar and is not a forecast. The CO₂ shown for them counts tailpipe emissions only, so charging and manufacturing are not counted. Check current signs, services, fares, prices and conditions before leaving.</p>
     <p>Do not use the app while driving, riding or crossing a road. In-app directions and location readings may be inaccurate. Follow road rules and use your own judgement.</p>
     <h2>Third-party services</h2>
-    <p>Route search and maps use Google Maps Platform, and route results are shown on a Google map. Use is also subject to the <a href="https://policies.google.com/terms" target="_blank" rel="noopener noreferrer">Google Terms of Service</a>, the <a href="https://www.google.com/intl/en-US_US/help/terms_maps/" target="_blank" rel="noopener noreferrer">Google Maps Additional Terms</a> and Google's <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>. Public-transport alerts and schedules come from Translink; traffic events come from QLDTraffic; weather and fallback elevation come from Open-Meteo. Their services may change or be unavailable.</p>
+    <p>Route search and maps use Google Maps Platform, and route results are shown on a Google map. Use is also subject to the <a href="https://policies.google.com/terms" target="_blank" rel="noopener noreferrer">Google Terms of Service</a>, the <a href="https://www.google.com/intl/en-US_US/help/terms_maps/" target="_blank" rel="noopener noreferrer">Google Maps Additional Terms</a> and Google's <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>. Public-transport alerts and schedules come from Translink; traffic events come from QLDTraffic; weather and fallback elevation come from Open-Meteo; the rain radar comes from RainViewer. The Lime and Neuron buttons open those companies' app store listings or websites, which have their own terms. Their services may change or be unavailable.</p>
     <h2>Shared rides and notifications</h2>
     <p>Ride-board posts are visible to people using the same Reroute server. Use a nickname and broad areas, not contact details or sensitive information. Posts expire automatically. Background alerts require a browser push subscription and may be delivered by your browser's push provider.</p>
     <h2>Prototype availability</h2>
-    <p>This prototype is provided as-is for evaluation. No account, transport booking, payment, scooter hire or emergency response is provided. The team may change or stop the prototype at any time.</p>
+    <p>This prototype is provided as-is for evaluation. No account, transport booking, payment, scooter hire or emergency response is provided. The profile button is a placeholder: it has no account behind it. The team may change or stop the prototype at any time.</p>
     <p class="fine">Review before public release: confirm the team's hosting terms, support contact and legal requirements. This page is plain-language product information, not legal advice.</p>
     <button class="btn btn-secondary" data-action="go" data-screen="privacy">Read the Privacy Policy</button>
   </div>`;
 }
 
 function privacyScreen() {
-  return `${navbar(legalBack())}<div class="scroll legal-content">
+  return `${navbar(true)}<div class="scroll legal-content">
     <p class="eyebrow">Your information</p><h1 class="large-title">Privacy Policy</h1>
-    <p class="subtitle">This prototype has no accounts or sign-in. This page describes what the current code stores and sends; it is not a promise about third-party services or the hosting provider.</p>
+    <p class="subtitle">This prototype has no accounts or sign-in (the profile button is a placeholder that stores nothing). This page describes what the current code stores and sends; it is not a promise about third-party services or the hosting provider.</p>
     <h2>On your device</h2>
     <p>Reroute saves settings (including travel modes, budget and walking limits, fuel and parking estimates, theme and accessibility choices), saved places and their Google place IDs, recent places, the last entered trip places, demo preferences, trip and CO₂ history, ride-board membership tokens, and disruption-watch details in this browser's local storage. This information is not synced to an account. Anyone with access to this browser profile may be able to see it. You can clear browser storage to remove it; clearing it may also stop local watch and ride-board controls from working. The app's service worker also keeps copies on this device of the app files and of recent read-only server answers (live alerts, weather, fuel prices, the address suggestions you asked for, app status and map settings) so the app can open offline.</p>
-    <p>The app asks for device location only when a feature needs it, such as current-location routing, a nearby weather forecast or live directions (the weather widget only uses it if you have already allowed it). The browser controls that permission. When your location is used it is sent to the Reroute server, as a starting point, to bias address suggestions or for weather, and from there to Google or Open-Meteo as described below. Live-directions positions stay on the device unless you tap Re-plan from here, which sends your position as a new starting point.</p>
+    <p>The app asks for device location when a feature needs it: opening Plan a trip (the From field starts at your current location), current-location routing, Journey disrupted?, the map picker's locate button, live directions and a nearby weather forecast (the weather widget and weather page only use it if you have already allowed it). The browser controls that permission; if you block it, type your start or choose it on the map. Your position is not stored by Reroute. When it is used it is sent to the Reroute server as a starting point, to bias address suggestions or for weather, and from there to Google or Open-Meteo as described below. Live-directions positions stay on the device unless you tap Re-plan from here, which sends your position as a new starting point. A pin you drop on the map is sent the same way, as coordinates, only when you search.</p>
     <h2>Sent to Reroute</h2>
     <p>For route searches, the server receives the entered origin, destination, optional place IDs, departure time and deadline, selected modes and limits, your vehicle and fare settings, avoided lines and the ride-board tokens needed for matching. It processes the route request and does not save a route-search history. The server keeps visitor IP addresses in memory for hourly abuse limits and counts the day's searches (a number only), and it keeps recent Google and weather answers in memory for a few minutes.</p>
     <p>Unless the operator switches on quiet logging (PLANB_QUIET=1), the server's console log records each request with its time, IP address and web address. For read requests that address includes what you typed into address suggestions and the coordinates used for weather and fuel lookups. The app does not log request bodies such as route searches. A hosting provider may separately keep connection or error logs.</p>
     <p>If you post or join a shared ride, the server stores a nickname, broad start and destination labels, coordinates rounded to about 100 metres, departure time, meeting point, optional note, seat and cost details, and random membership tokens. Posts are visible to users of the same server and are removed about 30 minutes after their departure time; people who join a post add a nickname. If you enable background disruption alerts, the server stores your browser push endpoint and encryption keys with the watched trip: its start and destination text, the destination place ID, the deadline, line names, route IDs, a label and an expiry (at most 24 hours). These records are stored in the server's data directory; the server operator can access them. Unsubscribe in the app to remove a push subscription.</p>
     <h2>Third-party services</h2>
     <ul>
-      <li><b>Google Maps Platform:</b> the server sends route endpoints, the departure time and the travel mode (public transport, driving, cycling) to the Routes API; toll estimates are only requested when your own car is switched on. It sends partial typed addresses, a random autocomplete session token and an approximate location bias to Places, coordinates near the trip endpoints for fuel and car-park searches, and sampled walking coordinates to Google Elevation when enabled.</li>
+      <li><b>Google Maps Platform:</b> the server sends route endpoints, the departure time and the travel mode (public transport, driving, cycling) to the Routes API; toll estimates are only requested when your own car is switched on. It sends partial typed addresses, a random autocomplete session token and an approximate location bias to Places, the Google place ID of a place you tap on the map (to look up its name and address), coordinates near the trip endpoints for fuel and car-park searches, and sampled walking coordinates to Google Elevation when enabled.</li>
       <li><b>Google Maps JavaScript (the map):</b> your browser loads the map script and map tiles directly from Google using a browser map key that the Reroute server hands to every visitor. Google receives your IP address, browser details, this site's address and the area of the map you view, and may use its own cookies or similar technologies. Opening a Google Maps or Uber link sends the relevant trip places or coordinates to that service.</li>
+      <li><b>RainViewer (rain radar):</b> on the weather page your browser downloads radar images directly from RainViewer (api.rainviewer.com and tilecache.rainviewer.com). RainViewer receives your IP address, browser details and which map area you view. Reroute sends it nothing else.</li>
+      <li><b>Lime and Neuron:</b> the hire buttons open the Apple App Store, Google Play or the operator's website. Reroute sends no trip details to Lime or Neuron; those sites and apps have their own privacy policies.</li>
       <li><b>Translink:</b> the server downloads public schedule and live alert, delay and vehicle feeds. It does not send your trip details to Translink.</li>
       <li><b>QLDTraffic:</b> the server requests public road-event data without sending your trip details.</li>
       <li><b>Open-Meteo:</b> the server sends the location used for weather (your device location if allowed, the trip start or Brisbane) rounded to three decimal places, or sampled walking-route coordinates for fallback elevation.</li>
@@ -573,15 +700,16 @@ function privacyScreen() {
 }
 
 function sourcesScreen() {
-  return `${navbar(legalBack())}<div class="scroll legal-content">
+  return `${navbar(true)}<div class="scroll legal-content">
     <p class="eyebrow">About this prototype</p><h1 class="large-title">About / Data Sources</h1>
     <p class="subtitle">Reroute is a student prototype for comparing journey options and responding to disruptions. It is not an official Translink or Queensland Government service.</p>
     <div class="group"><div class="group-card">
-      <div class="row"><span class="row-label"><b>Google Maps Platform</b><small>Routes (public transport, driving and cycling), places/autocomplete, fuel and car-park listings, optional elevation, and the interactive map (Maps JavaScript API). Google route content is shown on a Google map so Google's own logo and attribution stay visible.</small><a href="https://developers.google.com/maps/documentation/routes/policies" target="_blank" rel="noopener noreferrer">Routes API policies</a> · <a href="https://developers.google.com/maps/documentation/places/web-service/policies" target="_blank" rel="noopener noreferrer">Places policies</a></span></div>
+      <div class="row"><span class="row-label"><b>Google Maps Platform</b><small>Routes (public transport, driving and cycling), places/autocomplete, the name and address of a place you tap when choosing on the map (Place Details), fuel and car-park listings, optional elevation, and the interactive maps (Maps JavaScript API). Google route content is shown on a Google map so Google's own logo and attribution stay visible.</small><a href="https://developers.google.com/maps/documentation/routes/policies" target="_blank" rel="noopener noreferrer">Routes API policies</a> · <a href="https://developers.google.com/maps/documentation/places/web-service/policies" target="_blank" rel="noopener noreferrer">Places policies</a></span></div>
       <div class="row"><span class="row-label"><b>Translink</b><small>South East Queensland static GTFS schedules and GTFS-Realtime alerts, trip updates and vehicle positions, used to identify route stops and show live disruption/vehicle information. Data is licensed under Creative Commons Attribution 4.0 International (CC BY 4.0).</small><a href="https://translink.com.au/about-translink/open-data" target="_blank" rel="noopener noreferrer">Translink open data and feed links</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a></span></div>
       <div class="row"><span class="row-label"><b>QLDTraffic / Queensland Government</b><small>Public road events are used to flag incidents and estimate additional driving delay. Contains information from the QLDTraffic GeoJSON API dataset, Transport and Main Roads, Queensland Government, licensed under Creative Commons Attribution 4.0 International (CC BY 4.0). The data is provided “as is”. The app requests events from the server without sending trip details.</small><a href="https://www.data.qld.gov.au/dataset/131940-traffic-and-travel-information-geojson-api" target="_blank" rel="noopener noreferrer">QLDTraffic GeoJSON API dataset</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a> · <a href="https://qldtraffic.qld.gov.au/more/Disclaimer/index.html" target="_blank" rel="noopener noreferrer">QLDTraffic disclaimer</a></span></div>
-      <div class="row"><span class="row-label"><b>Open-Meteo</b><small>Weather forecasts for the home widget and walking warnings; elevation is a fallback when Google Elevation is unavailable. Weather and elevation data are attributed to Open-Meteo and are subject to its applicable terms and CC BY 4.0 attribution requirements.</small><a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a> · <a href="https://open-meteo.com/en/licence" target="_blank" rel="noopener noreferrer">Licence and attribution</a></span></div>
-      <div class="row"><span class="row-label"><b>Micromobility providers</b><small>There is no provider availability or pricing feed in this prototype. Scooter and bike options use a Google cycling route. E-scooter and e-bike times use assumed speeds, push-bike time is Google's cycling estimate and the push bike is only offered up to ${PUSH_BIKE_MAX_KM} km. Availability, safe access and hire costs must be checked in the provider's app, and the CO₂ shown counts tailpipe emissions only. Reroute is not affiliated with a hire provider.</small></span></div>
+      <div class="row"><span class="row-label"><b>Open-Meteo</b><small>Weather forecasts for the home widget, the weather page (the next 24 hours and 7 days) and walking warnings; elevation is a fallback when Google Elevation is unavailable. Weather and elevation data are attributed to Open-Meteo and are subject to its applicable terms and CC BY 4.0 attribution requirements.</small><a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a> · <a href="https://open-meteo.com/en/licence" target="_blank" rel="noopener noreferrer">Licence and attribution</a></span></div>
+      <div class="row"><span class="row-label"><b>RainViewer</b><small>The rain radar on the weather page: composite radar for the last two hours, one image every 10 minutes, loaded by your browser. RainViewer's free API is for personal and educational use, serves map zoom levels up to 7 (closer zooms enlarge those images) and does not guarantee availability.</small><a href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a> · <a href="https://www.rainviewer.com/api.html" target="_blank" rel="noopener noreferrer">API terms</a></span></div>
+      <div class="row"><span class="row-label"><b>Lime and Neuron (shared e-scooters and e-bikes)</b><small>Brisbane City Council's shared e-mobility scheme is run by Lime and Neuron. Neither publishes a vehicle or price feed for Brisbane, so Reroute does not show vehicle locations. E-scooter and e-bike hire costs are estimates from assumed prices you can change in Settings, on a Google cycling route at assumed speeds; push-bike time is Google's cycling estimate and the push bike is only offered up to ${PUSH_BIKE_MAX_KM} km. The buttons open each operator's app store listing or website. Check availability, the real price and safe access in their app. The CO₂ shown counts tailpipe emissions only. Reroute is not affiliated with Lime or Neuron.</small><a href="https://www.brisbane.qld.gov.au/transport-and-parking/public-transport/e-mobility" target="_blank" rel="noopener noreferrer">Brisbane City Council e-mobility</a></span></div>
       <div class="row"><span class="row-label"><b>Uber</b><small>The app can open Uber with pickup and drop-off details when you choose that option. It does not query Uber for a fare or availability before opening the link.</small><a href="https://m.uber.com/ul/" target="_blank" rel="noopener noreferrer">Uber universal link</a></span></div>
       <div class="row"><span class="row-label"><b>Google Fonts</b><small>Inter typeface used in the interface.</small><a href="https://fonts.google.com/specimen/Inter" target="_blank" rel="noopener noreferrer">Inter</a></span></div>
       <div class="row"><span class="row-label"><b>Web Push providers</b><small>Browser vendors deliver opt-in background notifications. No separate analytics provider is used by the app.</small></span></div>
@@ -593,23 +721,28 @@ function sourcesScreen() {
 
 function placeChips(field) {
   const chips = [];
-  if (field === "origin") chips.push(`<button class="chip" data-action="use-location">${I.locate(14)}Current location</button>`);
+  if (field === "origin" && !(state.form.origin === CURRENT_PLACE && (state.form.originCoords || state.form.originLocating))) chips.push(`<button class="chip" data-action="use-location">${I.locate(14)}Current location</button>`);
+  chips.push(`<button class="chip" data-action="pick-map" data-path="form.${field}">${I.map(14)}Choose on map</button>`);
   settings.saved_places.filter((p) => p.address).forEach((p) => chips.push(`<button class="chip" data-action="fill-place" data-field="${field}" data-place="${esc(p.id)}">${I[placeGlyph(p)](14)}${esc(p.name)}</button>`));
-  return chips.length ? `<div class="place-chips">${chips.join("")}</div>` : "";
+  return `<div class="place-chips">${chips.join("")}</div>`;
 }
+// The From row while Plan a trip opens: "Current location" with a shimmer until the position arrives, or a note when it is unavailable.
+const originRowClass = () => { const f = state.form; return f.origin === CURRENT_PLACE && f.originLocating ? " locating" : f.origin === CURRENT_PLACE && f.originCoords ? " is-current" : ""; };
+const originNote = () => (state.form.originNote ? `<p class="field-note" data-origin-note>${esc(state.form.originNote)}</p>` : `<p class="field-note" data-origin-note hidden></p>`);
 
 function journeyScreen() {
   const f = state.form;
   const modes = [settings.modes.transit && "Public transport", settings.modes.drive && "My car", settings.modes.rideshare && "Uber", settings.modes.scooter && "E-scooter", settings.modes.ebike && "E-bike", settings.modes.bicycle && "Push bike"].filter(Boolean).join(", ") || "None";
   return `
-    ${navbar("Home", gearButton())}
+    ${navbar(true)}
     <div class="scroll">
       <p class="eyebrow">Plan a trip</p>
       <h2 class="large-title">Where are you going?</h2>
       <p class="subtitle">Public transport options come first, with the true cost of driving and the CO₂ you avoid alongside.</p>
       <p class="section-header">Journey</p>
       <div class="group"><div class="group-card">
-        <div class="row field-row"><span class="row-icon" style="--tone:var(--success)">${I.walk(18)}</span><div class="place-input"><label for="f-origin">From</label><input id="f-origin" type="text" data-field="origin" ${acAttrs("form.origin")} value="${esc(f.origin)}" placeholder="Address, stop or place" autocomplete="off"></div></div>
+        <div class="row field-row${originRowClass()}" data-origin-row><span class="row-icon" style="--tone:var(--success)">${f.origin === CURRENT_PLACE ? I.locate(18) : I.walk(18)}</span><div class="place-input"><label for="f-origin">From</label><input id="f-origin" type="text" data-field="origin" ${acAttrs("form.origin")} value="${esc(f.origin)}" placeholder="Address, stop or place" autocomplete="off"></div></div>
+        ${originNote()}
         ${placeChips("origin")}
         <div class="row field-row"><span class="row-icon" style="--tone:var(--error)">${I.pin(18)}</span><div class="place-input"><label for="f-destination">To</label><input id="f-destination" type="text" data-field="destination" ${acAttrs("form.destination")} value="${esc(f.destination)}" placeholder="Address or place" autocomplete="off"></div></div>
         ${placeChips("destination")}
@@ -726,6 +859,7 @@ function co2Summary(options) {
 
 function tradeoff(o) {
   if (o.mode === "rideshare") return "Open Uber for the live price and pickup time. It's door to door, but costs more than public transport.";
+  if (o.cost_estimated) return `Estimated hire cost and time on a Google Maps cycling route at an assumed speed. Check that a vehicle is nearby, its real price and local rules in the Lime or Neuron app.`;
   if (["scooter", "ebike", "bicycle"].includes(o.mode)) return "Illustrative time on a Google Maps cycling route. Check vehicle access, local rules, availability and conditions; hire costs are not checked.";
   const parts = [];
   if (o.buffer_minutes !== undefined) parts.push(`Arrives ${bufferInfo(o).text}`);
@@ -739,6 +873,19 @@ function tradeoff(o) {
   let text = parts.join(", ") + ".";
   if (!o.fits && o.reasons.length) text += ` ${o.reasons[0].text}.`;
   return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+// Lime and Neuron run Brisbane's shared e-scooters and e-bikes. These open the official app store listing (it shows "Open" when the app is
+// installed) on a phone, or the operator's Brisbane page on a computer. Store links and app IDs checked 2026-10-23.
+const HIRE_APPS = {
+  Lime: { ios: "https://apps.apple.com/au/app/lime-ridegreen/id1199780189", android: "https://play.google.com/store/apps/details?id=com.limebike", web: "https://www.li.me/en-au/locations/brisbane" },
+  Neuron: { ios: "https://apps.apple.com/au/app/neuron-e-scooters-and-e-bikes/id1240649186", android: "https://play.google.com/store/apps/details?id=com.hhyu.neuron", web: "https://www.rideneuron.com/australia/" },
+};
+const isAndroid = () => /android/i.test(navigator.userAgent);
+const hireLink = (name) => { const app = HIRE_APPS[name]; return isIos() ? app.ios : isAndroid() ? app.android : app.web; };
+function hireButtons(o) {
+  return `<div class="hire-links" role="group" aria-label="Hire apps">${o.hire_providers.filter((name) => HIRE_APPS[name]).map((name) => `<a class="btn hire-btn ${name.toLowerCase()}" href="${esc(hireLink(name))}" target="_blank" rel="noopener noreferrer"><span class="hire-mark" aria-hidden="true">${name[0]}</span><span>Open ${esc(name)}</span>${I.external(15)}</a>`).join("")}</div>
+    <p class="fine hire-note">See nearby vehicles and the real price in the app. Reroute isn't affiliated with Lime or Neuron.</p>`;
 }
 
 function badge(o) {
@@ -761,7 +908,7 @@ function optionCard(o, index, highlight, lowest) {
   ].filter(Boolean).join("");
   const sub = [o.subtitle, o.mode === "transit" ? leaveLabel(o) : `${o.duration_minutes} min`, show.transfers && o.transfers ? plural(o.transfers, "transfer") : ""].filter(Boolean).join(" · ");
   const stats = [
-    show.cost ? `<span class="${costOver ? "over" : ""}"><b>${o.cost_known ? money(o.cost) : o.mode === "rideshare" ? "In Uber" : isCycle(o) ? "Not checked" : o.cost !== null && o.cost !== undefined ? `${money(o.cost)}+` : "?"}</b> ${o.mode === "transit" ? "fare" : "cost"}</span>` : "",
+    show.cost ? `<span class="${costOver ? "over" : ""}"><b>${o.cost_known ? `${o.cost_estimated ? "~" : ""}${money(o.cost)}` : o.mode === "rideshare" ? "In Uber" : isCycle(o) ? "Not checked" : o.cost !== null && o.cost !== undefined ? `${money(o.cost)}+` : "?"}</b> ${o.mode === "transit" ? "fare" : o.cost_estimated ? "est. hire" : "cost"}</span>` : "",
     show.walking && o.walking_minutes !== null ? `<span class="${walkOver ? "over" : ""}"><b>${o.walking_minutes} min</b> walk</span>` : "",
   ].join("");
   return `
@@ -844,7 +991,7 @@ function resultsScreen() {
     : ridesTile("Going this way with others?", "Offer spare seats or start a split Uber on the shared ride board.");
   const fuel = p.fuel?.price ? `Driving cost uses ${p.fuel.manual ? "your fuel price of" : `the average ${esc(p.fuel.fuel_type)} price near your start (${p.fuel.stations} stations, Google Places):`} $${p.fuel.price.toFixed(2)}/L at ${settings.fuel_l_per_100km} L/100 km.` : "Fuel price unavailable. Driving cost is incomplete.";
   return `
-    ${navbar("Edit", gearButton())}
+    ${navbar(true)}
     <div class="scroll tight">
       ${chips}
       <div class="heading-row"><div><p class="eyebrow">Routes</p><h2>Your options</h2>
@@ -897,8 +1044,7 @@ function sheetContent(o) {
   const explain = o.fits
     ? `<div class="explain success"><h4>${o.buffer_minutes !== undefined && o.buffer_minutes < 5 ? "Fits, but with little spare time" : "Meets every limit"}</h4><p>${esc(tradeoff(o))}</p></div>`
     : `<div class="explain ${o.reasons.some((r) => ["deadline", "disruption"].includes(r.limit)) ? "error" : "warning"}"><h4>Check before choosing${anySimulated(o) ? simTag(true) : ""}</h4>${o.reasons.map((r) => `<p>${esc(r.text)}</p>`).join("")}</div>`;
-  const alerts = rt?.alerts?.length ? `<p class="section-header">Translink alerts</p><div class="group"><div class="group-card">${rt.alerts.map((a) =>
-      `<div class="row top"><span class="row-label"><b>${esc(a.effect)}:</b> ${esc(a.header)}${a.simulated ? `<span class="tag">Simulated</span>` : ""}<small>${esc(a.description.slice(0, 220))}${a.description.length > 220 ? "…" : ""}</small></span></div>`).join("")}</div></div>` : "";
+  const alerts = rt?.alerts?.length ? `<p class="section-header">Translink alerts</p><div class="group"><div class="group-card">${rt.alerts.map((a) => alertRow(a, false)).join("")}</div></div>` : "";
   const breakdown = (o.cost_breakdown || []).map((item) => row(I.dollar(16), "var(--success)", esc(item.label), valueSpan(money(item.amount), true))).join("");
   const parking = o.mode === "drive" && o.parking ? `<p class="section-header">Parking near the destination</p><div class="group"><div class="group-card">
       ${o.parking.parks.length ? o.parking.parks.map((pk) => row(I.parking(16), "var(--accent)", `${esc(pk.name)}<small>${pk.distance_m} m from destination${pk.paid ? " · paid" : ""}${pk.free ? " · free option" : ""}</small>`)).join("")
@@ -924,7 +1070,7 @@ function sheetContent(o) {
       <p class="section-header">Your limits</p>
       <div class="group"><div class="group-card">
         ${state.plan.deadline ? limitCheck("Deadline", !lim.deadline, b.text) : ""}
-        ${limitCheck(`Cost ($${f.budget})`, o.cost_known ? !lim.cost : null, o.cost_known ? money(o.cost) : "Unknown")}
+        ${limitCheck(`Cost ($${f.budget})`, o.cost_known ? !lim.cost : null, o.cost_known ? `${o.cost_estimated ? "About " : ""}${money(o.cost)}` : "Unknown")}
         ${limitCheck(`Walking (${f.walking} min)`, o.walking_minutes === null ? null : !lim.walking, o.walking_minutes === null ? "Unknown" : `${o.walking_minutes} min`)}
         ${o.mode === "transit" ? limitCheck("Live service status", rt ? (rt.checked ? !lim.disruption : null) : null, rt?.checked ? (lim.disruption ? "Alert" : rt.delay > 2 ? `~${rt.delay} min late` : "No alerts") : "Not checked") : ""}
       </div></div>
@@ -946,6 +1092,7 @@ function sheetContent(o) {
       <div class="group"><div class="group-card">${steps}</div></div>
     </div>
     <div class="sheet-foot">
+      ${o.hire_providers?.length ? hireButtons(o) : ""}
       ${o.mode === "rideshare"
         ? `<a class="btn btn-inverse" href="${esc(o.uber_url)}" target="_blank" rel="noopener noreferrer">Open in Uber for the live price ${I.external()}</a>`
         : `<button class="btn ${o.fits ? "btn-primary" : "btn-secondary"}" data-action="choose" data-id="${esc(o.id)}">${o.fits ? "Choose this option" : "Choose anyway"}</button>`}
@@ -988,16 +1135,16 @@ function nextScreen() {
   const logged = store.get("trips", []).some((t) => t.ref === tripRef(o));
   const watchAlert = state.watch.alert;
   return `
-    ${navbar("Options", gearButton())}
+    ${navbar(true)}
     <div class="scroll">
       ${watchAlert ? `<div class="watch-banner" role="alert">${I.alert(20)}<div><p><b>New disruption on ${esc(watchAlert.lines.join(", "))}:</b> ${esc(watchAlert.header)}</p><button class="btn btn-primary" data-action="replan">See my alternatives</button></div></div>` : ""}
       <div class="confirm ${o.fits ? "" : "warn"}">
-        <p class="eyebrow">${o.fits ? I.checkCircle(16) : I.alert(16)}${o.fits ? "Route confirmed" : isCycle(o) ? "Chosen, cost and access not checked" : "Chosen, but outside your limits"}</p>
+        <p class="eyebrow">${o.fits ? I.checkCircle(16) : I.alert(16)}${o.fits ? (o.cost_estimated ? "Route chosen · check a vehicle is nearby" : "Route confirmed") : isCycle(o) && !o.cost_known ? "Chosen, cost and access not checked" : "Chosen, but outside your limits"}</p>
         <h2>${esc(o.title)}</h2>
         <div class="confirm-grid">
           <div><span>Arrival</span><b>${timeOf(o.arrival)}</b></div>
           <div><span>${state.plan.deadline ? "Buffer" : "Trip"}</span><b>${b.text}</b></div>
-          <div><span>Cost</span><b>${o.cost_known ? money(o.cost) : "Unknown"}</b></div>
+          <div><span>${o.cost_estimated ? "Est. hire" : "Cost"}</span><b>${o.cost_known ? `${o.cost_estimated ? "~" : ""}${money(o.cost)}` : "Unknown"}</b></div>
           <div><span>Distance</span><b>${o.distance_km ? `${o.distance_km} km` : "–"}</b></div>
         </div>
       </div>
@@ -1006,6 +1153,7 @@ function nextScreen() {
       ${o.traffic?.closure ? notice("<b>Road closure on this route.</b> Check the closure before you leave.", "error") : o.traffic?.added_delay_min ? notice(`<b>Traffic incidents:</b> about ${o.traffic.added_delay_min} min added${o.traffic.source === "Simulated" ? " (Simulated)" : ""}.`) : ""}
       <div class="actions">
         ${o.nav?.length ? `<button class="btn btn-primary" data-action="start-nav" data-id="${esc(o.id)}">${I.navArrow(18)}Start directions</button>` : ""}
+        ${o.hire_providers?.length ? hireButtons(o) : ""}
         <button class="btn ${logged ? "btn-secondary" : "btn-success"}" data-action="log-trip" ${logged ? "disabled" : ""}>${logged ? `${I.check(16)}Added to your impact` : `${I.leaf(18)}I'm taking this trip`}</button>
         <div class="btn-row">
           <a class="btn btn-secondary" href="${esc(o.maps_url)}" target="_blank" rel="noopener noreferrer" aria-label="Open in Google Maps">Google Maps ${I.external(16)}</a>
@@ -1062,7 +1210,7 @@ function panicScreen() {
     ${pm.locating ? `<div class="lead">${skelLines("Finding your location", 60)}</div>` : `<p class="lead">${pm.coords ? "Using your current location." : demoOn() && state.demo.start === "preset" ? "Demo start point: Taringa Station." : "Location unavailable. Type where you are."}</p>`}
     ${pm.coords || pm.locating ? "" : `<div class="panic-field"><input class="panic-input" data-panic="origin" ${acAttrs("panic.origin")} placeholder="Where are you now?" value="${esc(pm.origin || "")}" aria-label="Where are you now"></div>`}
     <div class="panic-field"><input class="panic-input" data-panic="dest" ${acAttrs("panic.dest")} placeholder="Destination" value="${esc(pm.dest)}" aria-label="Destination"></div>
-    ${chips.length ? `<div class="panic-chips">${chips.map(([k, l]) => `<button class="panic-chip" data-action="panic-place" data-place="${esc(k)}">${esc(l)}</button>`).join("")}</div>` : ""}
+    <div class="panic-chips">${chips.map(([k, l]) => `<button class="panic-chip" data-action="panic-place" data-place="${esc(k)}">${esc(l)}</button>`).join("")}<button class="panic-chip" data-action="pick-map" data-path="panic.dest">${I.map(16)}Choose on map</button></div>
     <label class="panic-by">Need to be there by <input class="panic-input" type="time" data-panic="by" value="${esc(pm.by)}" aria-label="Deadline (optional)"></label>
     ${pm.error ? notice(esc(pm.error), pm.errorKind || "error") : ""}
     <button class="panic-go${pm.phase === "loading" ? " is-loading" : ""}" data-action="panic-go" ${pm.phase === "loading" ? 'disabled aria-busy="true"' : ""}>${pm.phase === "loading" ? skelBar("Finding the fastest safe option", 140) : "Get me there"}</button>
@@ -1166,7 +1314,7 @@ function navFabsHtml() {
 
 function navScreen() {
   const n = state.nav, o = n && findOption(n.optionId);
-  if (!o) return `${navbar("Home")}<div class="scroll"><div class="empty-card"><div class="empty-icon">${I.route(24)}</div><h3>No route to follow</h3><p>Choose an option with directions first.</p></div></div>`;
+  if (!o) return `${navbar(true)}<div class="scroll"><div class="empty-card"><div class="empty-icon">${I.route(24)}</div><h3>No route to follow</h3><p>Choose an option with directions first.</p></div></div>`;
   return `<div class="nav-map" data-map="__nav"><div class="skeleton map-skeleton" role="status" aria-label="Loading map"></div></div>
     <div class="nav-top"><div class="nav-top-row"><div data-nav-banner>${navBannerHtml()}</div>${homeButton()}</div><div class="nav-stack" data-nav-notices>${navNoticesHtml()}</div></div>
     <div class="nav-fabs" data-nav-fabs>${navFabsHtml()}</div>
@@ -1366,6 +1514,7 @@ async function navReplan() {
     state.plan = plan;
     state.form.origin = origin;
     state.form.originPlaceId = null;
+    state.form.originCoords = null;
     state.chosenId = pick.id;
     navInit(pick);
     rerender();
@@ -1521,7 +1670,7 @@ function dashboardScreen() {
   const table = state.dashTable ? `<table class="data-table"><thead><tr><th>Month</th><th>Trips</th><th>CO₂ avoided</th><th>Saved</th></tr></thead><tbody>${months.map((m) => `<tr><td>${m.label}</td><td>${m.trips}</td><td>${kg(m.co2)}</td><td>${money(m.saved)}</td></tr>`).join("")}</tbody></table>` : "";
   const recent = all.slice(-8).reverse();
   return `
-    ${navbar("Home", gearButton())}
+    ${navbar(true)}
     <div class="scroll">
       <p class="eyebrow">Impact</p>
       <h2 class="large-title">Your impact</h2>
@@ -1550,6 +1699,207 @@ function dashboardScreen() {
     </div>`;
 }
 
+// ── Weather page ─────────────────────────────────────────────────────────────
+// Opened from the home widget or the side menu: now, the next 24 hours, 7 days and an interactive rain radar. The forecast comes from
+// Open-Meteo through the server; the radar tiles come straight from RainViewer to the browser (free for personal and educational use).
+
+const dayName = (date, i) => (i === 0 ? "Today" : new Intl.DateTimeFormat("en-AU", { weekday: "short", timeZone: "UTC" }).format(new Date(`${date}T00:00:00Z`)));
+const localClock = (local) => (local ? timeOf(`${local.slice(0, 16)}:00+10:00`) : "–");
+const uvLabel = (uv) => (uv < 3 ? "Low" : uv < 6 ? "Moderate" : uv < 8 ? "High" : uv < 11 ? "Very high" : "Extreme");
+// Wind direction is where the wind comes from; the arrow points where it blows.
+const windArrow = (deg) => (deg === null || deg === undefined ? "" : `<span class="wind-arrow" style="transform:rotate(${(deg + 180) % 360}deg)" aria-hidden="true">${I.arrowUp(14)}</span>`);
+const wxStat = (icon, label, value, sub = "") => `<div class="wxp-stat"><span class="wxp-stat-label">${icon}${label}</span><b>${value}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
+
+function weatherTopInner() {
+  const d = state.weatherDetail;
+  if (!d) {
+    return state.weatherDetailError ? `<div class="empty-card"><div class="empty-icon">${I.cloud(24)}</div><h3>Weather is unavailable</h3><p>${esc(state.weatherDetailError)}</p></div>`
+      : `<div class="wx-skel" role="status" aria-label="Loading the weather"><div class="skeleton skel-block" style="height:96px"></div><div class="skeleton skel-block" style="height:150px"></div></div>`;
+  }
+  const c = d.current, today = d.days?.[0], now = d.hourly?.[0];
+  const warn = d.bad && d.warning ? `<div class="wx-warn" role="alert">${I.alert(18)}<div><b>${esc(d.warning)}${simTag(d.simulated)}</b><span>Allow extra time if your trip includes walking between stops.</span></div></div>` : "";
+  return `<section class="wxp-now">
+      <div class="wx-temp">${Math.round(c.temp_c)}<sup>°</sup></div>
+      <div class="wx-now"><strong>${esc(c.label)}</strong><span>Feels like ${Math.round(c.apparent_c)}°${today ? ` · High ${Math.round(today.max_c)}° · Low ${Math.round(today.min_c)}°` : ""}</span></div>
+      <span class="wx-icon" style="--tone:${WX_TONE[c.icon] || "var(--accent)"}">${wxIcon(c.icon, 30)}</span>
+    </section>
+    ${warn}
+    <div class="wxp-stats">
+      ${wxStat(I.wind(14), "Wind", `${Math.round(c.wind_kmh)} km/h${c.wind_from ? ` ${esc(c.wind_from)}` : ""}${windArrow(c.wind_dir)}`, `Gusts ${Math.round(c.gust_kmh)} km/h`)}
+      ${wxStat(I.droplet(14), "Humidity", c.humidity === null || c.humidity === undefined ? "–" : `${Math.round(c.humidity)}%`)}
+      ${wxStat(I.rain(14), "Rain chance", now?.precip_prob === null || now?.precip_prob === undefined ? "–" : `${now.precip_prob}%`, today?.precip_mm ? `${today.precip_mm} mm today` : "No rain expected today")}
+      ${wxStat(I.sun(14), "UV index", today?.uv === null || today?.uv === undefined ? "–" : `${Math.round(today.uv)}`, today?.uv === null || today?.uv === undefined ? "" : `${uvLabel(today.uv)} today`)}
+      ${wxStat(I.sunrise(14), "Sunrise", localClock(today?.sunrise))}
+      ${wxStat(I.sunset(14), "Sunset", localClock(today?.sunset))}
+    </div>`;
+}
+
+function weatherRestInner() {
+  const d = state.weatherDetail;
+  if (!d) return "";
+  const hours = (d.hourly || []).map((h, i) => `<div class="wxp-hour" role="listitem"><span>${i ? hourOf(h.time) : "Now"}</span>${wxIcon(h.icon, 22)}<b>${Math.round(h.temp_c)}°</b><i>${h.precip_prob >= 20 ? `${h.precip_prob}%` : ""}</i><small>${Math.round(h.wind_kmh)} km/h</small></div>`).join("");
+  const days = d.days || [];
+  const lo = Math.min(...days.map((x) => x.min_c)), hi = Math.max(...days.map((x) => x.max_c)), span = Math.max(1, hi - lo);
+  const dayRows = days.map((x, i) => `<div class="wxp-day">
+      <div class="wxp-day-main" aria-hidden="true"><span class="wxp-day-name">${dayName(x.date, i)}</span><span class="wxp-day-icon" style="color:${WX_TONE[x.icon] || "var(--text-main)"}">${wxIcon(x.icon, 20)}</span>
+        <span class="wxp-day-rain">${x.precip_prob >= 20 ? `${x.precip_prob}%` : ""}</span>
+        <span class="wxp-day-temps"><small>${Math.round(x.min_c)}°</small><span class="wxp-range"><i style="left:${((x.min_c - lo) / span) * 100}%;right:${100 - ((x.max_c - lo) / span) * 100}%"></i></span><b>${Math.round(x.max_c)}°</b></span></div>
+      <div class="wxp-day-sub" aria-hidden="true">${esc(x.label)}${x.precip_mm ? ` · ${x.precip_mm} mm` : ""} · wind ${Math.round(x.wind_kmh)} km/h${x.wind_from ? ` ${esc(x.wind_from)}` : ""}${x.gust_kmh >= GUST_WARN_KMH ? `, gusts ${Math.round(x.gust_kmh)}` : ""}</div>
+      <span class="visually-hidden">${dayName(x.date, i)}: ${esc(x.label)}, low ${Math.round(x.min_c)}, high ${Math.round(x.max_c)} degrees${x.precip_prob ? `, ${x.precip_prob}% chance of rain` : ""}, wind up to ${Math.round(x.wind_kmh)} km/h${x.wind_from ? ` from the ${x.wind_from}` : ""}.</span></div>`).join("");
+  return `<p class="section-header">Next 24 hours</p>
+    <div class="wxp-hours" role="list" aria-label="Next 24 hours">${hours}</div>
+    <p class="section-header">Next 7 days</p>
+    <div class="group"><div class="group-card">${dayRows}</div></div>
+    <p class="fine">Forecast by <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a> (CC BY 4.0)${d.simulated ? " · Simulated for demo mode" : ` · updated ${timeOf(d.fetched_at)}`}. Rain radar by <a href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a>${demoOn() && d.simulated ? ", which stays live in demo mode" : ""}.</p>`;
+}
+const GUST_WARN_KMH = 50; // the same gust limit the server uses for bad-weather warnings
+
+function weatherScreen() {
+  return `${navbar(true)}<div class="scroll">
+      <p class="eyebrow">${I.cloud(14)}Weather · ${esc(state.weatherPlace)}${state.weatherDetail?.simulated ? simTag(true) : ""}</p>
+      <h2 class="large-title">Weather</h2>
+      <div data-wxp-top>${weatherTopInner()}</div>
+      <p class="section-header">Rain radar</p>
+      ${radarBlock()}
+      <div data-wxp-rest>${weatherRestInner()}</div>
+    </div>`;
+}
+// Patches the forecast parts in place so the radar map is not rebuilt when the forecast arrives.
+function renderWeatherPage() {
+  if (state.screen !== "weather" || !currentPage) return;
+  const eyebrow = currentPage.querySelector(".scroll > .eyebrow");
+  if (eyebrow) eyebrow.innerHTML = `${I.cloud(14)}Weather · ${esc(state.weatherPlace)}${state.weatherDetail?.simulated ? simTag(true) : ""}`;
+  setHTML(currentPage.querySelector("[data-wxp-top]"), weatherTopInner());
+  setHTML(currentPage.querySelector("[data-wxp-rest]"), weatherRestInner());
+  const entry = radarEntry();
+  if (entry && state.weatherAt) { entry.here?.setPosition(toLatLng(state.weatherAt)); if (!entry.moved) entry.map.setCenter(toLatLng(state.weatherAt)); }
+}
+async function loadWeatherDetail() {
+  state.weatherDetailError = null;
+  const { c, place } = await weatherCoords();
+  state.weatherPlace = place;
+  state.weatherAt = c;
+  const demo = demoOn() && state.demo.weather !== "live" ? `&demo=${state.demo.weather}` : "";
+  try {
+    const r = await fetch(`/api/weather?lat=${c[0]}&lng=${c[1]}&detail=1${demo}`);
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || !data.current) throw new Error(data.error || "Weather is unavailable right now.");
+    state.weatherDetail = data;
+  } catch (error) { if (!state.weatherDetail) state.weatherDetailError = error.message; }
+  renderWeatherPage();
+}
+
+// Rain radar: RainViewer's last two hours of composite radar, one frame every 10 minutes. Since 1 January 2026 RainViewer serves tiles
+// only up to zoom 7 and in one colour scheme (Universal Blue), so closer zooms enlarge the zoom-7 tile instead of asking for a missing one.
+// The newest frame shows first; Play loads the older frames (RainViewer allows about 100 tile requests a minute from one address).
+const RADAR_API = "https://api.rainviewer.com/public/weather-maps.json";
+const RADAR_MAX_ZOOM = 7;
+const radar = { host: "", frames: [], index: 0, playing: false, timer: null, error: null, loadedAt: 0 };
+function radarBlock() {
+  return `<div class="map-wrap radar-wrap" data-map-wrap="__radar"><div class="map radar-map" data-map="__radar"><div class="skeleton map-skeleton" role="status" aria-label="Loading the rain radar"></div></div>
+      <div class="map-controls">
+        <button data-action="map-zoom" data-delta="1" aria-label="Zoom in">${I.plus(18)}</button>
+        <button data-action="map-zoom" data-delta="-1" aria-label="Zoom out">${I.minus(18)}</button>
+        <button data-action="map-expand" aria-label="Expand map">${I.expand()}</button>
+      </div>
+      <div class="radar-bar" data-radar-bar>${radarBarInner()}</div></div>
+    <div class="map-legend radar-legend"><span><i class="radar-scale"></i>Light to heavy rain</span><span>Past 2 hours</span><span>Radar: <a href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a></span></div>`;
+}
+const radarTime = () => { const f = radar.frames[radar.index]; return f ? `${radar.index === radar.frames.length - 1 ? "Latest · " : ""}${timeOf(new Date(f.time * 1000).toISOString())}` : ""; };
+function radarBarInner() {
+  if (radar.error) return `<span class="radar-time">${esc(radar.error)}</span>`;
+  if (!radar.frames.length) return skelBar("Loading the radar frames", 140);
+  return `<button class="radar-play" data-action="radar-play" aria-pressed="${radar.playing}" aria-label="${radar.playing ? "Pause the radar" : "Play the last two hours of radar"}">${radar.playing ? I.pause(16) : I.play(16)}</button>
+    <input type="range" class="radar-slider" min="0" max="${radar.frames.length - 1}" step="1" value="${radar.index}" data-radar-slider aria-label="Radar time" aria-valuetext="${esc(radarTime())}">
+    <span class="radar-time" data-radar-time>${radarTime()}</span>`;
+}
+function radarEntry() { for (const entry of maps.values()) if (entry.radar) return entry; return null; }
+async function loadRadarFrames() {
+  if (radar.frames.length && Date.now() - radar.loadedAt < 5 * 60000) return;
+  radar.error = null;
+  try {
+    const r = await fetch(RADAR_API, { cache: "no-store" });
+    const data = await r.json();
+    const host = typeof data.host === "string" && /^https:\/\/[a-z0-9.-]+\.rainviewer\.com$/i.test(data.host) ? data.host : null;
+    const frames = (data.radar?.past || []).filter((f) => Number.isFinite(f.time) && /^\/v2\/radar\/[A-Za-z0-9]+$/.test(f.path || ""));
+    if (!host || !frames.length) throw new Error("bad response");
+    Object.assign(radar, { host, frames: frames.slice(-13), index: Math.min(frames.length, 13) - 1, error: null, loadedAt: Date.now() });
+  } catch { radar.error = "The rain radar is unavailable right now."; }
+}
+// A custom map type rather than ImageMapType, so a tile above zoom 7 can show the right part of its enlarged zoom-7 parent.
+function radarLayer(frame, i) {
+  return {
+    tileSize: new google.maps.Size(256, 256), maxZoom: 12, name: "Rain radar", alt: "Rain radar",
+    getTile(coord, zoom, doc) {
+      const tile = doc.createElement("div");
+      tile.className = "radar-tile";
+      tile.dataset.f = String(i);
+      const n = 2 ** zoom;
+      if (coord.y < 0 || coord.y >= n) return tile;
+      const z = Math.min(zoom, RADAR_MAX_ZOOM), f = 2 ** (zoom - z), x = ((coord.x % n) + n) % n;
+      const img = doc.createElement("img");
+      img.alt = "";
+      img.decoding = "async";
+      img.src = `${radar.host}${frame.path}/256/${z}/${Math.floor(x / f)}/${Math.floor(coord.y / f)}/2/1_1.png`;
+      img.style.cssText = `width:${256 * f}px;height:${256 * f}px;left:${-(x % f) * 256}px;top:${-(coord.y % f) * 256}px`;
+      img.onerror = () => img.remove();
+      tile.appendChild(img);
+      return tile;
+    },
+    releaseTile() {},
+  };
+}
+function addRadarFrame(entry, i) {
+  if (entry.layers.has(i) || !radar.frames[i]) return;
+  const layer = radarLayer(radar.frames[i], i);
+  entry.layers.set(i, layer);
+  entry.map.overlayMapTypes.push(layer);
+}
+function showRadarFrame(i) {
+  const entry = radarEntry();
+  radar.index = Math.max(0, Math.min(radar.frames.length - 1, i));
+  if (entry) { addRadarFrame(entry, radar.index); entry.map.getDiv().dataset.frame = String(radar.index); }
+  const bar = currentPage?.querySelector("[data-radar-bar]");
+  const time = bar?.querySelector("[data-radar-time]"), slider = bar?.querySelector("[data-radar-slider]");
+  if (time) time.textContent = radarTime();
+  if (slider) { if (Number(slider.value) !== radar.index) slider.value = String(radar.index); slider.setAttribute("aria-valuetext", radarTime()); }
+}
+function radarPlay(on = !radar.playing) {
+  const entry = radarEntry();
+  clearInterval(radar.timer);
+  radar.playing = on && !!entry && radar.frames.length > 1;
+  if (radar.playing) {
+    radar.frames.forEach((_, i) => addRadarFrame(entry, i));
+    if (radar.index === radar.frames.length - 1) showRadarFrame(0);
+    let hold = 0;
+    radar.timer = setInterval(() => {
+      if (document.hidden) return;
+      if (radar.index === radar.frames.length - 1) { if (++hold < 3) return; hold = 0; showRadarFrame(0); } else showRadarFrame(radar.index + 1);
+    }, 600);
+  }
+  const bar = currentPage?.querySelector("[data-radar-bar]");
+  if (bar) { bar.innerHTML = radarBarInner(); showRadarFrame(radar.index); }
+}
+function buildRadarMap(el) {
+  el.replaceChildren();
+  const map = makeGoogleMap(el);
+  const c = state.weatherAt || state.biasCoords || BRISBANE;
+  map.setOptions({ center: toLatLng(c), zoom: 8, minZoom: 4, maxZoom: 11 });
+  const entry = { map, bounds: new google.maps.LatLngBounds(), lines: [], markers: [], vehicles: new Map(), optionId: null, radar: true, layers: new Map(), moved: false };
+  entry.restyle = () => map.setOptions({ styles: mapStyles() });
+  entry.here = new google.maps.Marker({ position: toLatLng(c), map, icon: mapIcon("here"), clickable: false, title: "Weather location" });
+  entry.markers.push(entry.here);
+  entry.dispose = () => { clearInterval(radar.timer); radar.playing = false; };
+  map.addListener("dragstart", () => { entry.moved = true; });
+  maps.set(el, entry);
+  loadRadarFrames().then(() => {
+    if (maps.get(el) !== entry) return;
+    if (!radar.error) showRadarFrame(radar.frames.length - 1);
+    const bar = el.closest(".map-wrap")?.querySelector("[data-radar-bar]");
+    if (bar) bar.innerHTML = radarBarInner();
+  });
+}
+
 // ── Shared ride board ────────────────────────────────────────────────────────
 
 function rideCard(r) {
@@ -1574,7 +1924,7 @@ function ridesScreen() {
   const p = state.plan;
   const matches = (p?.rides || []).filter((r) => !state.rides.mine.some((m) => m.id === r.id));
   return `
-    ${navbar("Back", gearButton())}
+    ${navbar(true)}
     <div class="scroll">
       <p class="eyebrow">Shared rides</p>
       <h2 class="large-title">Travel together</h2>
@@ -1686,14 +2036,43 @@ function alertsBody() {
   if (state.alertsError && !state.alerts) return notice(esc(state.alertsError), "error");
   if (!state.alerts) return `<div class="group" role="status" aria-label="Loading alerts"><div class="group-card">${[0, 1, 2].map(() => `<div class="row top" aria-hidden="true"><div class="skel-stack" style="flex:1"><div class="skeleton skel-line w-30"></div><div class="skeleton skel-line w-100"></div><div class="skeleton skel-line sm w-60"></div></div></div>`).join("")}</div></div>`;
   if (!list.length) return `<div class="empty-card"><div class="empty-icon" style="--tone:var(--success)">${I.checkCircle(24)}</div><h3>No matching alerts</h3><p>Nothing disruptive is reported for that line right now.</p></div>`;
-  return `<div class="group"><div class="group-card">${list.slice(0, 40).map((a) => `<div class="row top"><span class="row-label">${a.lines.slice(0, 6).map((l) => `<span class="line-tag">${esc(l)}</span> `).join("")}<br><b>${esc(a.effect)}:</b> ${esc(a.header)}<small>${esc(a.description.slice(0, 260))}${a.description.length > 260 ? "…" : ""}</small></span></div>`).join("")}</div></div>`;
+  return `<div class="group"><div class="group-card">${list.slice(0, 40).map((a) => alertRow(a)).join("")}</div></div>`;
+}
+
+// One alert: line tags, effect and headline, and the description clamped to a few lines. "Show more" appears only when
+// the text is actually cut off (revealMore measures it once the row is on screen) and opens the full alert in a pop-up.
+function alertRow(a, tags = true) {
+  const lines = tags && a.lines.length ? `<span class="alert-tags">${a.lines.slice(0, 6).map((l) => `<span class="line-tag">${esc(l)}</span>`).join("")}${a.lines.length > 6 ? `<span class="line-tag">+${a.lines.length - 6}</span>` : ""}</span>` : "";
+  return `<div class="row top alert-row"><span class="row-label">${lines}<span class="alert-head"><b>${esc(a.effect)}:</b> ${esc(a.header)}${a.simulated ? `<span class="tag">Simulated</span>` : ""}</span>${a.description ? `<small class="alert-desc">${esc(a.description)}</small>` : ""}<button class="more-link" data-action="alert-more" data-id="${esc(a.id)}" hidden>Show more</button></span></div>`;
+}
+function revealMore(root) {
+  root?.querySelectorAll(".alert-row").forEach((rowEl) => {
+    const cut = [...rowEl.querySelectorAll(".alert-head, .alert-desc")].some((el) => el.scrollHeight > el.clientHeight + 1);
+    rowEl.querySelector(".more-link").hidden = !cut;
+  });
+}
+// Live alerts and the alerts attached to route options (which include simulated demo alerts).
+const findAlert = (id) => (state.alerts?.alerts || []).find((a) => a.id === id) || (state.plan?.options || []).flatMap((o) => o.realtime?.alerts || []).find((a) => a.id === id);
+function alertPopup(a) {
+  const link = /^https:\/\/[^\s"'<>]+$/i.test(a.url || "") ? a.url : "";
+  return `<div class="grabber"><span></span></div>
+    <div class="sheet-head"><h3 id="popup-title">${esc(a.effect)}</h3><button class="icon-btn" data-action="close-popup" aria-label="Close">${I.x(18)}</button></div>
+    <div class="sheet-scroll alert-full">
+      ${a.lines.length ? `<div class="alert-tags">${a.lines.map((l) => `<span class="line-tag">${esc(l)}</span>`).join("")}</div>` : ""}
+      <h4>${esc(a.header)}${a.simulated ? `<span class="sim-tag">Simulated</span>` : ""}</h4>
+      ${a.cause ? `<p class="fine">Cause: ${esc(a.cause)}</p>` : ""}
+      ${a.description ? `<p>${esc(a.description).replace(/\n+/g, "<br>")}${a.description.length >= 600 ? "…" : ""}</p>` : `<p class="hint">Translink gave no further details for this alert.</p>`}
+      ${a.description.length >= 600 ? `<p class="fine">Long alerts are shortened to 600 characters. The full notice is on Translink.</p>` : ""}
+      ${link ? `<a class="btn btn-secondary" href="${esc(link)}" target="_blank" rel="noopener noreferrer">More on Translink ${I.external(16)}</a>` : ""}
+      <p class="fine">Source: ${a.simulated ? "simulated for demo mode" : "Translink SEQ GTFS-Realtime"}. Check signs at the stop and Translink before you travel.</p>
+    </div>`;
 }
 
 function alertsSheet() {
   return `<div class="grabber"><span></span></div>
     <div class="sheet-head"><h3 id="sheet-title">Translink alerts</h3>${sheetClose()}</div>
     <div class="sheet-scroll">
-      <div class="group"><div class="group-card"><div class="row field-row"><span class="chev">${I.search(18)}</span><input type="text" data-alert-query value="${esc(state.alertQuery || "")}" placeholder="Filter by line, e.g. 412" aria-label="Filter alerts by line"></div></div></div>
+      <div class="group"><div class="group-card"><div class="row field-row"><span class="chev">${I.search(18)}</span><input type="text" data-alert-query value="${esc(state.alertQuery || "")}" placeholder="Search for a specific line, e.g. 412" aria-label="Search alerts for a specific line"></div></div></div>
       <div data-alert-results>${alertsBody()}</div>
       <p class="fine" style="margin:0 4px 16px">Source: Translink SEQ GTFS-Realtime, refreshed every minute${state.alerts ? `, last checked ${timeOf(state.alerts.fetched_at)}` : ""}.</p>
     </div>`;
@@ -1730,7 +2109,13 @@ function settingsContent() {
         ${modeRow("modes.scooter", I.scooter(18), "var(--seg-scooter)", "E-scooter", "Off by default · Google cycling route at an assumed 15 km/h · access and hire prices are not checked", s.modes.scooter)}
         ${modeRow("modes.ebike", I.bike(18), "var(--seg-bike)", "E-bike", "Off by default · Google cycling route at an assumed 20 km/h · access and hire prices are not checked", s.modes.ebike)}
         ${modeRow("modes.bicycle", I.bike(18), "var(--seg-bike)", "Push bike", `Off by default · Google's cycling time, only for trips up to ${PUSH_BIKE_MAX_KM} km`, s.modes.bicycle)}
-      </div></div>
+      </div>${s.modes.scooter || s.modes.ebike ? "" : `<p class="group-footer">E-scooter and e-bike options show an estimated hire cost and buttons to open Lime or Neuron.</p>`}</div>
+      ${s.modes.scooter || s.modes.ebike ? `<p class="section-header">Shared hire prices (assumed)</p>
+      <div class="group"><div class="group-card">
+        ${[["scooter", "E-scooter"], ["ebike", "E-bike"]].filter(([k]) => s.modes[k]).map(([k, l]) => `
+        <div class="row"><span class="row-label">${l} unlock fee ($)</span><input type="number" min="0" max="10" step="0.05" data-setting-number="hire.${k}.unlock" value="${s.hire[k].unlock}" aria-label="${l} unlock fee in dollars"></div>
+        <div class="row"><span class="row-label">${l} price per minute ($)</span><input type="number" min="0" max="3" step="0.01" data-setting-number="hire.${k}.per_min" value="${s.hire[k].per_min}" aria-label="${l} price per minute in dollars"></div>`).join("")}
+      </div><p class="group-footer">Used for the estimated hire cost: the unlock fee plus the price per minute times the riding time at the assumed speed. Lime and Neuron show their current Brisbane prices only in their apps, so the defaults ($1 to unlock and 45c a minute) are assumptions; check the apps and enter what they show. Passes and discounts are not included.</p></div>` : ""}
 
       <p class="section-header">Your car</p>
       <div class="group"><div class="group-card">
@@ -1857,7 +2242,7 @@ function applyTheme() {
 // Rendering, navigation, sheets and maps
 // ══════════════════════════════════════════════════════════════════════════════
 
-const SCREENS = { home: homeScreen, journey: journeyScreen, results: resultsScreen, next: nextScreen, panic: panicScreen, nav: navScreen, dashboard: dashboardScreen, rides: ridesScreen, terms: termsScreen, privacy: privacyScreen, sources: sourcesScreen };
+const SCREENS = { home: homeScreen, journey: journeyScreen, results: resultsScreen, next: nextScreen, panic: panicScreen, nav: navScreen, dashboard: dashboardScreen, rides: ridesScreen, weather: weatherScreen, terms: termsScreen, privacy: privacyScreen, sources: sourcesScreen };
 const pageClass = (screen) => `page${screen === "panic" || screen === "nav" ? ` ${screen}` : ""}`;
 const viewport = document.getElementById("viewport");
 const app = document.getElementById("app");
@@ -1883,8 +2268,11 @@ function navigate(screen, direction = "forward", syncUrl = true) {
   else if (syncUrl && location.pathname !== "/") history.pushState({ screen }, "", "/");
   if (state.screen === "nav") navStop();
   if (screen === "panic") startPanicLocate();
+  if (screen === "weather") loadWeatherDetail();
   collapseExpanded();
   closeSheet(true);
+  closeDialog();
+  if (menuEl) closeMenu(null, false);
   app.dataset.screen = screen;
   transitioning = true;
   if (direction === "forward" || direction === "up") state.stack.push(screen);
@@ -2021,7 +2409,7 @@ function resizeMap(entry) {
 function mapIcon(kind, bearingDeg = null, vehicle = null) {
   const colours = {
     start: "#34D399", end: "#F87171", park: cssColour("var(--accent)"),
-    me: cssColour("var(--accent)"), traffic: "#FBBF24", closure: "#F87171",
+    me: cssColour("var(--accent)"), here: cssColour("var(--accent)"), traffic: "#FBBF24", closure: "#F87171",
     vehicle: vehicle?.colour ? cssColour(vehicle.colour) : cssColour(SEGMENT_COLOUR[vehicle?.vehicle] || "var(--seg-bus)"),
   };
   const colour = colours[kind] || colours.end;
@@ -2048,6 +2436,7 @@ function mountMaps(root) {
 function buildMap(el) {
   const id = el.dataset.map;
   if (id === "__nav") return buildNavMap(el);
+  if (id === "__radar") return buildRadarMap(el);
   const options = id === "__all" ? state.plan.options : [findOption(id)].filter(Boolean);
   if (!options.length) return;
   el.replaceChildren();
@@ -2139,6 +2528,8 @@ function disposeMap(entry) {
   entry.lines.forEach(({ line }) => clear(line));
   [...(entry.markers || []), ...entry.vehicles.values(), entry.me].forEach((marker) => marker && clear(marker));
   entry.info?.close();
+  entry.dispose?.();
+  if (entry.layers) entry.map.overlayMapTypes.clear();
   google.maps.event.clearInstanceListeners(entry.map);
 }
 function cleanMaps() {
@@ -2173,6 +2564,59 @@ function bindCharts(root) {
 
 // Sheets -----------------------------------------------------------------------
 
+// Drag to dismiss, as in most phone apps: a sheet follows the finger down from its grab line or header (the side menu follows it to the left),
+// then closes past about a quarter of its size or after a quick flick, and otherwise springs back. Listeners sit on the backdrop, which
+// outlives re-rendered sheet content. Touch pointers stay with the element they started on, so no pointer capture is needed.
+let suppressClickUntil = 0;
+function dragToClose(container, panelSelector, handleSelector, axis, onClose) {
+  const sign = axis === "y" ? 1 : -1;
+  const along = (e) => (axis === "y" ? e.clientY : e.clientX), across = (e) => (axis === "y" ? e.clientX : e.clientY);
+  container.addEventListener("pointerdown", (start) => {
+    const handle = start.target.closest?.(handleSelector);
+    if (!handle || !container.contains(handle) || (start.pointerType === "mouse" && start.button !== 0)) return;
+    if (start.target.closest("a, input, select, textarea, .clr, [data-picker-map]") || (axis === "y" && start.target.closest("button"))) return;
+    const panel = container.querySelector(panelSelector);
+    if (!panel) return;
+    let active = false, offset = 0, last = along(start), lastT = start.timeStamp, speed = 0;
+    const size = axis === "y" ? panel.offsetHeight : panel.offsetWidth;
+    const move = (e) => {
+      if (e.pointerId !== start.pointerId) return;
+      const d = (along(e) - along(start)) * sign;
+      if (!active) {
+        if (Math.abs(d) < 8 && Math.abs(across(e) - across(start)) < 8) return;
+        if (d <= 0 || Math.abs(across(e) - across(start)) > Math.abs(d)) return finish(e, true);
+        active = true;
+        panel.classList.add("dragging");
+        container.classList.add("dragging");
+      }
+      offset = d > 0 ? d : d / 6;
+      speed = ((along(e) - last) * sign) / Math.max(1, e.timeStamp - lastT);
+      last = along(e);
+      lastT = e.timeStamp;
+      panel.style.transform = axis === "y" ? `translateY(${offset}px)` : `translateX(${-offset}px)`;
+      container.style.setProperty("--drag", String(Math.max(0, Math.min(1, offset / size))));
+      if (e.cancelable) e.preventDefault();
+    };
+    const finish = (e, abandon = false) => {
+      if (e.pointerId !== start.pointerId) return;
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
+      if (!active || abandon === true) return;
+      suppressClickUntil = performance.now() + 350;
+      panel.classList.remove("dragging");
+      container.classList.remove("dragging");
+      panel.style.transform = "";
+      container.style.removeProperty("--drag");
+      if (e.type !== "pointercancel" && (offset > Math.min(140, size * 0.25) || speed > 0.55)) onClose();
+    };
+    window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", finish);
+  });
+}
+const sheetDrag = (backdrop, onClose) => dragToClose(backdrop, ".sheet", ".grabber, .sheet-head", "y", onClose);
+
 let sheetEl = null;
 let lastFocus = null;
 function openSheet(html) {
@@ -2184,11 +2628,41 @@ function openSheet(html) {
   sheetEl.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">${html}</div>`;
   enhanceClear(sheetEl);
   viewport.appendChild(sheetEl);
+  sheetDrag(sheetEl, () => closeSheet());
   requestAnimationFrame(() => requestAnimationFrame(() => sheetEl?.classList.add("open")));
+  requestAnimationFrame(() => revealMore(sheetEl));
   mountMaps(sheetEl);
   sheetEl.querySelector(".icon-btn")?.focus({ preventScroll: true });
 }
+
+// A second sheet that opens above everything else (a full alert, the map picker) and returns to what was underneath.
+let popupEl = null;
+let popupFocus = null;
+function openPopup(html, kind = "") {
+  closePopup(true);
+  popupFocus = document.activeElement;
+  popupEl = document.createElement("div");
+  popupEl.className = `sheet-backdrop popup${kind ? ` ${kind}` : ""}`;
+  popupEl.dataset.action = "popup-backdrop";
+  popupEl.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="popup-title">${html}</div>`;
+  viewport.appendChild(popupEl);
+  sheetDrag(popupEl, () => closePopup());
+  requestAnimationFrame(() => requestAnimationFrame(() => popupEl?.classList.add("open")));
+  popupEl.querySelector(".icon-btn")?.focus({ preventScroll: true });
+}
+function closePopup(immediate = false) {
+  if (!popupEl) return;
+  const el = popupEl;
+  popupEl = null;
+  if (el.classList.contains("picker")) disposePicker();
+  if (immediate) return el.remove();
+  el.classList.remove("open");
+  setTimeout(() => el.remove(), 320);
+  popupFocus?.focus?.({ preventScroll: true });
+}
+
 function closeSheet(immediate = false) {
+  closePopup(true);
   if (!sheetEl) return;
   if (sheetEl.dataset.place) state.placeDraft = null;
   collapseExpanded();
@@ -2216,13 +2690,13 @@ function toast(text, kind = "success") {
 function payload(extra = {}) {
   const f = state.form;
   return {
-    origin: f.origin.trim(), destination: f.destination.trim(), purpose: state.purpose,
-    origin_place_id: f.originPlaceId || null, destination_place_id: f.destinationPlaceId || null,
+    origin: f.originCoords ? coordText(f.originCoords) : f.origin.trim(), destination: f.destinationCoords ? coordText(f.destinationCoords) : f.destination.trim(), purpose: state.purpose,
+    origin_place_id: f.originCoords ? null : f.originPlaceId || null, destination_place_id: f.destinationCoords ? null : f.destinationPlaceId || null,
     leave_now: f.leave_now, departure: f.departure, deadline: f.deadline || null,
     budget: f.budget, walking: f.walking,
     modes: settings.modes, transit_modes: settings.transit_modes,
     vehicle: { fuel_l_per_100km: settings.fuel_l_per_100km, fuel_type: settings.fuel_type, fuel_price: settings.fuel_price_mode === "manual" ? settings.fuel_price : null },
-    parking_cost: settings.parking_cost, transit_flat_fare: settings.use_flat_fare ? settings.flat_fare : null,
+    parking_cost: settings.parking_cost, transit_flat_fare: settings.use_flat_fare ? settings.flat_fare : null, hire_prices: settings.hire,
     emission_factors: settings.factors, want_elevation: settings.show.elevation,
     avoid_lines: f.avoid ? f.avoid.split(/[,\s]+/).filter(Boolean).slice(0, 10) : [],
     ride_tokens: store.get("rideTokens", []).map((t) => t.token),
@@ -2246,6 +2720,17 @@ async function postJSON(url, body) {
 async function search(extra = {}) {
   if (state.loading) return;
   const f = state.form;
+  if (f.origin === CURRENT_PLACE && !f.originCoords) {
+    state.loading = true;
+    rerender();
+    const coords = await new Promise(locate);
+    state.loading = false;
+    if (state.form !== f || f.origin !== CURRENT_PLACE) return rerender();
+    f.originLocating = false;
+    if (!coords) { state.error = "Your location isn't available. Type where you're starting from, or choose it on the map."; return rerender(); }
+    f.originCoords = coords;
+    state.biasCoords = coords;
+  }
   if (f.origin.trim().length < 3 || f.destination.trim().length < 3) { state.error = "Enter where you're starting and where you're going."; return rerender(); }
   state.loading = true;
   state.error = null;
@@ -2254,7 +2739,7 @@ async function search(extra = {}) {
   rerender();
   try {
     state.plan = await postJSON("/api/plan", payload(extra));
-    store.set("lastDestination", f.destination.trim());
+    store.set("lastDestination", f.destinationCoords ? coordText(f.destinationCoords) : f.destination.trim());
     store.set("lastDestinationPlaceId", f.destinationPlaceId || null);
     state.sort = f.avoid ? "best" : "pt";
     state.loading = false;
@@ -2285,7 +2770,7 @@ async function loadAlerts() {
   await fetchAlerts().catch((error) => { state.alertsError = error.message; });
   checkWatch();
   if (alertSignature() !== before && ["home", "results"].includes(state.screen) && !transitioning && !settingsEl && !document.activeElement?.matches?.("input")) rerender();
-  if (sheetEl?.querySelector("[data-alert-results]")) sheetEl.querySelector("[data-alert-results]").innerHTML = alertsBody();
+  if (sheetEl?.querySelector("[data-alert-results]")) { sheetEl.querySelector("[data-alert-results]").innerHTML = alertsBody(); revealMore(sheetEl); }
 }
 
 // "Refresh live data": POST /api/sync with the location when it is known. Falls back to GET /api/alerts until the endpoint exists.
@@ -2345,8 +2830,7 @@ function freshForm() {
   const now = brisbaneNowLocal();
   const preset = demoOn() && state.demo.start === "preset";
   return {
-    origin: preset ? DEMO_PRESET.origin : store.get("lastOrigin", "Taringa Station, Brisbane QLD"),
-    originPlaceId: preset ? null : store.get("lastOriginPlaceId", null),
+    origin: preset ? DEMO_PRESET.origin : CURRENT_PLACE, originPlaceId: null, originCoords: null, originLocating: false, originNote: null, destinationCoords: null,
     destination: preset ? DEMO_PRESET.destination : store.get("lastDestination", "") || savedPlace("work")?.address || "",
     destinationPlaceId: preset ? null : store.get("lastDestination", "") ? store.get("lastDestinationPlaceId", null) : savedPlace("work")?.place_id || null,
     leave_now: true, departure: addMinutes(now, 10), deadline: "",
@@ -2359,6 +2843,38 @@ function locate(onDone) {
   navigator.geolocation.getCurrentPosition(
     (pos) => onDone([pos.coords.latitude, pos.coords.longitude]),
     () => onDone(null), { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 });
+}
+
+// Plan a trip starts from where you are: the From field says "Current location" and the search sends the coordinates. Typing, a saved
+// place or the map replaces it. If location is blocked or unavailable, the last start point you used is filled in instead, with a note.
+function locateOrigin() {
+  const f = state.form;
+  f.originLocating = true;
+  locate((coords) => {
+    if (state.form !== f || f.origin !== CURRENT_PLACE || !f.originLocating) return;
+    f.originLocating = false;
+    if (coords) { f.originCoords = coords; state.biasCoords = coords; }
+    else {
+      const last = store.get("lastOrigin", "");
+      Object.assign(f, { origin: last, originPlaceId: last ? store.get("lastOriginPlaceId", null) : null, originCoords: null,
+        originNote: last ? "Your location isn't available, so your last start point is filled in. Allow location to start from where you are." : "Your location isn't available. Type where you're starting from." });
+    }
+    paintOrigin();
+  });
+}
+// Updates the From row in place (a full re-render could interrupt typing in the To field).
+function paintOrigin() {
+  if (state.screen !== "journey" || !currentPage) return;
+  const f = state.form, rowEl = currentPage.querySelector("[data-origin-row]"), input = currentPage.querySelector("#f-origin");
+  if (!rowEl || !input) return;
+  if (document.activeElement !== input) input.value = f.origin;
+  rowEl.classList.toggle("locating", f.origin === CURRENT_PLACE && f.originLocating);
+  rowEl.classList.toggle("is-current", f.origin === CURRENT_PLACE && !!f.originCoords);
+  rowEl.querySelector(".row-icon").innerHTML = f.origin === CURRENT_PLACE ? I.locate(18) : I.walk(18);
+  const note = currentPage.querySelector("[data-origin-note]");
+  if (note) { note.hidden = !f.originNote; note.textContent = f.originNote || ""; }
+  const chips = currentPage.querySelector("[data-origin-note] + .place-chips");
+  if (chips) chips.outerHTML = placeChips("origin");
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -2383,13 +2899,49 @@ const actions = {
     else rerender();
   },
   go: (el) => navigate(el.dataset.screen, el.dataset.screen === "panic" ? "up" : "forward"),
+  // Side menu, profile and pop-ups
+  "open-menu": openMenu,
+  "close-menu": () => closeMenu(),
+  "menu-backdrop": (el, event) => { if (event.target === el) closeMenu(); },
+  "menu-go": (el) => { closeMenu(null, false); navigate(el.dataset.screen); },
+  "menu-open": (el) => {
+    const open = { settings: openSettings, demo: openDemoSheet, share: () => openSheet(shareSheet()), alerts: () => openSheet(alertsSheet()), install: installApp }[el.dataset.open];
+    closeMenu(open);
+  },
+  "toggle-profile": () => toggleProfileMenu(),
+  "account-feature": () => { toggleProfileMenu(false); showDialog("Feature not available", "Accounts aren't part of this prototype yet, so there are no account details or profile to edit.", currentPage?.querySelector(".avatar-btn")); },
+  "close-dialog": closeDialog,
+  "dialog-backdrop": (el, event) => { if (event.target === el) closeDialog(); },
+  "alert-more": (el) => { const a = findAlert(el.dataset.id); if (a) openPopup(alertPopup(a)); },
+  "close-popup": () => closePopup(),
+  "popup-backdrop": (el, event) => { if (event.target === el) closePopup(); },
+  // Choose on map
+  "pick-map": (el) => openMapPicker(el.dataset.path),
+  "picker-zoom": (el) => { if (picker.map) picker.map.setZoom(picker.map.getZoom() + Number(el.dataset.delta)); },
+  "picker-locate": (el) => {
+    el.disabled = true;
+    locate((coords) => {
+      el.disabled = false;
+      if (!coords) return toast("Your location isn't available.", "warning");
+      state.biasCoords = coords;
+      if (!picker.map) return;
+      picker.map.panTo(toLatLng(coords));
+      picker.map.setZoom(Math.max(picker.map.getZoom(), 16));
+      if (picker.me) picker.me.setPosition(toLatLng(coords));
+      else picker.me = new google.maps.Marker({ position: toLatLng(coords), map: picker.map, icon: mapIcon("here"), clickable: false, zIndex: 5, title: "Your location" });
+    });
+  },
+  "picker-use": usePickedPlace,
+  "radar-play": () => radarPlay(),
   start: (el) => {
     state.purpose = el.dataset.purpose;
     state.form = freshForm();
     state.error = null;
+    if (state.form.origin === CURRENT_PLACE) state.form.originLocating = true;
     navigate("journey");
+    if (state.form.origin === CURRENT_PLACE) locateOrigin();
   },
-  search: () => { store.set("lastOrigin", state.form.origin.trim()); store.set("lastOriginPlaceId", state.form.originPlaceId || null); search(); },
+  search: () => { if (!state.form.originCoords && state.form.origin !== CURRENT_PLACE) { store.set("lastOrigin", state.form.origin.trim()); store.set("lastOriginPlaceId", state.form.originPlaceId || null); } search(); },
   step: (el) => {
     const field = el.dataset.field;
     const delta = Number(el.dataset.delta);
@@ -2418,7 +2970,7 @@ const actions = {
     el.disabled = true;
     el.innerHTML = skelBar("Locating", 96);
     locate((coords) => {
-      if (coords) { state.form.origin = `${coords[0].toFixed(6)},${coords[1].toFixed(6)}`; state.form.originPlaceId = null; state.biasCoords = coords; }
+      if (coords) { applyPlace("form.origin", CURRENT_PLACE, null, coords); state.biasCoords = coords; }
       else state.error = "Location is unavailable. Type your starting point instead.";
       rerender();
     });
@@ -2426,8 +2978,7 @@ const actions = {
   "fill-place": (el) => {
     const place = savedPlace(el.dataset.place);
     if (!place) return;
-    state.form[el.dataset.field] = place.address;
-    state.form[`${el.dataset.field}PlaceId`] = place.place_id || null;
+    applyPlace(`form.${el.dataset.field}`, place.address, place.place_id);
     rerender();
   },
   sort: (el) => { state.sort = el.dataset.value; rerender(); currentPage.querySelector(`[data-action="sort"][data-value="${state.sort}"]`)?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" }); },
@@ -2543,8 +3094,8 @@ const actions = {
   "nav-replan": navReplan,
   // Demo mode, sharing, install
   "open-demo": openDemoSheet,
-  "demo-set": (el) => { const { name, value } = el.dataset; state.demo[name] = name === "late_min" ? Number(value) : value; saveDemo(); refreshDemoSheet(); if (name === "weather") loadWeather(); },
-  "demo-exit": () => { state.demo.on = false; saveDemo(); renderDemoPill(); loadWeather(); closeSheet(); toast("Demo mode is off."); },
+  "demo-set": (el) => { const { name, value } = el.dataset; state.demo[name] = name === "late_min" ? Number(value) : value; saveDemo(); refreshDemoSheet(); if (name === "weather") { loadWeather(); if (state.screen === "weather") loadWeatherDetail(); } },
+  "demo-exit": () => { state.demo.on = false; saveDemo(); renderDemoPill(); loadWeather(); if (state.screen === "weather") loadWeatherDetail(); closeSheet(); toast("Demo mode is off."); },
   "demo-push": demoPush,
   "settings-demo": () => { closeSettings(); setTimeout(openDemoSheet, 420); },
   "open-share": () => openSheet(shareSheet()),
@@ -2560,12 +3111,14 @@ const actions = {
     const place = savedPlace(el.dataset.place);
     state.panic.dest = el.dataset.place === "last" ? store.get("lastDestination", "") : place?.address || "";
     state.panic.destPlaceId = el.dataset.place === "last" ? store.get("lastDestinationPlaceId", null) : place?.place_id || null;
+    state.panic.destCoords = null;
     rerender();
   },
   "panic-go": async () => {
     const pm = state.panic;
-    const origin = pm.coords ? `${pm.coords[0].toFixed(6)},${pm.coords[1].toFixed(6)}` : (pm.origin || "").trim();
-    if (origin.length < 3 || pm.dest.trim().length < 3) { pm.error = "Enter where you are and where you need to be."; return rerender(); }
+    const origin = pm.coords ? coordText(pm.coords) : pm.originCoords ? coordText(pm.originCoords) : (pm.origin || "").trim();
+    const dest = pm.destCoords ? coordText(pm.destCoords) : pm.dest.trim();
+    if (origin.length < 3 || dest.length < 3) { pm.error = "Enter where you are and where you need to be."; return rerender(); }
     let deadline = null;
     if (pm.by) {
       const today = brisbaneNowLocal().slice(0, 10);
@@ -2576,11 +3129,11 @@ const actions = {
     pm.error = null;
     rerender();
     state.purpose = "panic";
-    state.form = { ...freshForm(), origin, destination: pm.dest.trim(), leave_now: true, deadline: deadline || "", budget: 200, walking: 60,
-      originPlaceId: pm.coords ? null : pm.originPlaceId || null, destinationPlaceId: pm.destPlaceId || null };
+    state.form = { ...freshForm(), origin, destination: dest, leave_now: true, deadline: deadline || "", budget: 200, walking: 60,
+      originPlaceId: pm.coords || pm.originCoords ? null : pm.originPlaceId || null, destinationPlaceId: pm.destCoords ? null : pm.destPlaceId || null };
     try {
       state.plan = await postJSON("/api/plan", payload({ purpose: "panic" }));
-      store.set("lastDestination", pm.dest.trim());
+      store.set("lastDestination", dest);
       pm.phase = state.plan.recommended_id ? "answer" : "ask";
       if (!state.plan.recommended_id) pm.error = state.plan.errors.join(" ") || "No route was found. Try a nearby landmark.";
     } catch (error) {
@@ -2650,16 +3203,35 @@ function restoreRideForm(values) {
 }
 
 document.addEventListener("click", (event) => {
+  if (performance.now() < suppressClickUntil) return; // the click that ends a drag or swipe
+  if (profileOpen() && !event.target.closest(".profile-wrap")) toggleProfileMenu(false);
   const el = event.target.closest("[data-action]");
   if (!el || transitioning) return;
   const action = actions[el.dataset.action];
   if (action) action(el, event);
 });
 
+// The live-directions step list: swipe its grab line or ETA up to open it and down to close it (a tap still toggles it).
+let navSwipe = null;
+document.addEventListener("pointerdown", (event) => { if (state.nav && event.target.closest?.(".nav-grab, .nav-eta-main")) navSwipe = { id: event.pointerId, y: event.clientY }; });
+document.addEventListener("pointerup", (event) => {
+  if (!navSwipe || event.pointerId !== navSwipe.id) return;
+  const dy = event.clientY - navSwipe.y;
+  navSwipe = null;
+  if (Math.abs(dy) < 30 || !state.nav || state.screen !== "nav") return;
+  suppressClickUntil = performance.now() + 350;
+  if ((dy < 0) !== state.nav.sheetOpen) actions["nav-sheet"]();
+});
+
 document.addEventListener("input", (event) => {
   const t = event.target;
-  if (t.dataset.field && state.form) { state.form[t.dataset.field] = t.value; state.form[`${t.dataset.field}PlaceId`] = null; state.error = null; }
-  if (t.dataset.panic) { state.panic[t.dataset.panic] = t.value; state.panic[`${t.dataset.panic}PlaceId`] = null; }
+  if (t.dataset.field && state.form) {
+    const field = t.dataset.field;
+    Object.assign(state.form, { [field]: t.value, [`${field}PlaceId`]: null, [`${field}Coords`]: null });
+    if (field === "origin" && (state.form.originLocating || state.form.originNote)) { Object.assign(state.form, { originLocating: false, originNote: null }); paintOrigin(); }
+    state.error = null;
+  }
+  if (t.dataset.panic) { state.panic[t.dataset.panic] = t.value; state.panic[`${t.dataset.panic}PlaceId`] = null; state.panic[`${t.dataset.panic}Coords`] = null; }
   if (t.dataset.placeText) {
     const p = savedPlace(t.dataset.placeText);
     if (p) { p.address = t.value.slice(0, PLACE_ADDRESS_MAX); p.place_id = null; saveSettings(); }
@@ -2673,9 +3245,20 @@ document.addEventListener("input", (event) => {
     const v = t.value === "" ? null : Number(t.value);
     if (v === null || Number.isFinite(v)) { setPath(settings, t.dataset.settingNumber, v); saveSettings(); }
   }
+  // Dragging the radar time slider pauses playback; only the button changes, so the slider keeps the finger.
+  if (t.matches("[data-radar-slider]")) {
+    if (radar.playing) {
+      clearInterval(radar.timer);
+      radar.playing = false;
+      const play = t.parentElement.querySelector(".radar-play");
+      if (play) { play.innerHTML = I.play(16); play.setAttribute("aria-pressed", "false"); play.setAttribute("aria-label", "Play the last two hours of radar"); }
+    }
+    showRadarFrame(Number(t.value));
+  }
   if (t.matches("[data-alert-query]")) {
     state.alertQuery = t.value;
     sheetEl.querySelector("[data-alert-results]").innerHTML = alertsBody();
+    revealMore(sheetEl);
   }
 });
 
@@ -2699,9 +3282,12 @@ document.addEventListener("change", (event) => {
 
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
+  if (dialogEl) return closeDialog();
+  if (profileOpen()) { toggleProfileMenu(false); return currentPage.querySelector(".avatar-btn")?.focus(); }
+  if (popupEl) return closePopup();
   const expanded = viewport.querySelector(".map-wrap.expanded [data-action='map-expand']");
   if (expanded) return actions["map-expand"](expanded);
-  if (sheetEl) closeSheet(); else if (settingsEl) closeSettings();
+  if (sheetEl) closeSheet(); else if (settingsEl) closeSettings(); else if (menuEl) closeMenu();
 });
 
 matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { if (settings.theme === "system") applyTheme(); });
@@ -2831,7 +3417,7 @@ function demoToggle(key, checked) {
   state.demo[key] = checked;
   saveDemo();
   renderDemoPill();
-  if (key === "on") { state.costOpen = false; loadWeather(); }
+  if (key === "on") { state.costOpen = false; loadWeather(); if (state.screen === "weather") loadWeatherDetail(); }
   setTimeout(() => { refreshDemoSheet(); rerenderSettings(); }, 260);
 }
 async function demoPush() {
@@ -3058,6 +3644,8 @@ const autocomplete = (() => {
       .forEach((r) => { if (!entries.some((e) => e.text === r.text)) entries.push({ ...r, kind: "recent" }); });
     return entries;
   }
+  // Every location field ends its list with "Choose on map".
+  const withMap = (list) => [...list, { kind: "map", main: "Choose on map", secondary: "Tap a place, or press and hold to drop a pin" }];
 
   function bolded(item) {
     if (!item.matches?.length) return esc(item.main);
@@ -3066,7 +3654,7 @@ const autocomplete = (() => {
     return out + esc(item.main.slice(last));
   }
 
-  const ICON = { transit: () => I.bus(16), street: () => I.route(16), place: () => I.pin(16), recent: () => I.clock(16), location: () => I.locate(16) };
+  const ICON = { transit: () => I.bus(16), street: () => I.route(16), place: () => I.pin(16), recent: () => I.clock(16), location: () => I.locate(16), map: () => I.map(16) };
 
   function render(loading = false) {
     if (!input) return;
@@ -3079,10 +3667,10 @@ const autocomplete = (() => {
       list.addEventListener("click", (e) => { const opt = e.target.closest("[data-ac-index]"); if (opt) choose(Number(opt.dataset.acIndex)); });
       viewport.appendChild(list);
     }
-    const hasGoogle = items.some((i) => !["saved", "recent", "location"].includes(i.kind));
+    const hasGoogle = items.some((i) => !["saved", "recent", "location", "map"].includes(i.kind));
     list.innerHTML = `${items.map((item, i) => `
       <div class="ac-item${i === active ? " active" : ""}" id="ac-opt-${i}" role="option" aria-selected="${i === active}" data-ac-index="${i}" style="animation-delay:${i * 28}ms">
-        <span class="ac-icon ${item.kind}">${item.kind === "saved" ? I[item.glyph || "star"](16) : (ICON[item.kind] || ICON.place)()}</span>
+        <span class="ac-icon ${item.kind === "map" ? "pick" : item.kind}">${item.kind === "saved" ? I[item.glyph || "star"](16) : (ICON[item.kind] || ICON.place)()}</span>
         <span class="ac-text"><span class="ac-main">${bolded(item)}</span>${item.secondary ? `<span class="ac-sub">${esc(item.secondary)}</span>` : ""}</span>
       </div>`).join("")}
       ${loading ? `<div role="status" aria-label="Loading suggestions">${[0, 1].map(() => `<div class="ac-skel" aria-hidden="true"><div class="skeleton skel-tile" style="width:32px;height:32px;border-radius:10px"></div><div><div class="skeleton skel-line w-80"></div><div class="skeleton skel-line sm w-40"></div></div></div>`).join("")}</div>` : ""}
@@ -3116,18 +3704,18 @@ const autocomplete = (() => {
       if (id !== requestId || !input) return;
       const mine = local(text);
       const google = r.ok ? data.suggestions : [];
-      items = [...mine, ...google.filter((g) => !mine.some((l) => l.text === g.text))].slice(0, 7);
+      items = withMap([...mine, ...google.filter((g) => !mine.some((l) => l.text === g.text))].slice(0, 7));
       active = -1;
       render();
     } catch {
-      if (id === requestId && input) { items = local(text); render(); }
+      if (id === requestId && input) { items = withMap(local(text)); render(); }
     }
   }
 
   function open(el) {
     if (input !== el) { input = el; session = newSession(); }
-    if (el.value.trim().length >= 3) return onInput(el);
-    items = local(el.value);
+    if (el.value.trim().length >= 3 && el.value !== CURRENT_PLACE && !/^Dropped pin/.test(el.value)) return onInput(el);
+    items = withMap(local(el.value === CURRENT_PLACE || /^Dropped pin/.test(el.value) ? "" : el.value));
     active = -1;
     render();
   }
@@ -3136,7 +3724,7 @@ const autocomplete = (() => {
     if (input !== el) { input = el; session = newSession(); }
     clearTimeout(timer);
     const text = el.value.trim();
-    items = local(text);
+    items = withMap(local(text));
     active = -1;
     if (text.length < 3 || !state.status?.live_available) return render();
     render(true);
@@ -3151,19 +3739,16 @@ const autocomplete = (() => {
     input = null; items = []; active = -1;
   }
 
-  function apply(path, text, placeId) {
-    const [scope, field] = path.split(".");
-    if (scope === "form") { state.form[field] = text; state.form[`${field}PlaceId`] = placeId || null; state.error = null; }
-    else if (scope === "panic") { state.panic[field] = text; state.panic[`${field}PlaceId`] = placeId || null; }
-    else if (scope === "draft") { if (state.placeDraft) Object.assign(state.placeDraft, { [field]: text, place_id: placeId || null }); }
-    else { const p = savedPlace(field); if (p) { p.address = text; p.place_id = placeId || null; saveSettings(); } }
-  }
-
   function choose(index) {
     const item = items[index];
     const el = input;
     if (!item || !el) return;
     const path = el.dataset.ac;
+    if (item.kind === "map") {
+      close();
+      openMapPicker(path);
+      return;
+    }
     if (item.kind === "location") {
       close();
       el.value = "";
@@ -3171,15 +3756,16 @@ const autocomplete = (() => {
       locate((coords) => {
         if (coords) {
           state.biasCoords = coords;
-          apply(path, `${coords[0].toFixed(6)},${coords[1].toFixed(6)}`, null);
-          if (path.startsWith("panic")) state.panic.coords = coords;
-        } else { apply(path, "", null); toast("Location is unavailable. Type the address instead."); }
-        rerender();
+          applyPlace(path, storesText(path) ? coordText(coords) : CURRENT_PLACE, null, storesText(path) ? null : coords);
+          if (path === "panic.origin") state.panic.coords = coords;
+        } else { applyPlace(path, "", null); toast("Location is unavailable. Type the address instead."); }
+        if (storesText(path)) { rerenderSettings(); const d = sheetEl?.querySelector('[data-draft="address"]'); if (d) { d.value = state.placeDraft?.address || ""; d.closest(".row")?.classList.remove("is-loading"); } }
+        else rerender();
       });
       return;
     }
     el.value = item.text;
-    apply(path, item.text, item.place_id);
+    applyPlace(path, item.text, item.place_id);
     if (item.place_id) store.set("recentPlaces", [{ text: item.text, main: item.main, secondary: item.secondary, place_id: item.place_id }, ...recent().filter((r) => r.text !== item.text)].slice(0, 6));
     close();
     const inputs = [...(el.closest(".scroll, .settings-scroll")?.querySelectorAll("[data-ac]") || [])];
@@ -3198,13 +3784,173 @@ const autocomplete = (() => {
     else if (event.key === "Escape") { close(); event.stopPropagation(); }
   }
 
-  document.addEventListener("focusin", (e) => { if (e.target.dataset?.ac) open(e.target); });
+  document.addEventListener("focusin", (e) => {
+    if (!e.target.dataset?.ac) return;
+    const t = e.target;
+    // "Current location" and "Dropped pin (...)" stand in for coordinates: select them so typing replaces the whole label.
+    if (t.value === CURRENT_PLACE || /^Dropped pin \(/.test(t.value)) requestAnimationFrame(() => { if (document.activeElement === t) t.setSelectionRange(0, t.value.length); });
+    open(t);
+  });
   document.addEventListener("focusout", (e) => { if (e.target === input) setTimeout(() => { if (document.activeElement !== input) close(); }, 120); });
   document.addEventListener("keydown", onKey, true);
   viewport.addEventListener("scroll", position, true);
   window.addEventListener("resize", position);
   return { onInput, close };
 })();
+
+// Writes a chosen place into the field named by `path` (form.origin, panic.dest, places.home, draft.address, ...). Trip fields (form, panic)
+// keep coordinates beside a readable label; saved places store plain text, so a pin is saved as its "lat,lng" coordinates.
+function applyPlace(path, text, placeId, coords = null) {
+  const [scope, field] = path.split(".");
+  if (scope === "form") { Object.assign(state.form, { [field]: text, [`${field}PlaceId`]: placeId || null, [`${field}Coords`]: coords }); if (field === "origin") Object.assign(state.form, { originLocating: false, originNote: null }); state.error = null; }
+  else if (scope === "panic") { Object.assign(state.panic, { [field]: text, [`${field}PlaceId`]: placeId || null, [`${field}Coords`]: coords }); }
+  else if (scope === "draft") { if (state.placeDraft) Object.assign(state.placeDraft, { [field]: text, place_id: placeId || null }); }
+  else { const p = savedPlace(field); if (p) { p.address = text.slice(0, PLACE_ADDRESS_MAX); p.place_id = placeId || null; saveSettings(); } }
+}
+const storesText = (path) => /^(places|draft)\./.test(path);
+
+// ── Choose on map ────────────────────────────────────────────────────────────
+// A tall pop-up with a Google map that shows places. Tap a place icon to choose it (its Google place ID is used for routing and the
+// server looks up its name), or press and hold anywhere to drop a pin (its coordinates are used). The pin can be dragged to adjust it.
+// Maps JavaScript has no long-press event and iOS Safari never fires contextmenu, so a press timer on the map's own element detects it.
+const picker = { path: null, map: null, marker: null, me: null, overlay: null, choice: null, lastPress: 0, req: 0 };
+const PICKER_FOR = { "form.origin": "your start", "form.destination": "your destination", "panic.origin": "where you are", "panic.dest": "your destination", "places.home": "Home", "places.work": "Work/Uni", "draft.address": "this place" };
+function pickerCardInner() {
+  const c = picker.choice;
+  if (!c) return `<div class="picker-hint"><span class="row-icon" style="--tone:var(--accent)">${I.pin(18)}</span><p><b>Tap a place</b> on the map to choose it, or <b>press and hold</b> anywhere to drop a pin.</p></div>`;
+  if (c.kind === "loading") return skelLines("Looking up this place", 60, 80);
+  if (c.kind === "place") return `<div class="picker-choice"><span class="row-icon" style="--tone:var(--error)">${I.pin(18)}</span><div><b>${esc(c.name)}</b><small>${esc(c.address)}</small><span class="picker-attr">${googleMapsAttribution()}</span></div></div>`;
+  return `<div class="picker-choice"><span class="row-icon" style="--tone:var(--error)">${I.pin(18)}</span><div><b>Dropped pin</b><small>${c.lat.toFixed(5)}, ${c.lng.toFixed(5)} · drag the pin to adjust it</small>${c.note ? `<small class="warn-text">${esc(c.note)}</small>` : ""}</div></div>`;
+}
+function pickerSheet(path) {
+  return `<div class="grabber"><span></span></div>
+    <div class="sheet-head"><h3 id="popup-title">Choose ${esc(PICKER_FOR[path] || "a place")} on the map</h3><button class="icon-btn" data-action="close-popup" aria-label="Close">${I.x(18)}</button></div>
+    <div class="picker-body">
+      <div class="map-wrap picker-wrap"><div class="map picker-map" data-picker-map><div class="skeleton map-skeleton" role="status" aria-label="Loading map"></div></div>
+        <div class="map-controls">
+          <button data-action="picker-zoom" data-delta="1" aria-label="Zoom in">${I.plus(18)}</button>
+          <button data-action="picker-zoom" data-delta="-1" aria-label="Zoom out">${I.minus(18)}</button>
+          <button data-action="picker-locate" aria-label="Go to my location">${I.locate(18)}</button>
+        </div></div>
+      <div class="picker-card" data-picker-card aria-live="polite">${pickerCardInner()}</div>
+    </div>
+    <div class="sheet-foot"><button class="btn btn-primary" data-action="picker-use" disabled>Use this place</button></div>`;
+}
+function paintPicker() {
+  const card = popupEl?.querySelector("[data-picker-card]");
+  if (card) card.innerHTML = pickerCardInner();
+  const use = popupEl?.querySelector('[data-action="picker-use"]');
+  if (use) use.disabled = !picker.choice || picker.choice.kind === "loading";
+}
+// Where the map opens: the field's current pin or location, then your position, then the trip start, then central Brisbane.
+function pickerStart(path) {
+  const [scope, field] = path.split(".");
+  const own = scope === "form" ? state.form?.[`${field}Coords`] : scope === "panic" ? (field === "origin" ? state.panic.coords || state.panic.originCoords : state.panic.destCoords) : null;
+  const c = own || state.biasCoords || state.panic.coords || state.plan?.start;
+  return c ? { c, zoom: own ? 17 : 15 } : { c: BRISBANE, zoom: 13 };
+}
+// Places stay visible here (the route maps hide them); the dark style keeps their labels readable.
+const PICKER_DARK_STYLES = [...DARK_MAP_STYLES.filter((s) => s.featureType !== "poi"),
+  { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#C7CEDB" }] },
+  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#1C2A2A" }] }];
+const pickerStyles = () => (document.documentElement.dataset.theme === "light" ? [] : PICKER_DARK_STYLES);
+
+function openMapPicker(path) {
+  autocomplete.close();
+  document.activeElement?.blur?.();
+  Object.assign(picker, { path, choice: null, lastPress: 0, req: picker.req + 1 });
+  openPopup(pickerSheet(path), "picker");
+  const el = popupEl.querySelector("[data-picker-map]");
+  loadGoogleMaps().then(() => {
+    if (!popupEl?.contains(el)) return;
+    el.replaceChildren();
+    el.classList.add("google-map");
+    const start = pickerStart(path);
+    const map = picker.map = new google.maps.Map(el, {
+      center: toLatLng(start.c), zoom: start.zoom, gestureHandling: "greedy", clickableIcons: true,
+      mapTypeControl: false, streetViewControl: false, fullscreenControl: false, zoomControl: false, rotateControl: false, cameraControl: false, styles: pickerStyles(),
+    });
+    picker.overlay = Object.assign(new google.maps.OverlayView(), { onAdd() {}, draw() {}, onRemove() {} });
+    picker.overlay.setMap(map);
+    if (state.biasCoords) picker.me = new google.maps.Marker({ position: toLatLng(state.biasCoords), map, icon: mapIcon("here"), clickable: false, zIndex: 5, title: "Your location" });
+    map.addListener("click", (event) => {
+      const justPressed = picker.pressing || performance.now() - picker.lastPress < 800;
+      if (event.placeId) { event.stop(); if (!justPressed) choosePoi(event.placeId, event.latLng); }
+    });
+    // Right-click on a computer (and long-press on Android) drops a pin too; skip it when the press timer already did.
+    map.addListener("contextmenu", (event) => { if (performance.now() - picker.lastPress > 800) dropPin(event.latLng); });
+    bindLongPress(el);
+  }).catch((error) => { if (document.body.contains(el)) showMapFail(el, error.message); });
+}
+function bindLongPress(el) {
+  let press = null;
+  const cancel = () => { if (press) clearTimeout(press.timer); press = null; };
+  el.addEventListener("pointerdown", (e) => {
+    if (press) return cancel(); // a second finger means a pinch, not a press
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    const box = el.getBoundingClientRect(), x = e.clientX, y = e.clientY;
+    press = { id: e.pointerId, x, y, timer: setTimeout(() => {
+      press = null;
+      const latLng = picker.overlay?.getProjection()?.fromContainerPixelToLatLng(new google.maps.Point(x - box.left, y - box.top));
+      if (latLng) { picker.lastPress = performance.now(); picker.pressing = true; dropPin(latLng); }
+    }, 550) };
+  }, true);
+  el.addEventListener("pointermove", (e) => { if (press && e.pointerId === press.id && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) cancel(); }, true);
+  ["pointerup", "pointercancel"].forEach((type) => el.addEventListener(type, (e) => {
+    if (press && e.pointerId === press.id) cancel();
+    if (picker.pressing) setTimeout(() => { picker.pressing = false; }, 300); // the click that follows a long press is ignored
+  }, true));
+}
+function setPickerMarker(latLng) {
+  if (!picker.map) return;
+  if (!picker.marker) {
+    picker.marker = new google.maps.Marker({ position: latLng, map: picker.map, icon: mapIcon("end"), draggable: true, zIndex: 10, title: "Chosen place" });
+    picker.marker.addListener("dragend", (event) => { picker.req++; picker.choice = { kind: "pin", lat: event.latLng.lat(), lng: event.latLng.lng() }; paintPicker(); });
+  } else picker.marker.setPosition(latLng);
+}
+function dropPin(latLng) {
+  try { navigator.vibrate?.(12); } catch { /* optional */ }
+  picker.req++;
+  setPickerMarker(latLng);
+  picker.choice = { kind: "pin", lat: latLng.lat(), lng: latLng.lng() };
+  paintPicker();
+}
+async function choosePoi(placeId, latLng) {
+  const req = ++picker.req;
+  setPickerMarker(latLng);
+  picker.choice = { kind: "loading" };
+  paintPicker();
+  try {
+    const r = await fetch(`/api/place?id=${encodeURIComponent(placeId)}`);
+    const data = await r.json().catch(() => ({}));
+    if (req !== picker.req) return;
+    if (!r.ok || !data.name) throw new Error(data.error || "That place's name isn't available right now.");
+    picker.choice = { kind: "place", placeId, name: data.name, address: data.address || "", lat: data.location?.[0] ?? latLng.lat(), lng: data.location?.[1] ?? latLng.lng() };
+  } catch (error) {
+    if (req !== picker.req) return;
+    picker.choice = { kind: "pin", lat: latLng.lat(), lng: latLng.lng(), note: `${error.message} The pin's position will be used instead.` };
+  }
+  paintPicker();
+}
+function usePickedPlace() {
+  const c = picker.choice, path = picker.path;
+  if (!c || c.kind === "loading" || !path) return;
+  const coords = [Number(c.lat.toFixed(6)), Number(c.lng.toFixed(6))];
+  if (c.kind === "place") {
+    const text = c.address && !c.address.toLowerCase().startsWith(c.name.toLowerCase()) ? `${c.name}, ${c.address}` : c.address || c.name;
+    applyPlace(path, text, c.placeId, null);
+  } else applyPlace(path, storesText(path) ? coordText(coords) : pinLabel(coords), null, storesText(path) ? null : coords);
+  closePopup();
+  if (path.startsWith("places.")) rerenderSettings();
+  else if (path.startsWith("draft.")) { const input = sheetEl?.querySelector('[data-draft="address"]'); if (input) input.value = state.placeDraft?.address || ""; }
+  else rerender();
+}
+function disposePicker() {
+  [picker.marker, picker.me].forEach((m) => { if (m) { google.maps.event.clearInstanceListeners(m); m.setMap(null); } });
+  picker.overlay?.setMap(null);
+  if (picker.map) google.maps.event.clearInstanceListeners(picker.map);
+  Object.assign(picker, { map: null, marker: null, me: null, overlay: null, choice: null, path: null, req: picker.req + 1 });
+}
 
 function acAttrs(path) {
   return `data-ac="${path}" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="ac-list" autocomplete="off" spellcheck="false"`;
