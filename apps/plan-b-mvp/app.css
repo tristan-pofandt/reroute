@@ -74,13 +74,16 @@ a { color: var(--accent-text); }
 .viewport { position: relative; flex: 1; min-width: 0; overflow: hidden; }
 .home-shortcut {
   position: absolute; z-index: 140; top: calc(env(safe-area-inset-top, 0px) + 8px); right: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  min-width: 72px; min-height: 40px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 12px; color: var(--text-main); background: var(--bg-pop);
+  width: 88px; min-height: 44px; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: 12px; color: var(--text-main); background: var(--bg-pop);
   box-shadow: var(--shadow-card); font-size: 13px; font-weight: 600;
 }
 .home-shortcut[hidden] { display: none; }
-.home-shortcut:active { transform: scale(0.98); }
-.app.has-home-shortcut .navbar { padding-right: 92px; }
-.app.has-home-shortcut .nav-top { padding-right: 78px; }
+.home-shortcut { transition: var(--transition-smooth); }
+.home-shortcut:active { transform: scale(0.98); background: var(--fill-strong); }
+@media (hover: hover) { .home-shortcut:hover { background: var(--bg-surface); } }
+.app.has-home-shortcut .navbar { padding-right: 108px; }
+.app.has-home-shortcut .nav-top { padding-right: 96px; }
+.app.has-home-shortcut .panic-top { padding-right: 108px; }
 
 /* ── Pages and push transitions ──────────────────────────────────────────── */
 
@@ -297,7 +300,7 @@ button.chip:active { transform: scale(0.98); background: var(--fill-strong); }
 .wordmark { font-size: 19px; font-weight: 700; letter-spacing: -0.03em; }
 .wordmark span { color: var(--accent-text); }
 .home-legal-links { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 16px 4px 0; border-top: 1px solid var(--divider); margin-top: 22px; }
-.text-link { min-height: 36px; padding: 0; border: 0; color: var(--accent-text); background: transparent; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
+.text-link { min-height: 44px; padding: 0; border: 0; color: var(--accent-text); background: transparent; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
 .legal-content { display: flex; flex-direction: column; gap: 14px; }
 .legal-content .large-title { font-size: 30px; }
 .legal-content h2 { margin-top: 8px; font-size: 18px; }
@@ -415,6 +418,8 @@ button.tile-card:active { transform: scale(0.98); background: var(--bg-card); }
 .card-title { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
 .mode-tile { --tone: var(--seg-bus); width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: var(--tone); background: color-mix(in srgb, var(--tone) 15%, transparent); }
 .mode-tile.rideshare { --tone: var(--seg-rideshare); }
+.mode-tile.scooter { --tone: var(--seg-scooter); }
+.mode-tile.ebike, .mode-tile.bicycle { --tone: var(--seg-bike); }
 .mode-tile.rail { --tone: var(--seg-rail); }
 .mode-tile.tram { --tone: var(--seg-tram); }
 .mode-tile.ferry { --tone: var(--seg-ferry); }
@@ -485,6 +490,7 @@ button.tile-card:active { transform: scale(0.98); background: var(--bg-card); }
 .map { height: 240px; background: var(--bg-card); }
 .map-wrap.expanded { position: absolute; inset: 0; z-index: 70; margin: 0; border-radius: 0; border: none; animation: mapGrow 380ms var(--ease-out) both; }
 .map-wrap.expanded .map { height: 100%; }
+.map-wrap.expanded .map-controls { top: 64px; }
 @keyframes mapGrow { from { opacity: 0.4; transform: scale(0.94); } to { opacity: 1; transform: none; } }
 .map-controls { position: absolute; top: 12px; right: 12px; z-index: 500; display: flex; flex-direction: column; border-radius: 14px; overflow: hidden; background: var(--bg-pop); border: 1px solid var(--border-strong); box-shadow: var(--shadow-pop); }
 .map-controls button { width: 44px; height: 44px; border: none; background: none; color: var(--text-main); display: flex; align-items: center; justify-content: center; transition: var(--transition-smooth); }
@@ -496,11 +502,10 @@ button.tile-card:active { transform: scale(0.98); background: var(--bg-card); }
 .map-legend i { display: inline-block; width: 16px; height: 4px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
 .map-legend i.dot { width: 8px; height: 8px; border-radius: 50%; }
 .map-legend i.dash { background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px) !important; color: var(--seg-walk); }
-.map-fail { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; font-size: 13px; color: var(--text-muted); }
+.map-fail { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; overflow: auto; }
+.map-fail .feedback-banner { margin: 0; }
+.map-wrap.map-failed .map-controls { display: none; }
 .google-map { font-family: var(--font); }
-.pin-hit { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }
-.pin { width: 16px; height: 16px; border-radius: 50%; border: 3px solid #F1F5F9; box-shadow: 0 1px 5px rgba(0, 0, 0, 0.5); }
-.pin.start { background: var(--success); } .pin.end { background: var(--error); } .pin.park { background: var(--accent); width: 12px; height: 12px; border-width: 2px; }
 
 /* ── Next steps ──────────────────────────────────────────────────────────── */
 
@@ -675,21 +680,6 @@ button.tile-card:active { transform: scale(0.98); background: var(--bg-card); }
 .section-live { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .section-live .live-age { margin: 0 4px 12px 0; }
 
-.veh-marker { z-index: 700; }
-.veh-hit { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }
-.veh { --tone: var(--seg-bus); position: relative; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--tone); color: #fff; border: 2.5px solid #F1F5F9; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); }
-.veh svg { width: 15px; height: 15px; }
-.veh-arrow { position: absolute; inset: -9px; transition: transform 1s linear; pointer-events: none; }
-.veh-arrow::before { content: ""; position: absolute; top: 0; left: 50%; margin-left: -5px; border: 5px solid transparent; border-bottom: 8px solid var(--tone); border-top: 0; }
-.tev { --tone: var(--warning); width: 30px; height: 30px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: var(--tone); color: #1C1303; border: 2.5px solid #F1F5F9; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); }
-.tev.closure { --tone: var(--error); color: #fff; }
-.tev svg { width: 15px; height: 15px; }
-.me-hit { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }
-.me { position: relative; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); border: 3px solid #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); }
-.me::after { content: ""; position: absolute; inset: -3px; border-radius: 50%; background: var(--accent); opacity: 0; animation: ping 2.4s infinite ease-out; }
-.me-arrow { position: absolute; inset: -14px; transition: transform 0.6s linear; display: none; pointer-events: none; }
-.me-arrow.on { display: block; }
-.me-arrow::before { content: ""; position: absolute; top: 0; left: 50%; margin-left: -6px; border: 6px solid transparent; border-bottom: 10px solid var(--accent); border-top: 0; }
 
 .row-label .tag { display: inline-block; padding: 1px 7px; margin-left: 6px; border-radius: 6px; background: var(--accent-soft); color: var(--accent-text); font-size: 11px; font-weight: 600; letter-spacing: 0; vertical-align: 1px; }
 
@@ -925,7 +915,7 @@ button.row:disabled { opacity: 0.45; cursor: default; }
 /* Reduced motion: no looping or large-area motion, one-shot entrances land instantly. */
 @media (prefers-reduced-motion: reduce) {
   :root:not([data-motion="full"]) *, :root:not([data-motion="full"]) *::before, :root:not([data-motion="full"]) *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
-  :root:not([data-motion="full"]) .skeleton::after, :root:not([data-motion="full"]) .is-loading::after, :root:not([data-motion="full"]) .live-dot::after, :root:not([data-motion="full"]) .panic-icon::after, .me::after { animation: none !important; }
+  :root:not([data-motion="full"]) .skeleton::after, :root:not([data-motion="full"]) .is-loading::after, :root:not([data-motion="full"]) .live-dot::after, :root:not([data-motion="full"]) .panic-icon::after { animation: none !important; }
 }
 :root[data-motion="reduced"] *, :root[data-motion="reduced"] *::before, :root[data-motion="reduced"] *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
-:root[data-motion="reduced"] .skeleton::after, :root[data-motion="reduced"] .is-loading::after, :root[data-motion="reduced"] .live-dot::after, :root[data-motion="reduced"] .panic-icon::after, .me::after { animation: none !important; }
+:root[data-motion="reduced"] .skeleton::after, :root[data-motion="reduced"] .is-loading::after, :root[data-motion="reduced"] .live-dot::after, :root[data-motion="reduced"] .panic-icon::after { animation: none !important; }

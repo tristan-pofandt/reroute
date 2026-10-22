@@ -94,6 +94,20 @@ class ReadOnlyRouteTests(unittest.TestCase):
         self.assertNotIn("server-only-key", str(status))
         self.assertNotIn("public-browser-key", str(status))
 
+    def test_sharing_the_server_key_with_the_browser_prints_a_start_up_warning(self):
+        import contextlib
+        import io
+        for browser, server_key, expect in (("same-key", "same-key", True), ("browser-only", "same-key", False), ("", "same-key", False), ("same-key", None, False)):
+            out = io.StringIO()
+            with patch.dict(os.environ, {"MAPS_BROWSER_API_KEY": browser}), contextlib.redirect_stdout(out):
+                make_app(key=server_key)
+            self.assertEqual("WARNING: MAPS_BROWSER_API_KEY" in out.getvalue(), expect, (browser, server_key))
+            self.assertNotIn("same-key", out.getvalue())  # the warning never prints the key itself
+        message = server.shared_key_warning("k", "k")
+        for phrase in ("exposed", "/api/config", "separate browser key", "Maps JavaScript API", "HTTP referrers"):
+            self.assertIn(phrase, message)
+        self.assertIsNone(server.shared_key_warning("a", "b"))
+
     def test_daily_google_caps_default_to_refinement_limits(self):
         with patch.dict(os.environ, {"PLANB_DAILY_GOOGLE_CAP": "", "PLANB_DAILY_AUTOCOMPLETE_CAP": ""}):
             del os.environ["PLANB_DAILY_GOOGLE_CAP"]
@@ -394,6 +408,19 @@ class AbuseProtectionTests(unittest.TestCase):
         capped = client.post("/api/plan", json=body)
         self.assertEqual(capped.status_code, 429)
         self.assertIn("daily limit", capped.get_json()["error"])
+
+    def test_daily_autocomplete_cap_says_address_suggestions_not_live_searches(self):
+        self.with_env(PLANB_AUTOCOMPLETE_LIMIT_PER_HOUR=100, PLANB_DAILY_AUTOCOMPLETE_CAP=1)
+        original = server.google_api.autocomplete
+        server.google_api.autocomplete = lambda *args: []
+        try:
+            _, client = make_app()
+            codes = [client.get("/api/autocomplete?q=taringa", environ_overrides=PUBLIC) for _ in range(2)]
+        finally:
+            server.google_api.autocomplete = original
+        self.assertEqual([c.status_code for c in codes], [200, 429])
+        self.assertIn("address suggestions", codes[1].get_json()["error"])
+        self.assertNotIn("live searches", codes[1].get_json()["error"])
 
     def test_autocomplete_and_fuel_are_limited_per_ip(self):
         self.with_env(PLANB_AUTOCOMPLETE_LIMIT_PER_HOUR=1, PLANB_FUEL_LIMIT_PER_HOUR=1)

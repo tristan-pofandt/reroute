@@ -68,6 +68,14 @@ def load_key():
     return None, None
 
 
+def shared_key_warning(server_key, browser_key):
+    """A start-up warning when the key served to every browser is also the server's Routes and Places key, else None."""
+    if not (server_key and browser_key and server_key == browser_key):
+        return None
+    return ("WARNING: MAPS_BROWSER_API_KEY is the same key as MAPS_API_KEY. The browser key is sent to every visitor by /api/config, so this key is exposed. "
+            "Use a separate browser key restricted to the Maps JavaScript API and to your HTTP referrers, and keep MAPS_API_KEY server-side only.")
+
+
 def _int(name, default):
     try:
         return int(os.getenv(name, default))
@@ -117,6 +125,9 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
                                                   _int("PLANB_FUEL_LIMIT_PER_HOUR", 120))
     caps = {"plan": DailyCap(_int("PLANB_DAILY_GOOGLE_CAP", 50), clock), "autocomplete": DailyCap(_int("PLANB_DAILY_AUTOCOMPLETE_CAP", 500), clock)}
     maps_browser_key = os.getenv("MAPS_BROWSER_API_KEY", "").strip() or None
+    warning = shared_key_warning(key, maps_browser_key)
+    if warning:
+        print(warning, flush=True)
 
     app = Flask(__name__, static_folder=None)
     app.json.sort_keys = False
@@ -149,7 +160,8 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
                 response.headers["Retry-After"] = str(wait)
                 return response
         if cap and not caps[cap].take():
-            return failure("Reroute has reached its daily limit of live searches. Try again tomorrow.", 429)
+            what = "address suggestions. Type the full address instead" if cap == "autocomplete" else "live searches. Try again tomorrow"
+            return failure(f"Reroute has reached its daily limit of {what}.", 429)
         return None
 
     def read_json(limit=8192, allow_empty=False):

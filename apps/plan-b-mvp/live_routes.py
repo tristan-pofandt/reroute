@@ -47,8 +47,16 @@ BICYCLE_FIELDS = ",".join((
     "routes.duration", "routes.distanceMeters", "routes.polyline.encodedPolyline",
     "routes.legs.startLocation", "routes.legs.endLocation",
     "routes.legs.steps.navigationInstruction.instructions", "routes.legs.steps.staticDuration",
+    "routes.legs.steps.navigationInstruction.maneuver", "routes.legs.steps.startLocation", "routes.legs.steps.endLocation",
     "routes.legs.steps.distanceMeters", "routes.legs.steps.polyline.encodedPolyline",
 ))
+# Scooter, e-bike and push-bike options share one Google BICYCLE route. Only the push bike uses Google's own cycling duration;
+# the other two use an assumed average speed (km/h) because Google has no scooter or e-bike routing. The push bike is offered only for short trips.
+CYCLE_MODES = ("scooter", "ebike", "bicycle")
+CYCLE_PROFILES = {"scooter": ("E-scooter", 15), "ebike": ("E-bike", 20), "bicycle": ("Push bike", None)}
+PUSH_BIKE_ASSUMED_KMH = 12  # only used if Google returns no cycling duration
+PUSH_BIKE_MAX_KM = 5
+UNCHECKED_MODES = ("rideshare",) + CYCLE_MODES  # no price or availability check, so never the panic-mode recommendation
 
 # CO2 per litre burned (kg). Combustion-only factors; upstream fuel production is excluded.
 FUEL_CO2_PER_L = {"DIESEL": 2.68, "LPG": 1.51}
@@ -170,7 +178,7 @@ def validate(payload, now=None):
     modes = payload.get("modes")
     if not isinstance(modes, dict):
         raise InputError("Choose at least one way to travel in Settings.")
-    modes = {mode: modes.get(mode) is True for mode in ("transit", "drive", "rideshare", "scooter", "ebike", "bicycle")}
+    modes = {mode: modes.get(mode) is True for mode in ("transit", "drive", "rideshare") + CYCLE_MODES}
     if not any(modes.values()):
         raise InputError("Choose at least one way to travel in Settings.")
     transit_modes = payload.get("transit_modes") or {}
@@ -462,33 +470,45 @@ def bicycle_option(route, index, journey, mode):
     if not isinstance(distance_m, (int, float)) or distance_m <= 0:
         raise RoutesError("Google returned a cycling route without a valid distance.")
     distance_km = distance_m / 1000
-    profiles = {
-        "scooter": ("E-scooter", 15),
-        "ebike": ("E-bike", 20),
-        "bicycle": ("Push bike", 12),
-    }
-    label, speed_kmh = profiles[mode]
-    duration_minutes = max(1, math.ceil(distance_km / speed_kmh * 60))
+    label, speed_kmh = CYCLE_PROFILES[mode]
+    google_seconds = None
+    if speed_kmh is None:
+        try:
+            google_seconds = seconds(route.get("duration"))
+        except RoutesError:
+            google_seconds = None
+    if google_seconds:
+        duration_minutes = max(1, math.ceil(google_seconds / 60))
+        subtitle, timing = "Cycling route · Google's cycling time", "Time is Google's cycling estimate for this route."
+    else:
+        speed_kmh = speed_kmh or PUSH_BIKE_ASSUMED_KMH
+        duration_minutes = max(1, math.ceil(distance_km / speed_kmh * 60))
+        subtitle, timing = f"Cycling route · {speed_kmh} km/h assumed", f"Time uses an assumed average speed of {speed_kmh} km/h, not a measured one."
     encoded = (route.get("polyline") or {}).get("encodedPolyline")
     points = decode_polyline(encoded) if encoded else []
-    path = "This is a Google Maps cycling-route estimate, not a route checked for scooter or bike access. Time uses an illustrative average speed of " \
-        f"{speed_kmh} km/h; check local rules, path access and conditions before travelling."
+    steps = [step for step in (leg.get("steps") or []) if isinstance(step, dict)]
+    details = [{"kind": mode, "title": " ".join(((step.get("navigationInstruction") or {}).get("instructions") or "Continue").split()),
+                "minutes": math.ceil(seconds(step["staticDuration"]) / 60) if step.get("staticDuration") else None} for step in steps]
+    notice = ("This is a Google Maps cycling route, not a route checked for scooter or bike access. " + timing
+              + " Check local rules, path access and conditions before travelling.")
+    guidance = [item for item in (nav.nav_step(step, mode) for step in steps) if item["start"] and item["end"] and len(item["polyline"]) > 1]
     return {
         "id": f"{mode}-{index}", "mode": mode, "kind": mode,
         "title": label + (f" · route {index + 1}" if index else ""),
-        "subtitle": f"Cycling route estimate · {speed_kmh} km/h assumed",
+        "subtitle": subtitle,
         "duration_minutes": duration_minutes,
         "arrival_dt": journey["departure"] + timedelta(minutes=duration_minutes),
         "walking_minutes": 0, "transfers": 0, "lines": [],
         "distance_km": round(distance_km, 1),
         "cost": None, "cost_known": False, "cost_label": "Hire and equipment costs not checked",
         "cost_breakdown": [], "cost_unknown_text": "Availability and hire prices are not checked",
-        "directions_url": maps_link(journey["origin"], journey["destination"], mode),
-        "steps": [{"kind": mode, "title": path, "minutes": duration_minutes}],
+        "co2_kg": 0.0, "co2_note": "No tailpipe emissions; " + ("manufacturing not counted" if mode == "bicycle" else "charging and manufacturing not counted"),
+        "notice": notice,
+        "steps": details[:25] or [{"kind": mode, "title": "Open the full directions in Google Maps", "minutes": duration_minutes}],
         "segments": [{"kind": mode, "points": points}] if points else [],
         "walk_paths": [], "other_minutes": None,
         "start": _latlng(leg.get("startLocation")), "end": _latlng(leg.get("endLocation")),
-        "nav": [],
+        "nav": guidance,
     }
 
 
@@ -614,7 +634,7 @@ def _plan(payload, key, services, now, demo):
     with ThreadPoolExecutor(max_workers=3) as pool:
         transit_future = _submit(pool, fetch, "transit") if journey["modes"]["transit"] else None
         drive_future = _submit(pool, fetch, "drive")
-        cycle_future = _submit(pool, fetch, "bicycle") if any(journey["modes"][mode] for mode in ("scooter", "ebike", "bicycle")) else None
+        cycle_future = _submit(pool, fetch, "bicycle") if any(journey["modes"][mode] for mode in CYCLE_MODES) else None
         drive_routes = drive_future.result()
         transit_routes = transit_future.result() if transit_future else []
         cycle_routes = cycle_future.result() if cycle_future else []
@@ -640,15 +660,20 @@ def _plan(payload, key, services, now, demo):
             errors.append(f"Driving: {error}")
     drives.sort(key=lambda option: option["drive_seconds"])
 
+    # One option per cycle mode, from the first cycling route. The push bike is only for short trips.
     cycle_options = []
-    for mode in ("scooter", "ebike", "bicycle"):
-        if not journey["modes"][mode]:
+    for mode in CYCLE_MODES:
+        if not journey["modes"][mode] or not cycle_routes:
             continue
-        for index, route in enumerate(cycle_routes[:2]):
-            try:
-                cycle_options.append(bicycle_option(route, index, journey, mode))
-            except RoutesError as error:
-                errors.append(f"Cycling options: {error}")
+        try:
+            cycle = bicycle_option(cycle_routes[0], 0, journey, mode)
+        except RoutesError as error:
+            errors.append(f"Cycling options: {error}")
+            continue
+        if mode == "bicycle" and cycle["distance_km"] > PUSH_BIKE_MAX_KM:
+            notes.append(f"Push bike is only offered for trips up to {PUSH_BIKE_MAX_KM:g} km; this trip is {cycle['distance_km']:g} km.")
+            continue
+        cycle_options.append(cycle)
 
     start = next((option["start"] for option in drives + transit + cycle_options if option.get("start")), None)
     end = next((option["end"] for option in drives + transit + cycle_options if option.get("end")), None)
@@ -947,8 +972,8 @@ def recommend(options, journey):
     """Panic mode: the easiest undisrupted option that still makes the deadline."""
     undisrupted = [option for option in options
                    if not any(reason["limit"] == "disruption" for reason in option["reasons"])
-                   and option["mode"] != "rideshare"]
-    pool = undisrupted or [option for option in options if option["mode"] != "rideshare"] or options
+                   and option["mode"] not in UNCHECKED_MODES]
+    pool = undisrupted or [option for option in options if option["mode"] not in UNCHECKED_MODES] or options
     if not pool:
         return None
     deadline = journey["deadline"]

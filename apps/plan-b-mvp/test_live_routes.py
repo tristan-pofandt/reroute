@@ -186,16 +186,76 @@ class RequestBodyTests(unittest.TestCase):
         self.assertEqual(request_body(driving, "drive")["extraComputations"], ["TOLLS"])
         self.assertNotIn("extraComputations", request_body(no_car, "drive"))
 
+    CYCLE_MODES = {"transit": False, "drive": False, "rideshare": False, "scooter": True, "ebike": True, "bicycle": True}
+
+    def cycle_route(self, metres=4000, duration="900s"):
+        step = {"staticDuration": "300s", "distanceMeters": 1500, "polyline": {"encodedPolyline": POLYLINE}, "startLocation": START, "endLocation": END,
+                "navigationInstruction": {"instructions": "Head  north", "maneuver": "DEPART"}}
+        route = {"distanceMeters": metres, "polyline": {"encodedPolyline": POLYLINE}, "legs": [{"startLocation": START, "endLocation": END, "steps": [step]}]}
+        if duration:
+            route["duration"] = duration
+        return route
+
     def test_scooter_ebike_and_push_bike_share_a_bicycle_route_but_remain_separate_options(self):
-        routes = FakeRoutes()
-        modes = {"transit": False, "drive": False, "rideshare": False, "scooter": True, "ebike": True, "bicycle": True}
-        result = run({"modes": modes}, routes=routes)
+        routes = FakeRoutes(drive=[self.cycle_route()])
+        result = run({"modes": self.CYCLE_MODES}, routes=routes)
         self.assertEqual({item["id"] for item in result["options"]}, {"scooter-0", "ebike-0", "bicycle-0"})
         bicycle_request = next(call[1] for call in routes.calls if call[1]["travelMode"] == "BICYCLE")
         self.assertEqual(bicycle_request["travelMode"], "BICYCLE")
         self.assertTrue(all(not item["cost_known"] for item in result["options"]))
         self.assertTrue(all(item["duration_minutes"] > 0 for item in result["options"]))
         self.assertTrue(all("not checked" in item["cost_unknown_text"].lower() for item in result["options"]))
+
+    def test_cycle_options_report_zero_tailpipe_co2_with_an_honest_note(self):
+        result = run({"modes": {**self.CYCLE_MODES, "drive": True}}, routes=FakeRoutes(drive=[self.cycle_route()]))
+        for mode in ("scooter", "ebike", "bicycle"):
+            item = option(result, f"{mode}-0")
+            self.assertEqual(item["co2_kg"], 0)
+            self.assertIn("No tailpipe emissions", item["co2_note"])
+            self.assertIn("not counted", item["co2_note"])
+            self.assertEqual(item["vs_drive"]["co2_saved_kg"], result["baseline"]["co2_kg"])
+
+    def test_push_bike_uses_googles_cycling_duration_and_the_others_use_assumed_speeds(self):
+        result = run({"modes": self.CYCLE_MODES}, routes=FakeRoutes(drive=[self.cycle_route(metres=4000, duration="1500s")]))
+        self.assertEqual(option(result, "bicycle-0")["duration_minutes"], 25)
+        self.assertIn("Google's cycling time", option(result, "bicycle-0")["subtitle"])
+        self.assertEqual(option(result, "scooter-0")["duration_minutes"], 16)
+        self.assertEqual(option(result, "ebike-0")["duration_minutes"], 12)
+        self.assertIn("15 km/h assumed", option(result, "scooter-0")["subtitle"])
+        self.assertIn("assumed", option(result, "scooter-0")["notice"])
+
+    def test_push_bike_falls_back_to_an_assumed_speed_without_a_google_duration(self):
+        result = run({"modes": self.CYCLE_MODES}, routes=FakeRoutes(drive=[self.cycle_route(metres=6000, duration=None)]), )
+        item = option(result, "bicycle-0") if any(o["id"] == "bicycle-0" for o in result["options"]) else None
+        self.assertIsNone(item)  # 6 km is over the push-bike limit
+        result = run({"modes": self.CYCLE_MODES}, routes=FakeRoutes(drive=[self.cycle_route(metres=3000, duration=None)]))
+        self.assertEqual(option(result, "bicycle-0")["duration_minutes"], 15)
+        self.assertIn("12 km/h assumed", option(result, "bicycle-0")["subtitle"])
+
+    def test_push_bike_is_only_offered_for_short_trips(self):
+        limit = live_routes.PUSH_BIKE_MAX_KM
+        result = run({"modes": self.CYCLE_MODES}, routes=FakeRoutes(drive=[self.cycle_route(metres=limit * 1000 + 500)]))
+        self.assertEqual({item["id"] for item in result["options"]}, {"scooter-0", "ebike-0"})
+        self.assertTrue(any("Push bike is only offered" in note for note in result["notes"]))
+        result = run({"modes": self.CYCLE_MODES}, routes=FakeRoutes(drive=[self.cycle_route(metres=limit * 1000)]))
+        self.assertIn("bicycle-0", {item["id"] for item in result["options"]})
+
+    def test_cycle_options_get_directions_from_the_google_cycling_steps(self):
+        item = option(run({"modes": self.CYCLE_MODES}, routes=FakeRoutes(drive=[self.cycle_route()])), "ebike-0")
+        self.assertEqual(len(item["nav"]), 1)
+        self.assertEqual(item["nav"][0]["mode"], "ebike")
+        self.assertEqual(item["steps"][0]["title"], "Head north")
+        self.assertIn("travelmode=bicycling", item["maps_url"])
+        bare = option(run({"modes": self.CYCLE_MODES}, routes=FakeRoutes(drive=[{**self.cycle_route(), "legs": [{}]}])), "ebike-0")
+        self.assertEqual(bare["nav"], [])
+        self.assertEqual(len(bare["steps"]), 1)
+
+    def test_panic_mode_never_recommends_an_unchecked_cycle_option(self):
+        payload = {"modes": {**self.CYCLE_MODES, "transit": True, "drive": True}, "purpose": "panic", "departure": "", "deadline": "2026-10-20T10:00", "transit_flat_fare": 3}
+        result = run(payload, routes=FakeRoutes(drive=[self.cycle_route()]))
+        self.assertNotIn(result["recommended_id"], {"scooter-0", "ebike-0", "bicycle-0"})
+        only = run({"modes": self.CYCLE_MODES, "purpose": "panic", "departure": ""}, routes=FakeRoutes(drive=[self.cycle_route()]))
+        self.assertIn(only["recommended_id"], {"scooter-0", "ebike-0", "bicycle-0"})
 
 
 class TransitTests(unittest.TestCase):

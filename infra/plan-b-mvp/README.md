@@ -11,7 +11,7 @@ Operational configuration for running the [Plan B MVP](../../apps/plan-b-mvp/REA
 ## Read this first
 
 - **Review the legal pages before public use.** Google's Routes API policy requires public Terms of Use and Privacy Policy URLs for apps that show Google routes. This app serves `/terms`, `/privacy` and `/about`; the team must verify the wording and add deployment-specific contact and hosting details before release.
-- **Never commit keys.** `MAPS_API_KEY`, `MAPS_BROWSER_API_KEY` and `VAPID_PRIVATE_KEY` live only in the host's environment settings. `.env` files are git-ignored and excluded from the image. The browser key is public by design; create a separate key restricted to Maps JavaScript API and exact HTTP referrers (including the deployed HTTPS origin and any local development origin). The server key must never be used as the browser key.
+- **Never commit keys.** `MAPS_API_KEY`, `MAPS_BROWSER_API_KEY` and `VAPID_PRIVATE_KEY` live only in the host's environment settings. `.env` files are git-ignored and excluded from the image. The browser key is public by design; create a separate key restricted to Maps JavaScript API and exact HTTP referrers (including the deployed HTTPS origin and any local development origin). The server key must never be used as the browser key: the server prints a warning at start-up if the two are equal, because `/api/config` sends the browser key to every visitor.
 - **Use one worker.** The push monitor thread, the static GTFS loader and the feed caches live inside the Python process, so the container runs gunicorn with `-w 1` and eight threads. Do not scale it out to several instances without moving that state elsewhere.
 - **Web Push and installing the app need HTTPS.** Both Render and a Cloudflare tunnel provide it. Plain `http://` on a laptop only works for `localhost`.
 
@@ -26,6 +26,7 @@ Operational configuration for running the [Plan B MVP](../../apps/plan-b-mvp/REA
 | `VAPID_SUBJECT` | No | Contact for push services, default `mailto:planb-demo@example.invalid`. Use a team mailbox, never a personal address |
 | `HOST`, `PORT` | No | Bind address and port. The image sets `0.0.0.0` and `8000`; Render supplies `PORT` itself |
 | `PLANB_TRUST_PROXY` | On a host | Number of reverse proxies in front of the app (the image and `render.yaml` set `1`) so the real visitor address is used for rate limiting |
+| `PLANB_QUIET` | No | Set to `1` to stop the server printing a console line for every request. Those lines hold the visitor IP address and the URL, which includes typed address suggestions and weather or fuel coordinates, so the privacy page assumes you decide this on purpose |
 | `PLANB_PLAN_LIMIT_PER_HOUR` | No | Searches per visitor address per hour, default 40. Address suggestions (`PLANB_AUTOCOMPLETE_LIMIT_PER_HOUR`, 400) and fuel prices (`PLANB_FUEL_LIMIT_PER_HOUR`, 120) have their own limits |
 | `PLANB_DAILY_GOOGLE_CAP` | No | Searches per Brisbane day for everyone together, default 50; `render.yaml` uses 50 |
 | `PLANB_DAILY_AUTOCOMPLETE_CAP` | No | Address suggestion requests per Brisbane day for everyone together, default 500; `render.yaml` uses 500 |
