@@ -47,6 +47,8 @@ const I = {
   external: (s = 16) => svg('<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>', s),
   moon: (s) => svg('<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>', s),
   home: (s) => svg('<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>', s),
+  scooter: (s) => svg('<circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 18h7l-2-8h4l2 8M13 10h-2l-1-4h4M17 6h2"/>', s),
+  bike: (s) => svg('<circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="m6 17 4-8 4 8H6l4-8h5l3 8M12 6h3"/>', s),
   // Weather
   sun: (s) => svg('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>', s),
   cloud: (s) => svg('<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"/>', s),
@@ -99,10 +101,9 @@ function maneuverIcon(maneuver, size = 28) {
   const icon = I[MANEUVER_ICON[right ? key.replace(/_RIGHT$/, "_LEFT") : key] || "arrowUp"](size);
   return right ? `<span class="flip">${icon}</span>` : icon;
 }
-const KIND_ICON = { bus: I.bus, rail: I.train, tram: I.tram, ferry: I.ferry, mixed: I.route, rideshare: I.rideshare, car: I.car, walk: I.walk, carpool: I.users };
-// Colours are CSS variables so they follow the theme; cssColour() resolves them for Leaflet.
-const SEGMENT_COLOUR = { walk: "var(--seg-walk)", bus: "var(--seg-bus)", rail: "var(--seg-rail)", tram: "var(--seg-tram)", ferry: "var(--seg-ferry)", car: "var(--seg-car)", rideshare: "var(--seg-rideshare)" };
-const KIND_NAME = { walk: "Walk", bus: "Bus", rail: "Train", tram: "Light rail", ferry: "Ferry", car: "Drive", rideshare: "Uber" };
+const KIND_ICON = { bus: I.bus, rail: I.train, tram: I.tram, ferry: I.ferry, mixed: I.route, rideshare: I.rideshare, car: I.car, walk: I.walk, carpool: I.users, scooter: I.scooter, ebike: I.bike, bicycle: I.bike };
+const SEGMENT_COLOUR = { walk: "var(--seg-walk)", bus: "var(--seg-bus)", rail: "var(--seg-rail)", tram: "var(--seg-tram)", ferry: "var(--seg-ferry)", car: "var(--seg-car)", rideshare: "var(--seg-rideshare)", scooter: "var(--seg-scooter)", ebike: "var(--seg-bike)", bicycle: "var(--seg-bike)" };
+const KIND_NAME = { walk: "Walk", bus: "Bus", rail: "Train", tram: "Light rail", ferry: "Ferry", car: "Drive", rideshare: "Uber", scooter: "E-scooter", ebike: "E-bike", bicycle: "Push bike" };
 const cssColour = (value) => { const m = /var\((--[\w-]+)\)/.exec(value || ""); return m ? getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim() : value; };
 
 // ── Persistent preferences (this browser only) ───────────────────────────────
@@ -114,7 +115,7 @@ const store = {
 
 const DEFAULT_SETTINGS = {
   theme: "dark", motion: "full",
-  modes: { transit: true, drive: true, rideshare: true },
+  modes: { transit: true, drive: true, rideshare: true, scooter: true, ebike: true, bicycle: false },
   transit_modes: { bus: true, train: true, tram: true, ferry: true },
   fuel_l_per_100km: 8, fuel_type: "SP91", fuel_price_mode: "auto", fuel_price: 2.3,
   parking_cost: null, use_flat_fare: true, flat_fare: 0.5,
@@ -165,8 +166,9 @@ const saveSettings = () => store.set("settings", settings);
 
 // ── App state ────────────────────────────────────────────────────────────────
 
+const INITIAL_SCREEN = ({ "/terms": "terms", "/privacy": "privacy", "/about": "sources" })[window.location.pathname] || "home";
 const state = {
-  screen: "home", stack: ["home"],
+  screen: INITIAL_SCREEN, stack: [INITIAL_SCREEN],
   status: null, alerts: null, alertsError: null, weather: null, weatherError: null, weatherPlace: "Brisbane", installEvent: null,
   demo: { ...DEMO_DEFAULT, ...store.get("demo", {}) }, costOpen: false, errorKind: "error",
   nav: null,
@@ -180,6 +182,7 @@ const state = {
 };
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const googleMapsAttribution = () => `<span class="gmp-attribution" translate="no">Google Maps</span>`;
 const money = (v) => (v === null || v === undefined ? "Unknown" : `$${Number(v).toFixed(2).replace(/\.00$/, "")}`);
 const kg = (v) => (v === 0 ? "0 kg" : Math.abs(v) < 1 ? `${Math.round(v * 1000)} g` : `${v.toFixed(1)} kg`);
 // Header and goal figures read better in kilograms throughout ("0.4 kg", "0 kg").
@@ -507,7 +510,83 @@ function homeScreen() {
       </div></div>
       ${live === false ? notice("Live search is off: no Google Maps API key was found on the server. See the README.", "error") : ""}
       <p class="fine" style="margin-top:24px"><a href="demo.html">Fictional interview scenario</a> · Estimates only, always check before you travel</p>
+      <nav class="home-legal-links" aria-label="App information">
+        <button class="text-link" data-action="go" data-screen="terms">Terms of Use</button>
+        <button class="text-link" data-action="go" data-screen="privacy">Privacy Policy</button>
+        <button class="text-link" data-action="go" data-screen="sources">About / Data Sources</button>
+      </nav>
     </div>`;
+}
+
+function termsScreen() {
+  return `${navbar(null)}<div class="scroll legal-content">
+    <p class="eyebrow">Reroute</p><h1 class="large-title">Terms of Use</h1>
+    <p class="subtitle">A student prototype for exploring journey options. It is not an official transport service or a substitute for your own judgement.</p>
+    <h2>Estimates, not guarantees</h2>
+    <p>Route times, fares, parking availability, fuel costs, weather, live vehicle positions and disruption information can be incomplete, delayed or wrong. E-scooter, e-bike and push-bike times are illustrative estimates based on a Google Maps cycling route and an assumed average speed; this app does not check hire availability, local access rules or safe paths for each vehicle type. Check current signs, services, fares, prices and conditions before leaving.</p>
+    <p>Do not use the app while driving, riding or crossing a road. In-app directions and location readings may be inaccurate. Follow road rules and use your own judgement.</p>
+    <h2>Third-party services</h2>
+    <p>Route search and maps use Google Maps Platform. Use is also subject to the <a href="https://policies.google.com/terms" target="_blank" rel="noopener noreferrer">Google Terms of Service</a>, the <a href="https://www.google.com/intl/en-US_US/help/terms_maps/" target="_blank" rel="noopener noreferrer">Google Maps Additional Terms</a> and Google's <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>. Public-transport alerts and schedules come from Translink; traffic events come from QLDTraffic; weather and fallback elevation come from Open-Meteo. Their services may change or be unavailable.</p>
+    <h2>Shared rides and notifications</h2>
+    <p>Ride-board posts are visible to people using the same Reroute server. Use a nickname and broad areas, not contact details or sensitive information. Posts expire automatically. Background alerts require a browser push subscription and may be delivered by your browser's push provider.</p>
+    <h2>Prototype availability</h2>
+    <p>This prototype is provided as-is for evaluation. No account, transport booking, payment, scooter hire or emergency response is provided. The team may change or stop the prototype at any time.</p>
+    <p class="fine">Review before public release: confirm the team's hosting terms, support contact and legal requirements. This page is plain-language product information, not legal advice.</p>
+    <button class="btn btn-secondary" data-action="go" data-screen="privacy">Read the Privacy Policy</button>
+  </div>`;
+}
+
+function privacyScreen() {
+  return `${navbar(null)}<div class="scroll legal-content">
+    <p class="eyebrow">Your information</p><h1 class="large-title">Privacy Policy</h1>
+    <p class="subtitle">This prototype has no accounts or sign-in. This page describes what the current code stores and sends; it is not a promise about third-party services or the hosting provider.</p>
+    <h2>On your device</h2>
+    <p>Reroute saves settings (including travel modes, budget and walking limits, fuel and parking estimates, theme and accessibility choices), saved places and their Google place IDs, recent places, the last entered trip places, demo preferences, trip and CO₂ history, ride-board membership tokens, and disruption-watch details in this browser's local storage. This information is not synced to an account. Anyone with access to this browser profile may be able to see it. You can clear browser storage to remove it; clearing it may also stop local watch and ride-board controls from working.</p>
+    <p>The app asks for device location only when a feature needs it, such as current-location routing, a nearby weather forecast or live directions. The browser controls that permission. A route search is sent to the Reroute server; location coordinates can also be sent to Google or Open-Meteo as described below.</p>
+    <h2>Sent to Reroute</h2>
+    <p>For route searches, the server receives the entered origin, destination, optional place IDs, departure time, selected modes and constraints, and ride-board tokens needed for matching. It processes the route request and does not save a route-search history. The server temporarily keeps visitor IP addresses in memory for hourly abuse limits; a hosting provider may separately keep connection or error logs.</p>
+    <p>If you post or join a shared ride, the server stores a nickname, broad start and destination labels, coordinates rounded to about 100 metres, departure time, meeting point, optional note, seat and cost details, and random membership tokens. Posts are visible to users of the same server and expire after their departure time. If you enable background disruption alerts, the server stores your browser push endpoint and encryption keys with the watched route, stops/lines, trip labels and expiry. These records are stored in the server's data directory; the server operator can access them. Unsubscribe in the app to remove a push subscription.</p>
+    <h2>Third-party services</h2>
+    <ul>
+      <li><b>Google Maps Platform:</b> the server sends route endpoints and departure time to Routes API; partial typed addresses, a random autocomplete session token and an approximate location bias to Places; coordinates near the trip endpoints for fuel and parking searches; and sampled walking coordinates for Google Elevation when enabled. Google Maps JavaScript loads map tiles in your browser and receives ordinary network/browser information. Opening a Google Maps or Uber link sends the relevant trip places or coordinates to that service.</li>
+      <li><b>Translink:</b> the server downloads public schedule and live alert, delay and vehicle feeds. It does not send your trip details to Translink.</li>
+      <li><b>QLDTraffic:</b> the server requests public road-event data without sending your trip details.</li>
+      <li><b>Open-Meteo:</b> the server sends the start location rounded to three decimal places for weather, or sampled walking-route coordinates for fallback elevation.</li>
+      <li><b>Browser push provider:</b> when you opt in, an encrypted disruption notification is sent to the browser's subscription endpoint, which may be operated by Google, Mozilla, Apple or another provider.</li>
+      <li><b>Google Fonts:</b> the browser requests the Inter typeface. The current map renderer uses Google Maps JavaScript; the app itself does not load third-party analytics.</li>
+    </ul>
+    <h2>Cookies, analytics and logs</h2>
+    <p>The app code does not create analytics profiles or set its own tracking cookies. It uses browser local storage and a service worker for saved preferences, offline app files and push notifications. Google Maps and other third parties may use their own technologies and receive technical data under their own privacy terms. Reroute's server uses IP addresses transiently for rate limiting; hosting and infrastructure logs depend on where the app is run.</p>
+    <h2>Questions and review</h2>
+    <p>This is a student prototype with no in-app account or privacy request workflow. Before public release, the team must add a monitored contact, confirm hosting-provider retention, review third-party terms and verify the disclosures against the actual deployment.</p>
+    <button class="btn btn-secondary" data-action="go" data-screen="sources">About and data sources</button>
+  </div>`;
+}
+
+function sourcesScreen() {
+  return `${navbar(null)}<div class="scroll legal-content">
+    <p class="eyebrow">About this prototype</p><h1 class="large-title">About / Data Sources</h1>
+    <p class="subtitle">Reroute is a student prototype for comparing journey options and responding to disruptions. It is not an official Translink or Queensland Government service.</p>
+    <div class="group"><div class="group-card">
+      <div class="row"><span class="row-label"><b>Google Maps Platform</b><small>Routes, places/autocomplete, fuel and car-park listings, optional elevation, and the interactive map. Maps and Google route content are displayed on Google Maps so Google's own logo and attribution remain visible.</small><a href="https://developers.google.com/maps/documentation/routes/policies" target="_blank" rel="noopener noreferrer">Routes API policies</a> · <a href="https://developers.google.com/maps/documentation/places/web-service/policies" target="_blank" rel="noopener noreferrer">Places policies</a></span></div>
+      <div class="row"><span class="row-label"><b>Translink</b><small>South East Queensland static GTFS schedules and GTFS-Realtime alerts, trip updates and vehicle positions, used to identify route stops and show live disruption/vehicle information. Data is licensed under Creative Commons Attribution 4.0 International (CC BY 4.0).</small><a href="https://translink.com.au/about-translink/open-data" target="_blank" rel="noopener noreferrer">Translink open data and feed links</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a></span></div>
+      <div class="row"><span class="row-label"><b>QLDTraffic / Queensland Government</b><small>Public road events are used to flag incidents and estimate additional driving delay. Contains information from the QLDTraffic GeoJSON API dataset, Transport and Main Roads, Queensland Government, licensed under Creative Commons Attribution 4.0 International (CC BY 4.0). The data is provided “as is”. The app requests events from the server without sending trip details.</small><a href="https://www.data.qld.gov.au/dataset/131940-traffic-and-travel-information-geojson-api" target="_blank" rel="noopener noreferrer">QLDTraffic GeoJSON API dataset</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a> · <a href="https://qldtraffic.qld.gov.au/more/Disclaimer/index.html" target="_blank" rel="noopener noreferrer">QLDTraffic disclaimer</a></span></div>
+      <div class="row"><span class="row-label"><b>Open-Meteo</b><small>Weather forecasts for the home widget and walking warnings; elevation is a fallback when Google Elevation is unavailable. Weather and elevation data are attributed to Open-Meteo and are subject to its applicable terms and CC BY 4.0 attribution requirements.</small><a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a> · <a href="https://open-meteo.com/en/licence" target="_blank" rel="noopener noreferrer">Licence and attribution</a></span></div>
+      <div class="row"><span class="row-label"><b>Micromobility providers</b><small>There is no provider availability or pricing feed in this prototype. Scooter and bike options use a Google cycling route and illustrative speeds; availability, safe access and hire costs must be checked in the provider's app. Reroute is not affiliated with a hire provider.</small></span></div>
+      <div class="row"><span class="row-label"><b>Uber</b><small>The app can open Uber with pickup and drop-off details when you choose that option. It does not query Uber for a fare or availability before opening the link.</small><a href="https://m.uber.com/ul/" target="_blank" rel="noopener noreferrer">Uber universal link</a></span></div>
+      <div class="row"><span class="row-label"><b>Google Fonts</b><small>Inter typeface used in the interface.</small><a href="https://fonts.google.com/specimen/Inter" target="_blank" rel="noopener noreferrer">Inter</a></span></div>
+      <div class="row"><span class="row-label"><b>Web Push providers</b><small>Browser vendors deliver opt-in background notifications. No separate analytics provider is used by the app.</small></span></div>
+    </div></div>
+    <p class="fine">Google Places does not publish parking prices in the fields this app requests. Parking price data therefore cannot be estimated from the Google response; the closest alternative is an optional typical-cost estimate you enter in Settings, shown separately from listed car-park availability. The QLDTraffic dataset is licensed CC BY 4.0 and supplied “as is”; check the linked dataset and disclaimer before public release.</p>
+    <button class="btn btn-secondary" data-action="go" data-screen="terms">Read the Terms of Use</button>
+  </div>`;
+}
+
+function updateHomeShortcut() {
+  const button = document.getElementById("home-shortcut");
+  const visible = state.screen !== "home" || settingsEl !== null || sheetEl !== null;
+  if (button) button.hidden = !visible;
+  app?.classList.toggle("has-home-shortcut", visible);
 }
 
 function placeChips(field) {
@@ -615,6 +694,7 @@ function lowestCo2(options) {
 }
 
 function co2Line(o) {
+  if (!co2Known(o)) return null;
   const base = state.plan?.baseline;
   if (!co2Known(o)) return null;
   const saved = o.vs_drive?.co2_saved_kg;
@@ -644,6 +724,7 @@ function co2Summary(options) {
 
 function tradeoff(o) {
   if (o.mode === "rideshare") return "Open Uber for the live price and pickup time. It's door to door, but costs more than public transport.";
+  if (["scooter", "ebike", "bicycle"].includes(o.mode)) return "Illustrative time on a Google Maps cycling route. Check vehicle access, local rules, availability and conditions; hire costs are not checked.";
   const parts = [];
   if (o.buffer_minutes !== undefined) parts.push(`Arrives ${bufferInfo(o).text}`);
   else parts.push(`About ${o.duration_minutes} minutes`);
@@ -776,7 +857,7 @@ function resultsScreen() {
       ${rides}
       ${p.errors.length && options.length ? notice(esc(p.errors.join(" ")), "error") : ""}
       ${p.notes.map((n) => notice(esc(n), "info")).join("")}
-      <p class="fine" style="margin:16px 4px 0">Route times from Google Maps, checked ${timeOf(p.queried_at)}. ${fuel} CO₂ figures are estimates (see Settings). Always check services before you travel.</p>
+      <p class="fine results-attribution" style="margin:16px 4px 0">${googleMapsAttribution()}<span>Route times checked ${timeOf(p.queried_at)}. ${fuel} CO₂ figures are estimates (see Settings). Always check services before you travel.</span></p>
     </div>`;
 }
 
@@ -788,7 +869,7 @@ function limitCheck(label, ok, detail) {
   return `<div class="row"><span class="check ${cls}">${icon}</span><span class="row-label">${label}</span><span class="row-value">${esc(detail)}</span></div>`;
 }
 
-// The map slot shows a shimmer until Leaflet has loaded (see mountMaps).
+// The map slot shows a shimmer until Google Maps has loaded (see mountMaps).
 function mapBlock(id, caption = "") {
   return `<div class="map-wrap" data-map-wrap="${esc(id)}"><div class="map" data-map="${esc(id)}"><div class="skeleton map-skeleton" role="status" aria-label="Loading map"></div></div>
     <div class="map-controls">
@@ -820,7 +901,7 @@ function sheetContent(o) {
   const parking = o.mode === "drive" && o.parking ? `<p class="section-header">Parking near the destination</p><div class="group"><div class="group-card">
       ${o.parking.parks.length ? o.parking.parks.map((pk) => row(I.parking(16), "var(--accent)", `${esc(pk.name)}<small>${pk.distance_m} m from destination${pk.paid ? " · paid" : ""}${pk.free ? " · free option" : ""}</small>`)).join("")
         : `<div class="row"><span class="row-label">No car parks listed within ${o.parking.radius_m} m. Parking may be hard to find.</span></div>`}
-    </div><p class="group-footer">Car parks from Google Places. Parking prices aren't published there. Set a typical parking cost in Settings to include it.</p></div>` : "";
+  </div><p class="group-footer">${googleMapsAttribution()} ${settings.parking_cost !== null ? `Your typical parking-cost estimate is ${money(settings.parking_cost)} for this trip; it is not a price quote for any listed car park.` : "Google Places lists nearby car parks but does not return their prices. Add your typical parking cost in Settings for a personal trip estimate."} Car parks from Google Places.</p></div>` : "";
   const stepOf = stepNav(o);
   const steps = o.steps.slice(0, 12).map((s) => { const ni = stepOf(s); return row((KIND_ICON[s.kind] || I.route)(16), SEGMENT_COLOUR[s.kind] || "var(--accent)", `${esc(s.title)}${s.board_time ? `<small>Board at ${esc(s.board_time)}${s.stops ? ` · ${plural(s.stops, "stop")}` : ""}</small>` : ""}${s.directions?.length > 1 ? `<small>${s.directions.map(esc).join(" · ")}</small>` : ""}${ni >= 0 ? liveSlot(o, ni) : ""}`, s.minutes ? valueSpan(`${s.minutes} min`) : ""); }).join("");
   const weather = o.weather_warning ? `<div class="explain warning"><h4>Weather${simTag(state.plan.weather?.simulated)}</h4><p>${esc(o.weather_warning)}</p></div>` : "";
@@ -1124,28 +1205,30 @@ function navLines(entry) {
   const n = state.nav;
   entry.lines.forEach(({ line, step }) => {
     const done = step.i < n.idx, cur = step.i === n.idx, kind = modeKind(step);
-    line.setStyle({ color: done ? cssColour("var(--text-faint)") : step.transit?.colour || cssColour(SEGMENT_COLOUR[kind] || "var(--accent)"), weight: cur ? 8 : kind === "walk" ? 4 : 6, opacity: done ? 0.45 : cur ? 1 : 0.85, dashArray: kind === "walk" ? "2 9" : null });
-    if (cur) line.bringToFront();
+    line.setOptions({ strokeColor: done ? cssColour("var(--text-faint)") : step.transit?.colour || cssColour(SEGMENT_COLOUR[kind] || "var(--accent)"),
+      strokeWeight: cur ? 8 : kind === "walk" ? 4 : 6, strokeOpacity: done ? 0.45 : cur ? 1 : 0.85, zIndex: cur ? 2 : 1 });
   });
 }
 function buildNavMap(el) {
   const n = state.nav;
   if (!n) return;
   el.replaceChildren();
-  const map = L.map(el, { zoomControl: false, attributionControl: true, zoomSnap: 0.5 });
-  const entry = { map, tiles: tileLayer().addTo(map), bounds: null, lines: [], optionId: n.optionId, vehicles: new Map(), nav: true, me: null, zoomIdx: -1 };
-  entry.restyle = () => navLines(entry);
-  n.steps.forEach((s) => { if (!s.arrive) entry.lines.push({ line: L.polyline(s.poly, { lineCap: "round", lineJoin: "round" }).addTo(map), step: s }); });
-  const pin = (cls) => L.divIcon({ className: "", html: `<div class="pin-hit"><div class="pin ${cls}"></div></div>`, iconSize: [44, 44], iconAnchor: [22, 22] });
-  L.marker(n.steps[0].start, { icon: pin("start"), interactive: false }).addTo(map);
-  L.marker(n.steps.at(-1).end, { icon: pin("end"), interactive: false }).addTo(map);
-  entry.bounds = L.latLngBounds(n.steps.flatMap((s) => s.poly));
-  map.fitBounds(entry.bounds, { padding: [48, 48] });
-  map.on("dragstart", () => { if (state.nav?.following) { state.nav.following = false; navPaint(); } });
+  const map = makeGoogleMap(el);
+  const entry = { map, bounds: new google.maps.LatLngBounds(), lines: [], markers: [], optionId: n.optionId, vehicles: new Map(), nav: true, me: null, zoomIdx: -1 };
+  entry.restyle = () => { map.setOptions({ styles: settings.theme === "light" ? [] : DARK_MAP_STYLES }); navLines(entry); };
+  n.steps.forEach((s) => {
+    if (s.arrive) return;
+    entry.lines.push({ line: new google.maps.Polyline({ path: s.poly.map(toLatLng), map, geodesic: true }), step: s });
+    s.poly.forEach((point) => entry.bounds.extend(toLatLng(point)));
+  });
+  entry.markers.push(new google.maps.Marker({ position: toLatLng(n.steps[0].start), map, icon: mapIcon("start"), clickable: false }));
+  entry.markers.push(new google.maps.Marker({ position: toLatLng(n.steps.at(-1).end), map, icon: mapIcon("end"), clickable: false }));
+  fitMap(entry, { top: 48, right: 48, bottom: 48, left: 48 });
+  map.addListener("dragstart", () => { if (state.nav?.following) { state.nav.following = false; navPaint(); } });
   maps.set(el, entry);
   navLines(entry);
   navMap();
-  setTimeout(() => { if (maps.get(el) === entry) { map.invalidateSize(); if (!state.nav?.pos) map.fitBounds(entry.bounds, { padding: [48, 48] }); } }, 420);
+  setTimeout(() => { if (maps.get(el) === entry && !state.nav?.pos) fitMap(entry, { top: 48, right: 48, bottom: 48, left: 48 }); }, 420);
 }
 function navMap() {
   const n = state.nav, entry = navEntry();
@@ -1153,22 +1236,28 @@ function navMap() {
   if (entry.lineIdx !== n.idx) { entry.lineIdx = n.idx; navLines(entry); }
   if (n.pos) {
     if (!entry.me) {
-      entry.me = L.marker(n.pos, { icon: L.divIcon({ className: "me-marker", html: '<div class="me-hit"><div class="me"><span class="me-arrow"></span></div></div>', iconSize: [44, 44], iconAnchor: [22, 22] }), interactive: false, keyboard: false, zIndexOffset: 1000 }).addTo(entry.map);
-      setTimeout(() => entry.me?.getElement()?.classList.add("me-glide"), 300);
-    } else entry.me.setLatLng(n.pos);
-    const arrow = entry.me.getElement()?.querySelector(".me-arrow");
-    if (arrow) { arrow.classList.toggle("on", n.heading !== null); if (n.heading !== null) arrow.style.transform = `rotate(${Math.round(n.heading)}deg)`; }
+      entry.me = new google.maps.Marker({ position: toLatLng(n.pos), map: entry.map, icon: mapIcon("me", n.heading), clickable: false, zIndex: 1000 });
+    } else {
+      entry.me.setPosition(toLatLng(n.pos));
+      entry.me.setIcon(mapIcon("me", n.heading));
+    }
     if (n.following) {
       const s = n.steps[n.idx], animate = !prefersReducedMotion(), riding = s?.transit && navRiding(n, s);
       const v = s?.transit && !riding ? rtOf(findOption(n.optionId), s.i).vehicle : null;
       if (v) {
         // Waiting at the stop: frame you and the approaching vehicle together.
         const sig = `${n.idx}|${v.lat},${v.lng}`;
-        if (entry.fitSig !== sig) { entry.fitSig = sig; entry.zoomIdx = null; entry.map.fitBounds(L.latLngBounds([n.pos, [v.lat, v.lng]]), { paddingTopLeft: [48, 210], paddingBottomRight: [48, 170], maxZoom: 16, animate }); }
+        if (entry.fitSig !== sig) {
+          entry.fitSig = sig;
+          entry.zoomIdx = null;
+          const bounds = new google.maps.LatLngBounds().extend(toLatLng(n.pos)).extend({ lat: v.lat, lng: v.lng });
+          entry.map.fitBounds(bounds, { top: 210, right: 48, bottom: 170, left: 48 });
+          google.maps.event.addListenerOnce(entry.map, "idle", () => { if (entry.map.getZoom() > 16) entry.map.setZoom(16); });
+        }
       } else {
         const key = `${n.idx}${riding ? "r" : ""}`, zoom = s?.transit ? 15 : s?.mode === "drive" ? 16 : 17;
         entry.fitSig = null;
-        if (entry.zoomIdx !== key) { entry.zoomIdx = key; entry.map.setView(n.pos, zoom, { animate }); } else entry.map.panTo(n.pos, { animate, duration: 0.5, easeLinearity: 1 });
+        if (entry.zoomIdx !== key) { entry.zoomIdx = key; entry.map.setCenter(toLatLng(n.pos)); entry.map.setZoom(zoom); } else entry.map.panTo(toLatLng(n.pos));
       }
     }
   }
@@ -1613,7 +1702,7 @@ function settingsContent() {
   const showRow = (key, label, hint) => `<div class="row"><span class="row-label">${label}${hint ? `<small>${hint}</small>` : ""}</span>${toggle(`show.${key}`, s.show[key], label)}</div>`;
   const modeRow = (path, icon, tone, label, hint, checked) => `<div class="row"><span class="row-icon" style="--tone:${tone}">${icon}</span><span class="row-label">${label}${hint ? `<small>${hint}</small>` : ""}</span>${toggle(path, checked, label)}</div>`;
   const fuelPreview = state.fuelLoading ? `<div class="row" role="status" aria-label="Checking fuel prices"><div class="skel-stack" style="flex:1"><div class="skeleton skel-line w-60"></div><div class="skeleton skel-line sm w-80"></div></div></div>`
-    : `<div class="row"><span class="row-label">${state.fuelPreview ? `Now about <b>$${state.fuelPreview.price.toFixed(2)}/L</b><small>Average of ${state.fuelPreview.stations} stations nearby · Google Places</small>` : "Checked near your start point when you search"}</span></div>`;
+    : `<div class="row"><span class="row-label">${state.fuelPreview ? `Now about <b>$${state.fuelPreview.price.toFixed(2)}/L</b><small>Average of ${state.fuelPreview.stations} stations nearby · ${googleMapsAttribution()}</small>` : "Checked near your start point when you search"}</span></div>`;
   return `
     ${navbar(null, `<button class="nav-action" data-action="close-settings">Done</button>`)}
     <div class="settings-scroll">
@@ -1633,6 +1722,9 @@ function settingsContent() {
         ${s.modes.transit ? `<div class="chip-set">${[["bus", "Bus"], ["train", "Train"], ["tram", "Light rail"], ["ferry", "Ferry"]].map(([k, l]) => `<button class="chip" data-action="toggle-transit" data-value="${k}" aria-pressed="${s.transit_modes[k]}">${l}</button>`).join("")}</div>` : ""}
         ${modeRow("modes.drive", I.car(18), "var(--text-muted)", "My own car", "Driving is always used to show what you save", s.modes.drive)}
         ${modeRow("modes.rideshare", I.rideshare(18), "var(--seg-rideshare)", "Uber", "Opens Uber for the live price", s.modes.rideshare)}
+        ${modeRow("modes.scooter", I.scooter(18), "var(--seg-scooter)", "E-scooter", "Cycling-route estimate; scooter access is not checked", s.modes.scooter)}
+        ${modeRow("modes.ebike", I.bike(18), "var(--seg-bike)", "E-bike", "Cycling-route estimate; e-bike access is not checked", s.modes.ebike)}
+        ${modeRow("modes.bicycle", I.bike(18), "var(--seg-bike)", "Push bike", "Off by default · cycling-route estimate; access is not checked", s.modes.bicycle)}
       </div></div>
 
       <p class="section-header">Your car</p>
@@ -1641,8 +1733,8 @@ function settingsContent() {
         <div class="row"><span class="row-icon" style="--tone:var(--warning)">${I.dollar(18)}</span><span class="row-label">Fuel type</span><select data-setting-select="fuel_type" aria-label="Fuel type">${Object.entries(fuelTypes).map(([k, l]) => `<option value="${k}" ${k === s.fuel_type ? "selected" : ""}>${esc(l)}</option>`).join("")}</select></div>
         <div class="row"><span class="row-label">Fuel price</span>${segmented("fuel_price_mode", s.fuel_price_mode, [["auto", "Live average"], ["manual", "My price"]])}</div>
         ${s.fuel_price_mode === "manual" ? `<div class="row"><span class="row-label">My price ($/L)</span><input type="number" min="0.5" max="5" step="0.01" data-setting-number="fuel_price" value="${s.fuel_price}" aria-label="Fuel price in dollars per litre"></div>` : fuelPreview}
-        <div class="row"><span class="row-icon" style="--tone:var(--accent)">${I.parking(18)}</span><span class="row-label">Typical parking cost<small>Leave empty if unknown</small></span><input type="number" min="0" max="200" step="0.5" data-setting-number="parking_cost" value="${s.parking_cost ?? ""}" placeholder="$" aria-label="Typical parking cost"></div>
-      </div><p class="group-footer">Car parks near your destination are found automatically, but prices aren't published, so add what you usually pay.</p></div>
+        <div class="row"><span class="row-icon" style="--tone:var(--accent)">${I.parking(18)}</span><span class="row-label">Typical parking cost estimate<small>Per trip · leave empty if unknown</small></span><input type="number" min="0" max="200" step="0.5" data-setting-number="parking_cost" value="${s.parking_cost ?? ""}" placeholder="$" aria-label="Typical parking cost estimate"></div>
+      </div><p class="group-footer">Google Places does not return car-park prices. This personal estimate is added to driving costs; it is not a quote for a listed car park.</p></div>
 
       <p class="section-header">Public transport fares</p>
       <div class="group"><div class="group-card">
@@ -1714,6 +1806,7 @@ function openSettings() {
   settingsEl.innerHTML = `<div class="settings-panel" role="dialog" aria-modal="true" aria-label="Settings">${settingsContent()}</div>`;
   enhanceClear(settingsEl);
   viewport.appendChild(settingsEl);
+  updateHomeShortcut();
   requestAnimationFrame(() => requestAnimationFrame(() => settingsEl?.classList.add("open")));
   settingsEl.querySelector(".nav-action").focus({ preventScroll: true });
   if (settings.fuel_price_mode === "auto" && !state.fuelPreview) previewFuel();
@@ -1730,6 +1823,7 @@ function closeSettings() {
   if (!settingsEl) return;
   const el = settingsEl;
   settingsEl = null;
+  updateHomeShortcut();
   el.classList.remove("open");
   setTimeout(() => el.remove(), 360);
   rerender();
@@ -1760,7 +1854,7 @@ function applyTheme() {
 // Rendering, navigation, sheets and maps
 // ══════════════════════════════════════════════════════════════════════════════
 
-const SCREENS = { home: homeScreen, journey: journeyScreen, results: resultsScreen, next: nextScreen, panic: panicScreen, nav: navScreen, dashboard: dashboardScreen, rides: ridesScreen };
+const SCREENS = { home: homeScreen, journey: journeyScreen, results: resultsScreen, next: nextScreen, panic: panicScreen, nav: navScreen, dashboard: dashboardScreen, rides: ridesScreen, terms: termsScreen, privacy: privacyScreen, sources: sourcesScreen };
 const pageClass = (screen) => `page${screen === "panic" || screen === "nav" ? ` ${screen}` : ""}`;
 const viewport = document.getElementById("viewport");
 const app = document.getElementById("app");
@@ -1778,8 +1872,11 @@ function makePage(screen) {
   return page;
 }
 
-function navigate(screen, direction = "forward") {
+function navigate(screen, direction = "forward", syncUrl = true) {
   if (transitioning || screen === state.screen) return;
+  const legalPath = { terms: "/terms", privacy: "/privacy", sources: "/about" }[screen];
+  if (syncUrl && legalPath) history.pushState({ screen }, "", legalPath);
+  else if (syncUrl && location.pathname !== "/") history.replaceState({ screen }, "", "/");
   if (state.screen === "nav") navStop();
   if (screen === "panic") startPanicLocate();
   collapseExpanded();
@@ -1789,6 +1886,7 @@ function navigate(screen, direction = "forward") {
   if (direction === "forward" || direction === "up") state.stack.push(screen);
   else { while (state.stack.length > 1 && state.stack[state.stack.length - 1] !== screen) state.stack.pop(); if (state.stack[state.stack.length - 1] !== screen) state.stack = [screen]; }
   state.screen = screen;
+  updateHomeShortcut();
   const incoming = makePage(screen);
   const outgoing = currentPage;
   const inCls = { forward: "in-forward", back: "in-back", up: "in-up", down: "in-back" }[direction];
@@ -1803,7 +1901,7 @@ function navigate(screen, direction = "forward") {
     outgoing?.remove();
     incoming.classList.remove(inCls);
     transitioning = false;
-    maps.forEach((entry) => entry.map.invalidateSize());
+    maps.forEach(resizeMap);
     cleanMaps();
   }, 400);
 }
@@ -1825,6 +1923,11 @@ function goBack() {
   navigate(target, state.screen === "panic" || state.screen === "nav" ? "down" : "back");
 }
 
+window.addEventListener("popstate", () => {
+  const target = ({ "/terms": "terms", "/privacy": "privacy", "/about": "sources" })[location.pathname] || "home";
+  if (target !== state.screen) navigate(target, "back", false);
+});
+
 function rerender() {
   if (!currentPage) { currentPage = makePage(state.screen); viewport.appendChild(currentPage); }
   else {
@@ -1843,40 +1946,75 @@ function rerender() {
   cleanMaps();
 }
 
-// Maps: Leaflet is fetched the first time a map slot appears -----------------------
-
-const LEAFLET = {
-  css: ["https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css", "sha256-tXCrvaljxgtN5LT/Syb5Mm9T+yzPFGH98JVcoJT7JTk="],
-  js: ["https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js", "sha256-XJrs/DDkVkUZ29zdzFOkGCJ9zHVo5hnpdi3c7HYJ7Uc="],
-};
-let leafletPromise = null;
-function loadLeaflet() {
-  if (window.L) return Promise.resolve(window.L);
-  const inject = (tag, props) => new Promise((resolve, reject) => {
-    const el = Object.assign(document.createElement(tag), props, { crossOrigin: "anonymous", onload: resolve, onerror: () => { el.remove(); reject(new Error("Map library unavailable")); } });
-    document.head.appendChild(el);
-  });
-  leafletPromise ||= Promise.all([
-    inject("link", { rel: "stylesheet", href: LEAFLET.css[0], integrity: LEAFLET.css[1] }),
-    inject("script", { src: LEAFLET.js[0], integrity: LEAFLET.js[1], async: true }),
-  ]).then(() => window.L).catch((error) => { leafletPromise = null; throw error; });
-  return leafletPromise;
+// Google Maps is loaded only when a map is opened. Its browser key is separately
+// referrer-restricted; the Routes/Places server key is never sent to the browser.
+let googleMapsPromise = null;
+function loadGoogleMaps() {
+  if (window.google?.maps?.Map) return Promise.resolve(window.google.maps.importLibrary("maps"));
+  if (!googleMapsPromise) {
+    googleMapsPromise = fetch("/api/config").then(async (response) => {
+      const config = await response.json();
+      if (!response.ok) throw new Error(config.error || "Map configuration is unavailable.");
+      if (!config.maps_browser_key) throw new Error("Maps need a referrer-restricted MAPS_BROWSER_API_KEY on the server.");
+      return config.maps_browser_key;
+    }).then((key) => new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&loading=async`;
+      script.async = true;
+      script.onerror = () => reject(new Error("Google Maps could not be loaded. Check the browser key and Maps JavaScript API settings."));
+      script.onload = () => window.google.maps.importLibrary("maps").then(resolve, reject);
+      document.head.appendChild(script);
+    })).catch((error) => { googleMapsPromise = null; throw error; });
+  }
+  return googleMapsPromise;
 }
 
-function tileLayer() {
-  // OpenStreetMap tiles, decoded off the main thread. Dark mode darkens them with a CSS filter.
-  const Tiles = L.TileLayer.extend({ createTile(coords, done) { const tile = L.TileLayer.prototype.createTile.call(this, coords, done); tile.decoding = "async"; return tile; } });
-  return new Tiles("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+const DARK_MAP_STYLES = [
+  { elementType: "geometry", stylers: [{ color: "#202431" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#AAB2C0" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#202431" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#343A49" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#111927" }] },
+  { featureType: "poi", stylers: [{ visibility: "off" }] },
+];
+const toLatLng = ([lat, lng]) => ({ lat: Number(lat), lng: Number(lng) });
+const mapPadding = { top: 24, right: 72, bottom: 24, left: 24 };
+function makeGoogleMap(el) {
+  el.classList.add("google-map");
+  return new google.maps.Map(el, {
+    center: { lat: -27.4698, lng: 153.0251 }, zoom: 13, gestureHandling: "greedy",
+    mapTypeControl: false, streetViewControl: false, fullscreenControl: false, zoomControl: false,
+    styles: settings.theme === "light" ? [] : DARK_MAP_STYLES,
   });
+}
+function fitMap(entry, padding = mapPadding) {
+  if (entry?.bounds && !entry.bounds.isEmpty()) entry.map.fitBounds(entry.bounds, padding);
+}
+function resizeMap(entry) {
+  if (entry?.map) google.maps.event.trigger(entry.map, "resize");
+}
+function mapIcon(kind, bearingDeg = null, vehicle = null) {
+  const colours = {
+    start: "#34D399", end: "#F87171", park: cssColour("var(--accent)"),
+    me: cssColour("var(--accent)"), traffic: "#FBBF24", closure: "#F87171",
+    vehicle: vehicle?.colour ? cssColour(vehicle.colour) : cssColour(SEGMENT_COLOUR[vehicle?.vehicle] || "var(--seg-bus)"),
+  };
+  const colour = colours[kind] || colours.end;
+  const body = kind === "park" ? '<text x="22" y="28" text-anchor="middle" font-family="Arial,sans-serif" font-size="18" font-weight="700" fill="#fff">P</text>'
+    : kind === "me" ? `<path d="M22 8 14 32l8-5 8 5z" fill="#fff" transform="rotate(${bearingDeg ?? 0} 22 22)"/>`
+      : kind === "vehicle" ? `<path d="M14 14h16v12H14zM17 11h10v3H17zM17 28a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" fill="#fff"/><path d="M22 10V4" stroke="#fff" stroke-width="2" transform="rotate(${bearingDeg ?? 0} 22 18)"/>`
+        : kind === "traffic" || kind === "closure" ? '<path d="M22 12v12M22 29v1" stroke="#1C1303" stroke-width="3" stroke-linecap="round"/>'
+          : '<circle cx="22" cy="22" r="6" fill="#fff"/>';
+  const svgText = `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="16" fill="${colour}" stroke="#F1F5F9" stroke-width="3"/><g>${body}</g></svg>`;
+  return { url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svgText)}`, scaledSize: new google.maps.Size(44, 44), anchor: new google.maps.Point(22, 22) };
 }
 
 function mountMaps(root) {
   const slots = [...root.querySelectorAll("[data-map]")].filter((el) => !maps.has(el) && !mounting.has(el));
   if (!slots.length) return;
   slots.forEach((el) => mounting.add(el));
-  loadLeaflet().then(() => slots.forEach((el) => { mounting.delete(el); if (document.body.contains(el)) buildMap(el); }))
-    .catch(() => slots.forEach((el) => { mounting.delete(el); el.innerHTML = '<p class="map-fail">The map could not be loaded. Check your connection and reopen this view.</p>'; }));
+  loadGoogleMaps().then(() => slots.forEach((el) => { mounting.delete(el); if (document.body.contains(el)) buildMap(el); }))
+    .catch((error) => slots.forEach((el) => { mounting.delete(el); el.innerHTML = `<p class="map-fail">${esc(error.message)}</p>`; }));
 }
 
 function buildMap(el) {
@@ -1885,75 +2023,79 @@ function buildMap(el) {
   const options = id === "__all" ? state.plan.options : [findOption(id)].filter(Boolean);
   if (!options.length) return;
   el.replaceChildren();
-  const map = L.map(el, { zoomControl: false, attributionControl: true, scrollWheelZoom: true, zoomSnap: 0.5 });
-  const entry = { map, tiles: tileLayer().addTo(map), bounds: null, lines: [], optionId: id === "__all" ? null : id, vehicles: new Map() };
-  entry.restyle = () => { entry.lines.forEach(({ line, kind }) => line.setStyle({ color: cssColour(SEGMENT_COLOUR[kind] || "var(--accent)") })); };
-  const group = [];
+  const map = makeGoogleMap(el);
+  const entry = { map, bounds: new google.maps.LatLngBounds(), lines: [], markers: [], optionId: id === "__all" ? null : id, vehicles: new Map() };
+  entry.restyle = () => {
+    map.setOptions({ styles: settings.theme === "light" ? [] : DARK_MAP_STYLES });
+    entry.lines.forEach(({ line, kind, colour }) => line.setOptions({ strokeColor: colour || cssColour(SEGMENT_COLOUR[kind] || "var(--accent)") }));
+  };
+  const info = new google.maps.InfoWindow();
   options.forEach((o, index) => {
     const faded = id === "__all" && index > 0;
     (o.segments || []).forEach((s) => {
       if (!s.points?.length) return;
-      const line = L.polyline(s.points, {
-        color: cssColour(SEGMENT_COLOUR[s.kind] || "var(--accent)"), weight: s.kind === "walk" ? 4 : 6, opacity: faded ? 0.35 : 0.92,
-        dashArray: s.kind === "walk" ? "2 9" : null, lineCap: "round", lineJoin: "round",
-      }).addTo(map);
-      if (s.label) line.bindTooltip(`${KIND_NAME[s.kind] || ""} ${s.label}`, { sticky: true });
-      if (id === "__all") line.bindPopup(`<b>${esc(o.title)}</b><br>Arrive ${timeOf(o.arrival)}`);
-      entry.lines.push({ line, kind: s.kind });
-      group.push(line);
+      const colour = s.colour || cssColour(SEGMENT_COLOUR[s.kind] || "var(--accent)");
+      const path = s.points.map(toLatLng);
+      const line = new google.maps.Polyline({
+        path, map, strokeColor: colour, strokeWeight: s.kind === "walk" ? 4 : 6, strokeOpacity: faded ? 0.35 : 0.92,
+        clickable: id === "__all", geodesic: true,
+      });
+      if (id === "__all") line.addListener("click", (event) => {
+        info.setContent(`<b>${esc(o.title)}</b><br>Arrive ${timeOf(o.arrival)}`);
+        info.setPosition(event.latLng);
+        info.open({ map });
+      });
+      entry.lines.push({ line, kind: s.kind, colour: s.colour });
+      path.forEach((point) => entry.bounds.extend(point));
     });
   });
-  const pin = (cls) => L.divIcon({ className: "", html: `<div class="pin-hit"><div class="pin ${cls}"></div></div>`, iconSize: [44, 44], iconAnchor: [22, 22] });
   const first = options[0];
   const pts = (first.segments || []).flatMap((s) => s.points || []);
   if (pts.length) {
-    L.marker(pts[0], { icon: pin("start"), interactive: false }).addTo(map);
-    L.marker(pts[pts.length - 1], { icon: pin("end"), interactive: false }).addTo(map);
+    entry.markers.push(new google.maps.Marker({ position: toLatLng(pts[0]), map, icon: mapIcon("start"), clickable: false }));
+    entry.markers.push(new google.maps.Marker({ position: toLatLng(pts[pts.length - 1]), map, icon: mapIcon("end"), clickable: false }));
   }
   if (id !== "__all") (first.traffic?.events || []).forEach((ev) => {
-    L.marker([ev.lat, ev.lng], { icon: L.divIcon({ className: "", html: `<div class="pin-hit"><div class="tev${ev.closure ? " closure" : ""}">${trafficIcon(ev, 15)}</div></div>`, iconSize: [44, 44], iconAnchor: [22, 22] }), title: ev.title })
-      .bindTooltip(`${esc(ev.title)}${ev.road ? ` · ${esc(ev.road)}` : ""}${ev.simulated ? " · Simulated" : ""}`, { direction: "top", offset: [0, -14] }).addTo(map);
+    const position = { lat: Number(ev.lat), lng: Number(ev.lng) };
+    entry.markers.push(new google.maps.Marker({ position, map, icon: mapIcon(ev.closure ? "closure" : "traffic"),
+      title: `${ev.title}${ev.road ? ` · ${ev.road}` : ""}${ev.simulated ? " · Simulated" : ""}` }));
+    entry.bounds.extend(position);
   });
   if (first.mode === "drive" && first.parking?.parks) {
-    first.parking.parks.forEach((pk) => L.marker(pk.location, { icon: pin("park"), title: pk.name }).bindTooltip(`${esc(pk.name)} · ${pk.distance_m} m`).addTo(map));
+    first.parking.parks.forEach((pk) => {
+      const position = toLatLng(pk.location);
+      entry.markers.push(new google.maps.Marker({ position, map, icon: mapIcon("park"), title: `${pk.name} · ${pk.distance_m} m` }));
+      entry.bounds.extend(position);
+    });
   }
   syncVehicles(entry);
-  if (group.length) {
-    entry.bounds = L.featureGroup(group).getBounds();
-    entry.vehicles.forEach((marker) => entry.bounds.extend(marker.getLatLng()));
-    map.fitBounds(entry.bounds, { padding: [24, 24] });
-  } else if (state.plan.end) map.setView(state.plan.end, 14);
+  if (!entry.bounds.isEmpty()) fitMap(entry);
+  else if (state.plan.end) { map.setCenter(toLatLng(state.plan.end)); map.setZoom(14); }
   maps.set(el, entry);
-  setTimeout(() => { if (maps.get(el) !== entry) return; map.invalidateSize(); if (entry.bounds) map.fitBounds(entry.bounds, { padding: [24, 24] }); }, 420);
+  setTimeout(() => { if (maps.get(el) === entry) fitMap(entry); }, 420);
 }
 
-// Live vehicle markers: one per transit leg with a position. Moves are glided by a CSS transform transition on the marker element.
-function vehicleIcon(t, bearingDeg) {
-  const colour = t.colour || SEGMENT_COLOUR[t.vehicle] || "var(--seg-bus)";
-  const icon = (KIND_ICON[t.vehicle] || I.bus)(15);
-  return L.divIcon({ className: "veh-marker", html: `<div class="veh-hit"><div class="veh" style="--tone:${colour}">${bearingDeg === null || bearingDeg === undefined ? "" : `<span class="veh-arrow" style="transform:rotate(${Math.round(bearingDeg)}deg)"></span>`}${icon}</div></div>`, iconSize: [44, 44], iconAnchor: [22, 22] });
-}
+// Native Google map markers stay attached to geographic coordinates during pinch zoom.
 function syncVehicles(entry, fromStep = 0) {
   const o = entry.optionId && findOption(entry.optionId);
-  if (!o?.nav || !window.L) return;
+  if (!o?.nav || !window.google?.maps) return;
   const seen = new Set();
   o.nav.forEach((n, i) => {
     const v = n.transit && i >= fromStep ? rtOf(o, i).vehicle : null;
     if (!v) return;
     seen.add(i);
-    const text = `${KIND_NAME[n.transit.vehicle] || "Vehicle"} ${esc(n.transit.line)}${v.stops_away === null || v.stops_away === undefined ? "" : ` · ${plural(v.stops_away, "stop")} away`}`;
+    const text = `${KIND_NAME[n.transit.vehicle] || "Vehicle"} ${n.transit.line}${v.stops_away === null || v.stops_away === undefined ? "" : ` · ${plural(v.stops_away, "stop")} away`}`;
     let marker = entry.vehicles.get(i);
     if (!marker) {
-      marker = L.marker([v.lat, v.lng], { icon: vehicleIcon(n.transit, v.bearing), keyboard: false }).bindTooltip(text, { direction: "top", offset: [0, -16] }).addTo(entry.map);
+      marker = new google.maps.Marker({ position: { lat: v.lat, lng: v.lng }, map: entry.map, icon: mapIcon("vehicle", v.bearing, n.transit), title: text, zIndex: 700 });
       entry.vehicles.set(i, marker);
-      setTimeout(() => marker.getElement()?.classList.add("veh-glide"), 300);
     } else {
-      marker.setLatLng([v.lat, v.lng]).setTooltipContent(text);
-      const arrow = marker.getElement()?.querySelector(".veh-arrow");
-      if (arrow && v.bearing !== null && v.bearing !== undefined) arrow.style.transform = `rotate(${Math.round(v.bearing)}deg)`;
+      marker.setPosition({ lat: v.lat, lng: v.lng });
+      marker.setIcon(mapIcon("vehicle", v.bearing, n.transit));
+      marker.setTitle(text);
     }
   });
-  entry.vehicles.forEach((marker, i) => { if (!seen.has(i)) { marker.remove(); entry.vehicles.delete(i); } });
+  entry.vehicles.forEach((marker, i) => { if (!seen.has(i)) { marker.setMap(null); entry.vehicles.delete(i); } });
 }
 
 // A map expanded to full screen lives in the viewport, so put it back (or drop it) whenever the page or sheet that owned it goes away.
@@ -1963,7 +2105,16 @@ function collapseExpanded() {
     if (wrap._home && document.body.contains(wrap._home)) wrap._home.insertBefore(wrap, wrap._next?.parentNode === wrap._home ? wrap._next : null); else wrap.remove();
   });
 }
-function cleanMaps() { maps.forEach((entry, el) => { if (!document.body.contains(el)) { entry.map.remove(); maps.delete(el); } }); }
+function cleanMaps() {
+  maps.forEach((entry, el) => {
+    if (!document.body.contains(el)) {
+      entry.lines.forEach(({ line }) => line.setMap(null));
+      (entry.markers || []).forEach((marker) => marker.setMap(null));
+      entry.vehicles.forEach((marker) => marker.setMap(null));
+      maps.delete(el);
+    }
+  });
+}
 function mapEntryFor(button) { const el = button.closest(".map-wrap")?.querySelector("[data-map]"); return el ? maps.get(el) : null; }
 
 // Charts: hover / focus tooltips ------------------------------------------------
@@ -2002,6 +2153,7 @@ function openSheet(html) {
   sheetEl.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">${html}</div>`;
   enhanceClear(sheetEl);
   viewport.appendChild(sheetEl);
+  updateHomeShortcut();
   requestAnimationFrame(() => requestAnimationFrame(() => sheetEl?.classList.add("open")));
   mountMaps(sheetEl);
   sheetEl.querySelector(".icon-btn")?.focus({ preventScroll: true });
@@ -2012,6 +2164,7 @@ function closeSheet(immediate = false) {
   collapseExpanded();
   const el = sheetEl;
   sheetEl = null;
+  updateHomeShortcut();
   if (immediate) { el.remove(); cleanMaps(); return; }
   el.classList.remove("open");
   setTimeout(() => { el.remove(); cleanMaps(); }, 320);
@@ -2192,6 +2345,12 @@ function setPath(object, path, value) {
 
 const actions = {
   back: goBack,
+  "go-home": () => {
+    closeSheet(true);
+    if (settingsEl) closeSettings();
+    if (state.screen !== "home") navigate("home", "back");
+    else rerender();
+  },
   go: (el) => navigate(el.dataset.screen, el.dataset.screen === "panic" ? "up" : "forward"),
   start: (el) => {
     state.purpose = el.dataset.purpose;
@@ -2307,7 +2466,7 @@ const actions = {
   "clear-trips": () => { store.set("trips", []); toast("Impact history cleared."); rerenderSettings(); rerender(); },
   "toggle-table": () => { state.dashTable = !state.dashTable; rerender(); },
   "map-zoom": (el) => { const e = mapEntryFor(el); if (e) e.map.setZoom(e.map.getZoom() + Number(el.dataset.delta)); },
-  "map-fit": (el) => { const e = mapEntryFor(el); if (e?.bounds) e.map.flyToBounds(e.bounds, { padding: [24, 24], duration: 0.6 }); },
+  "map-fit": (el) => { const e = mapEntryFor(el); if (e?.bounds) fitMap(e); },
   "map-expand": (el) => {
     const wrap = el.closest(".map-wrap");
     const expanded = !wrap.classList.contains("expanded");
@@ -2317,7 +2476,7 @@ const actions = {
     el.innerHTML = expanded ? I.shrink() : I.expand();
     el.setAttribute("aria-label", expanded ? "Shrink map" : "Expand map");
     const e = mapEntryFor(el);
-    setTimeout(() => { if (!e || !document.body.contains(e.map.getContainer())) return; e.map.invalidateSize(); if (e.bounds) e.map.fitBounds(e.bounds, { padding: [30, 30] }); }, 60);
+    setTimeout(() => { if (!e || !document.body.contains(e.map.getDiv())) return; resizeMap(e); if (e.bounds) fitMap(e, { top: 30, right: 72, bottom: 30, left: 30 }); }, 60);
   },
   // Live directions
   "start-nav": (el) => {
@@ -2348,7 +2507,7 @@ const actions = {
     navAnnounce();
     navPaint();
   },
-  "nav-recenter": () => { const n = state.nav, entry = navEntry(); n.following = true; if (entry) { entry.zoomIdx = null; entry.fitSig = null; if (!n.pos) entry.map.fitBounds(entry.bounds, { padding: [48, 48] }); } navPaint(); },
+  "nav-recenter": () => { const n = state.nav, entry = navEntry(); n.following = true; if (entry) { entry.zoomIdx = null; entry.fitSig = null; if (!n.pos) fitMap(entry, { top: 48, right: 48, bottom: 48, left: 48 }); } navPaint(); },
   "nav-voice": () => { settings.voice = !settings.voice; saveSettings(); if (settings.voice) speak("Voice prompts on."); else try { speechSynthesis.cancel(); } catch { /* optional */ } navPaint(); },
   "nav-replan": navReplan,
   // Demo mode, sharing, install
@@ -2813,6 +2972,7 @@ function openAlternatives(id) {
 
 async function boot() {
   applyTheme();
+  updateHomeShortcut();
   renderDemoPill();
   rerender();
   if ("serviceWorker" in navigator) {
@@ -2896,7 +3056,7 @@ const autocomplete = (() => {
         <span class="ac-text"><span class="ac-main">${bolded(item)}</span>${item.secondary ? `<span class="ac-sub">${esc(item.secondary)}</span>` : ""}</span>
       </div>`).join("")}
       ${loading ? `<div role="status" aria-label="Loading suggestions">${[0, 1].map(() => `<div class="ac-skel" aria-hidden="true"><div class="skeleton skel-tile" style="width:32px;height:32px;border-radius:10px"></div><div><div class="skeleton skel-line w-80"></div><div class="skeleton skel-line sm w-40"></div></div></div>`).join("")}</div>` : ""}
-      ${hasGoogle ? `<div class="ac-foot">Suggestions by <span translate="no">Google</span></div>` : ""}`;
+      ${hasGoogle ? `<div class="ac-foot">Suggestions by ${googleMapsAttribution()}</div>` : ""}`;
     list.hidden = !(items.length || loading);
     position();
     input.setAttribute("aria-expanded", String(!list.hidden));

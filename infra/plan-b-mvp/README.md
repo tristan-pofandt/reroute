@@ -10,8 +10,8 @@ Operational configuration for running the [Plan B MVP](../../apps/plan-b-mvp/REA
 
 ## Read this first
 
-- **A Terms of Use and Privacy Policy page is still required before public use.** Google's Routes API policy requires them for an app that shows Google routes to the public, and this repository does not contain them yet. A demo to invited investors on a QR code is still public use of the Google key, so write them first or keep the audience small and known.
-- **Never commit keys.** `MAPS_API_KEY` and `VAPID_PRIVATE_KEY` live only in the host's environment settings. `.env` files are git-ignored and excluded from the image.
+- **Review the legal pages before public use.** Google's Routes API policy requires public Terms of Use and Privacy Policy URLs for apps that show Google routes. This app serves `/terms`, `/privacy` and `/about`; the team must verify the wording and add deployment-specific contact and hosting details before release.
+- **Never commit keys.** `MAPS_API_KEY`, `MAPS_BROWSER_API_KEY` and `VAPID_PRIVATE_KEY` live only in the host's environment settings. `.env` files are git-ignored and excluded from the image. The browser key is public by design; create a separate key restricted to Maps JavaScript API and exact HTTP referrers (including the deployed HTTPS origin and any local development origin). The server key must never be used as the browser key.
 - **Use one worker.** The push monitor thread, the static GTFS loader and the feed caches live inside the Python process, so the container runs gunicorn with `-w 1` and eight threads. Do not scale it out to several instances without moving that state elsewhere.
 - **Web Push and installing the app need HTTPS.** Both Render and a Cloudflare tunnel provide it. Plain `http://` on a laptop only works for `localhost`.
 
@@ -20,14 +20,15 @@ Operational configuration for running the [Plan B MVP](../../apps/plan-b-mvp/REA
 | Variable | Required | Meaning |
 | --- | --- | --- |
 | `MAPS_API_KEY` | Yes, for live routes | Google Maps Platform key with Routes API and Places API (New) enabled; Elevation API is optional |
+| `MAPS_BROWSER_API_KEY` | Yes, for maps | Separate key for Maps JavaScript API, restricted by HTTP referrer and API. It is served by `/api/config` and is public to visitors; do not reuse the server key |
 | `PUBLIC_URL` | Recommended | The address people use, for example `https://plan-b-mvp.onrender.com`. It is encoded by `/qr.svg`, shown in `/api/status`, and accepted by the Origin check |
 | `VAPID_PRIVATE_KEY`, `VAPID_PUBLIC_KEY` | For push | Base64url VAPID key pair. If both are unset the server generates a pair once into `data/vapid.json`, which is lost on redeploy and would invalidate every browser subscription, so set them on any public host |
 | `VAPID_SUBJECT` | No | Contact for push services, default `mailto:planb-demo@example.invalid`. Use a team mailbox, never a personal address |
 | `HOST`, `PORT` | No | Bind address and port. The image sets `0.0.0.0` and `8000`; Render supplies `PORT` itself |
 | `PLANB_TRUST_PROXY` | On a host | Number of reverse proxies in front of the app (the image and `render.yaml` set `1`) so the real visitor address is used for rate limiting |
 | `PLANB_PLAN_LIMIT_PER_HOUR` | No | Searches per visitor address per hour, default 40. Address suggestions (`PLANB_AUTOCOMPLETE_LIMIT_PER_HOUR`, 400) and fuel prices (`PLANB_FUEL_LIMIT_PER_HOUR`, 120) have their own limits |
-| `PLANB_DAILY_GOOGLE_CAP` | No | Searches per Brisbane day for everyone together, default 1500. `render.yaml` lowers it to 300 |
-| `PLANB_DAILY_AUTOCOMPLETE_CAP` | No | Address suggestion requests per Brisbane day for everyone together, default 15000 |
+| `PLANB_DAILY_GOOGLE_CAP` | No | Searches per Brisbane day for everyone together, default 50; `render.yaml` uses 50 |
+| `PLANB_DAILY_AUTOCOMPLETE_CAP` | No | Address suggestion requests per Brisbane day for everyone together, default 500; `render.yaml` uses 500 |
 | `QLDTRAFFIC_API_KEY` | No | Your own QLDTraffic key; without it the public key published on the Queensland Government open data portal is used |
 | `PLANB_DATA_DIR` | No | Where the ride board, push subscriptions, VAPID keys and the cached GTFS index are written, default `apps/plan-b-mvp/data` (`/app/data` in the image) |
 
@@ -43,9 +44,9 @@ A visitor on the same Wi-Fi as the developer machine is limited like any other v
 
 1. Push the branch you want to deploy to GitHub. Render builds from the repository.
 2. In the Render dashboard choose **New > Blueprint**, select this repository and set the Blueprint file path to `infra/plan-b-mvp/render.yaml`. Render creates one Docker web service named `plan-b-mvp` using `infra/plan-b-mvp/Dockerfile` with the repository root as the build context.
-3. When prompted, enter `MAPS_API_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_PUBLIC_KEY` and `VAPID_SUBJECT`. Leave `PUBLIC_URL` empty for the first deploy.
-4. After the first deploy Render shows the service address (`https://plan-b-mvp-xxxx.onrender.com`). Set `PUBLIC_URL` to it and redeploy so the QR code and Origin check use it.
-5. Open the address on a phone and run one search. `GET /api/status` should report `"live_available": true`, `"push": true` and, a minute or so after start, `"gtfs_static": {"state": "ready"}`.
+3. When prompted, enter `MAPS_API_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_PUBLIC_KEY` and `VAPID_SUBJECT`. Leave `PUBLIC_URL` and `MAPS_BROWSER_API_KEY` empty until the first deploy reveals the service address.
+4. After the first deploy Render shows the service address (`https://plan-b-mvp-xxxx.onrender.com`). Set `PUBLIC_URL` to it and create a separate browser key restricted to that exact HTTPS referrer and Maps JavaScript API only. Set `MAPS_BROWSER_API_KEY`, then redeploy so maps, the QR code and Origin check use the correct settings.
+5. Open the address on a phone and run one search. `GET /api/status` should report `"live_available": true`, `"push": true` and, a minute or so after start, `"gtfs_static": {"state": "ready"}`. Open a route map and check that Google's logo and attribution remain visible.
 
 Notes for Render:
 
@@ -71,10 +72,11 @@ The tunnel is only up while the laptop is awake and online, and anyone with the 
 ## Google key restrictions, quotas and cost
 
 - Create a **separate key for the public deployment**; do not reuse the team's development key.
-- Under **API restrictions** allow only Routes API and Places API (New), plus Elevation API if you enabled it.
-- The key is used from the server, so browser (HTTP referrer) restrictions do not apply. Use an **IP address restriction** only when the host has a fixed outbound address; check the host's documentation first, because a wrong restriction makes every search fail. A tunnel from a laptop on a changing network cannot be IP-restricted reliably, which is another reason to keep the caps low.
-- In Google Cloud set **per-day quotas** for each of those APIs and a **billing budget with alerts**. The app's own caps (`PLANB_PLAN_LIMIT_PER_HOUR` and `PLANB_DAILY_GOOGLE_CAP`) are a second line of defence, not a replacement.
-- A search makes one Routes request for public transport (about USD 0.005), one traffic-aware Routes request for driving (about USD 0.01) and, when not cached, fuel price (about USD 0.035), car park (about USD 0.032) and elevation lookups, so a first search costs roughly USD 0.02 to 0.10 at list prices before Google's free monthly usage. The demo mode of the app shows the count and approximate cost for each search; the price table is in `apps/plan-b-mvp/google_api.py` and was last checked on 2026-10-21. At the default cap of 1500 searches a day the worst case is well over USD 100 a day, which is why `render.yaml` sets 300.
+- Create one server key for Routes API and Places API (New), plus Elevation API if enabled. Restrict it to those APIs and, where the host has a fixed outbound IP, to that IP.
+- Create a separate browser key for Maps JavaScript API only. Restrict it to the deployed HTTPS referrer and required local development referrers. Test restrictions before use; an incorrect restriction makes maps fail to load.
+- Google route content is rendered on Google Maps; keep Google's automatically displayed map logo and attribution visible. The app does not place Google route geometry on third-party map tiles.
+- In Google Cloud set **per-day quotas** for each billable server API and a **billing budget with alerts**. The app's own caps (`PLANB_PLAN_LIMIT_PER_HOUR`, `PLANB_DAILY_GOOGLE_CAP` and `PLANB_DAILY_AUTOCOMPLETE_CAP`) are a second line of defence, not a replacement.
+- A search may make Routes, Places and Elevation requests; cost varies by endpoint, cache state, route fields, usage and current Google prices. The demo mode shows approximate list-price estimates for the tracked requests. Check the current price table in `apps/plan-b-mvp/google_api.py` and Google Cloud billing before use. The daily caps are not a guarantee of a maximum charge because each search can make multiple billable requests.
 - Open-Meteo, Translink and QLDTraffic are free to read, but be considerate: the server caches them (weather 10 minutes, traffic 5 minutes, vehicles 15 seconds, alerts 60 seconds).
 
 ## Try the image locally
@@ -83,7 +85,7 @@ Docker was not available while this was written, so this has not been run:
 
 ```bash
 docker build -f infra/plan-b-mvp/Dockerfile -t plan-b-mvp .
-docker run --rm -p 8000:8000 -e MAPS_API_KEY=your_key_here plan-b-mvp
+docker run --rm -p 8000:8000 -e MAPS_API_KEY=your_server_key -e MAPS_BROWSER_API_KEY=your_referrer_restricted_browser_key plan-b-mvp
 ```
 
-Then open `http://localhost:8000`. Pass the key with `-e` or `--env-file`; never bake it into the image.
+Then open `http://localhost:8000`. Pass both keys with `-e` or `--env-file`; restrict the browser key to the local origin and Maps JavaScript API, and never bake either key into the image.

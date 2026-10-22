@@ -123,6 +123,10 @@ class ValidationTests(unittest.TestCase):
     def test_no_travel_mode_is_rejected(self):
         self.assert_invalid(modes={"transit": False, "drive": False, "rideshare": False})
 
+    def test_push_bike_is_off_when_not_selected(self):
+        journey = validate(PAYLOAD, NOW)
+        self.assertFalse(journey["modes"]["bicycle"])
+
     def test_deadline_is_optional(self):
         journey = validate({**PAYLOAD, "deadline": ""}, NOW)
         self.assertIsNone(journey["deadline"])
@@ -175,6 +179,23 @@ class RequestBodyTests(unittest.TestCase):
         run({"modes": {"transit": True, "drive": True}}, routes=routes)
         self.assertEqual(sorted(call[1]["travelMode"] for call in routes.calls), ["DRIVE", "TRANSIT"])
         self.assertTrue(all(call[0] == "test-key" for call in routes.calls))
+
+    def test_tolls_are_requested_only_when_driving_is_enabled(self):
+        driving = validate({**PAYLOAD, "modes": {"transit": False, "drive": True}}, NOW)
+        no_car = validate({**PAYLOAD, "modes": {"transit": False, "drive": False, "rideshare": True}}, NOW)
+        self.assertEqual(request_body(driving, "drive")["extraComputations"], ["TOLLS"])
+        self.assertNotIn("extraComputations", request_body(no_car, "drive"))
+
+    def test_scooter_ebike_and_push_bike_share_a_bicycle_route_but_remain_separate_options(self):
+        routes = FakeRoutes()
+        modes = {"transit": False, "drive": False, "rideshare": False, "scooter": True, "ebike": True, "bicycle": True}
+        result = run({"modes": modes}, routes=routes)
+        self.assertEqual({item["id"] for item in result["options"]}, {"scooter-0", "ebike-0", "bicycle-0"})
+        bicycle_request = next(call[1] for call in routes.calls if call[1]["travelMode"] == "BICYCLE")
+        self.assertEqual(bicycle_request["travelMode"], "BICYCLE")
+        self.assertTrue(all(not item["cost_known"] for item in result["options"]))
+        self.assertTrue(all(item["duration_minutes"] > 0 for item in result["options"]))
+        self.assertTrue(all("not checked" in item["cost_unknown_text"].lower() for item in result["options"]))
 
 
 class TransitTests(unittest.TestCase):

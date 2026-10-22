@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 os.environ["PLANB_NO_BACKGROUND"] = "1"
 os.environ["PLANB_DATA_DIR"] = tempfile.mkdtemp()
@@ -85,6 +86,22 @@ class ReadOnlyRouteTests(unittest.TestCase):
         self.assertEqual(client.get("/api/autocomplete?q=taringa").status_code, 503)
         self.assertEqual(client.get("/api/fuel").status_code, 503)
 
+    def test_public_config_returns_only_the_separate_browser_key(self):
+        with patch.dict(os.environ, {"MAPS_BROWSER_API_KEY": "public-browser-key"}):
+            _, client = make_app(key="server-only-key")
+        self.assertEqual(client.get("/api/config").get_json(), {"maps_browser_key": "public-browser-key"})
+        status = client.get("/api/status").get_json()
+        self.assertNotIn("server-only-key", str(status))
+        self.assertNotIn("public-browser-key", str(status))
+
+    def test_daily_google_caps_default_to_refinement_limits(self):
+        with patch.dict(os.environ, {"PLANB_DAILY_GOOGLE_CAP": "", "PLANB_DAILY_AUTOCOMPLETE_CAP": ""}):
+            del os.environ["PLANB_DAILY_GOOGLE_CAP"]
+            del os.environ["PLANB_DAILY_AUTOCOMPLETE_CAP"]
+            app, _ = make_app()
+        caps = app.extensions["planb"]["caps"]
+        self.assertEqual((caps["plan"].cap, caps["autocomplete"].cap), (50, 500))
+
     def test_alerts_include_exact_route_ids_and_feed_errors_are_502(self):
         data = self.client.get("/api/alerts").get_json()
         self.assertEqual(data["alerts"][0]["route_ids"], ["412-5146"])
@@ -139,7 +156,8 @@ class StaticAndPwaTests(unittest.TestCase):
         self.app, self.client = make_app()
 
     def test_existing_files_are_served_with_the_right_types(self):
-        for path, kind in (("/", "text/html"), ("/index.html", "text/html"), ("/app.js", "text/javascript"), ("/app.css", "text/css"), ("/favicon.svg", "image/svg+xml"),
+        for path, kind in (("/", "text/html"), ("/index.html", "text/html"), ("/terms", "text/html"), ("/privacy", "text/html"), ("/about", "text/html"),
+                           ("/app.js", "text/javascript"), ("/app.css", "text/css"), ("/favicon.svg", "image/svg+xml"),
                            ("/demo.html", "text/html"), ("/demo.js", "text/javascript"), ("/styles.css", "text/css")):
             response = self.client.get(path)
             self.assertEqual(response.status_code, 200, path)

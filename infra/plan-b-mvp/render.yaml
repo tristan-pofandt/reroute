@@ -16,6 +16,8 @@ services:
     envVars:
       - key: MAPS_API_KEY
         sync: false
+      - key: MAPS_BROWSER_API_KEY
+        sync: false
       - key: VAPID_PRIVATE_KEY
         sync: false
       - key: VAPID_PUBLIC_KEY
@@ -29,7 +31,9 @@ services:
       - key: PLANB_PLAN_LIMIT_PER_HOUR
         value: "40"
       - key: PLANB_DAILY_GOOGLE_CAP
-        value: "300"
+        value: "50"
+      - key: PLANB_DAILY_AUTOCOMPLETE_CAP
+        value: "500"
     # Optional, paid: keep the ride board, push subscriptions and the GTFS index across deploys.
     # disk:
     #   name: planb-data

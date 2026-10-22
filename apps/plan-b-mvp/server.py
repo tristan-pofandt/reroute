@@ -35,6 +35,9 @@ HERE = Path(__file__).resolve().parent
 FILES = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/index.html": ("index.html", "text/html; charset=utf-8"),
+    "/terms": ("index.html", "text/html; charset=utf-8"),
+    "/privacy": ("index.html", "text/html; charset=utf-8"),
+    "/about": ("index.html", "text/html; charset=utf-8"),
     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
     "/app.css": ("app.css", "text/css; charset=utf-8"),
     "/demo.html": ("demo.html", "text/html; charset=utf-8"),
@@ -112,7 +115,8 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
     limiter = RateLimiter(clock)
     plan_limit, autocomplete_limit, fuel_limit = (_int("PLANB_PLAN_LIMIT_PER_HOUR", 40), _int("PLANB_AUTOCOMPLETE_LIMIT_PER_HOUR", 400),
                                                   _int("PLANB_FUEL_LIMIT_PER_HOUR", 120))
-    caps = {"plan": DailyCap(_int("PLANB_DAILY_GOOGLE_CAP", 1500), clock), "autocomplete": DailyCap(_int("PLANB_DAILY_AUTOCOMPLETE_CAP", 15000), clock)}
+    caps = {"plan": DailyCap(_int("PLANB_DAILY_GOOGLE_CAP", 50), clock), "autocomplete": DailyCap(_int("PLANB_DAILY_AUTOCOMPLETE_CAP", 500), clock)}
+    maps_browser_key = os.getenv("MAPS_BROWSER_API_KEY", "").strip() or None
 
     app = Flask(__name__, static_folder=None)
     app.json.sort_keys = False
@@ -245,6 +249,10 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
             "fuel_types": google_api.FUEL_TYPES,
             "push": push.ready(), "gtfs_static": static.status(), "public_url": public_url, "version": VERSION,
         })
+
+    @app.get("/api/config")
+    def public_config():
+        return reply({"maps_browser_key": maps_browser_key})
 
     @app.get("/api/alerts")
     def alerts():

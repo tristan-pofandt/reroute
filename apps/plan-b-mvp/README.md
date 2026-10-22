@@ -17,7 +17,7 @@ pip install -r requirements.txt
 python server.py
 ```
 
-Then open `http://127.0.0.1:8000`. The optional `HOST` and `PORT` environment variables change where it listens (default `127.0.0.1` and `8000`). On a phone-sized screen the app fills the screen with safe-area insets; on desktop it is a centred column up to 480 px wide. On Windows, `python` must be a real Python install: the Microsoft Store shortcut that Windows puts on the PATH by default does not run scripts, so use the full path to your `python.exe` (or `py`) if `python server.py` prints a Store message instead of starting the server.
+Then open `http://127.0.0.1:8000`. For interactive maps, set `MAPS_BROWSER_API_KEY` to a separate key restricted to `http://127.0.0.1:8000/*` and `http://localhost:8000/*`, with Maps JavaScript API only. The optional `HOST` and `PORT` environment variables change where it listens (default `127.0.0.1` and `8000`). On a phone-sized screen the app fills the screen with safe-area insets; on desktop it is a centred column up to 480 px wide. On Windows, `python` must be a real Python install: the Microsoft Store shortcut that Windows puts on the PATH by default does not run scripts, so use the full path to your `python.exe` (or `py`) if `python server.py` prints a Store message instead of starting the server.
 
 Install and Web Push need a secure origin: `http://localhost` and `http://127.0.0.1` work on the same machine, but a phone needs HTTPS (see [`infra/plan-b-mvp/README.md`](../../infra/plan-b-mvp/README.md)). The first start downloads the Translink static GTFS zip (about 37 MB) in a background thread and builds a cached index of about 1.3 MB (1,211 routes and 12,861 stops at the check on 2026-10-21); this took about 20 seconds on the developer machine, and searches never wait for it. The cache is stored in `data/`, which is git-ignored.
 
@@ -29,7 +29,9 @@ The server looks for the Google key in this order and uses the first one it find
 2. a `.env` file in `apps/plan-b-mvp/`;
 3. a `.env` file in `apps/prototype-6-2026-09-23/` (the team's existing key).
 
-`.env` files are git-ignored. Keep the key on the server, never paste it into the browser and never commit it. Without a key the Google-powered features (routes, places, fuel prices, car parks, elevation) are unavailable, but the Translink alerts and vehicles, weather, traffic, ride board, settings, impact dashboard and the fictional `demo.html` do not need it.
+`.env` files are git-ignored. Keep the server key on the server and never commit either key. The interactive map uses a separate `MAPS_BROWSER_API_KEY`, which is intentionally public to browsers and must be restricted by HTTP referrer to the exact development and deployment origins and by API to Maps JavaScript API only. Never put `MAPS_API_KEY` in the browser. Without the server key, Google-powered features (routes, places, fuel prices, car parks and elevation) are unavailable; without the browser key, maps show a configuration message while the rest of the app remains available.
+
+Google requires route content to be shown on a Google map. The app therefore uses Google Maps JavaScript for every route map and leaves Google's automatically rendered logo and attribution visible; it does not overlay Google routes on OpenStreetMap. Where Google Places or Routes content appears outside a map, the app also shows the permitted “Google Maps” text attribution in a high-contrast, non-translated label.
 
 ### Google APIs
 
@@ -48,12 +50,14 @@ The deployment settings are documented in [`infra/plan-b-mvp/README.md`](../../i
 | Variable | Meaning |
 | --- | --- |
 | `MAPS_API_KEY` | Google key, see the lookup order above |
+| `MAPS_BROWSER_API_KEY` | Separate public Maps JavaScript key; restrict by HTTP referrer and Maps JavaScript API |
 | `HOST`, `PORT` | Bind address (default `127.0.0.1`) and port (default `8000`) |
 | `PUBLIC_URL` | The address people use; encoded by `/qr.svg` and accepted by the Origin check |
 | `VAPID_PRIVATE_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT` | Web Push keys and contact. If both keys are unset, one pair is generated into `data/vapid.json` |
 | `QLDTRAFFIC_API_KEY` | Optional own QLDTraffic key; otherwise the public key published on the Queensland Government open data portal is used |
 | `PLANB_PLAN_LIMIT_PER_HOUR` | Searches per visitor address per hour, default 40 |
-| `PLANB_DAILY_GOOGLE_CAP` | Searches per Brisbane day for everyone together, default 1500 |
+| `PLANB_DAILY_GOOGLE_CAP` | Searches per Brisbane day for everyone together, default 50 |
+| `PLANB_DAILY_AUTOCOMPLETE_CAP` | Address suggestion requests per Brisbane day for everyone together, default 500 |
 | `PLANB_DATA_DIR` | Where the ride board, push subscriptions, VAPID keys and GTFS cache are written, default `data/` here |
 
 ## Data sources and what is sent where
@@ -68,13 +72,13 @@ The deployment settings are documented in [`infra/plan-b-mvp/README.md`](../../i
 | Translink SEQ GTFS-Realtime VehiclePositions (no key) | Vehicle locations (about 800 to 1,000 vehicles in the developer check; bearing is usually absent), cached for 15 seconds | A plain feed request from this server |
 | Open-Meteo forecast API (no key) | Weather for the home widget and walking warnings, cached for 10 minutes per cell of about 1 km | Coordinates of the start rounded to three decimals (about 100 m), from this server |
 | Open-Meteo elevation API (fallback) | Elevation from a 90 m Copernicus terrain model | Sampled coordinates along walking paths |
-| QLDTraffic open data events API (public key) | Road events used to estimate driving delays, cached for 5 minutes (570 events at the check on 2026-10-21) | A plain request from this server; no trip details are sent |
+| QLDTraffic GeoJSON API (public key) | Road events used to estimate driving delays, cached for 5 minutes | A plain request from this server; no trip details are sent |
 | Browser push services (the endpoint of each browser, for example Google, Mozilla or Apple) via Web Push | Delivery of background disruption notifications | An encrypted payload (title, text and a link) from this server to the subscription endpoint, only for travellers who turn on background alerts |
 | segno (library, no external service) | The QR code at `/qr.svg` | Nothing leaves the server |
 | Uber universal deep link (`m.uber.com/ul`) | Opens Uber with pickup and dropoff filled in | Pickup and dropoff coordinates, only when the traveller opens the link |
 | Google Maps directions link | Secondary hand-off for the chosen trip | The entered places, only when the traveller opens the link |
 | Google Fonts (`fonts.googleapis.com`, `fonts.gstatic.com`) | The Inter typeface used by the design system | Standard font and stylesheet requests from the browser |
-| OpenStreetMap tiles with Leaflet (cdnjs) | Map background; Leaflet is loaded the first time a map appears | Standard tile and script requests from the browser |
+| Google Maps JavaScript API | Interactive maps for Google route content; Google's map logo and attribution are kept visible | Standard map, tile and browser requests to Google from the browser |
 
 The browser stores settings, saved places, demo settings, watch details and the impact history in `localStorage` on that device only. The server stores the ride board, push subscriptions, VAPID keys and the GTFS index in `data/`, which is git-ignored.
 
@@ -87,7 +91,7 @@ The mapping from each rule and feature to what was built is in the [v3 feature l
 - **Design system look:** dark-first editorial layout using the tokens in [`design-system.md`](../../docs/design/design-system.md) (surface layers, subtle 1 px borders, Inter, 16 and 24 px spacing, one accent), with Auto, Light and Dark themes in Settings. The fake phone hardware and status bar of v2 were removed.
 - **States and tactility:** pressed state (scale 0.98), accessible focus rings, 44 px minimum tap targets, shimmer skeletons instead of spinners, and fading success and error banners. Animations use only `transform` and `opacity`, and respect the reduced-motion setting.
 - **Clear buttons:** every text, search and address input (From and To, the Journey disrupted? fields, saved places, the place editor, the ride form and the alerts filter) shows a small x once it has text. It is a 44 by 44 px target around a smaller icon, has an accessible name such as "Clear To", keeps focus in the field, closes the suggestions and resets any stored place ID. One helper (`enhanceClear` and `clearInput` in `app.js`) provides it for all fields.
-- **Icons and loading:** one set of inline SVG icons instead of emojis; Leaflet is loaded the first time a map appears and the QR image is lazy-loaded.
+- **Icons and loading:** one set of inline SVG icons instead of emojis; Google Maps is loaded the first time a map appears and the QR image is lazy-loaded.
 
 ### Planning and decision support
 
@@ -99,7 +103,8 @@ The mapping from each rule and feature to what was built is in the [v3 feature l
 - **Elevation gain:** uphill and downhill metres for walking parts of public-transport options, from an elevation service rather than the Routes API.
 - **Driving cost, parking and traffic:** fuel plus the Google toll estimate plus parking, with car parks within 800 m of the destination. QLDTraffic events within 150 m of the driving route add an estimated delay (a closure on the route is flagged and blocks the option; a crash, hazard or flood adds 5 minutes; roadworks or a special event add 2; the total is capped at 20 and labelled as an estimate). Google's traffic-aware drive time already includes normal congestion.
 - **Uber:** a deep link opens Uber with pickup and dropoff filled in. The app does not show an Uber price and labels rideshare cost as unknown.
-- **Map:** Leaflet with OpenStreetMap tiles (darkened in dark mode), zoom buttons, fit route, full-screen expand, colour-coded segments (GTFS route colours when matched, dashed walking), pins, car-park pins, traffic incident pins and an overview map of all routes.
+- **Map:** Google Maps JavaScript with a dark map style, zoom buttons, fit route, full-screen expand, colour-coded segments (GTFS route colours when matched, dashed walking), pins, car-park pins, traffic incident pins and an overview map of all routes. Google route geometry is shown on Google Maps, whose logo and attribution remain visible on each map; the app uses “Google Maps” text attribution beside route and Places content outside maps.
+- **Micromobility estimates:** separate e-scooter, e-bike and opt-in push-bike route/time estimates use Google's cycling geometry and illustrative speeds. No provider availability or fare feed is integrated, so the estimate has no hire price and is not checked for local vehicle access or route safety; check an operator's app and local rules before travelling.
 
 ### Live data and disruption handling
 
@@ -170,11 +175,11 @@ python -m unittest -v
 python -m py_compile server.py live_routes.py google_api.py gtfs_rt.py gtfs_static.py weather.py traffic.py push.py limits.py nav.py demo_mode.py rides.py
 ```
 
-The 250 tests make no network calls, so they cannot verify external data, and none of them exercises the front end (`app.js`), which was checked by driving the app in headless Microsoft Edge. During the build on 2026-10-21 the developer also checked the following against the real services and the team key: route IDs from the static GTFS matched the realtime feeds exactly for the checked trip; VehiclePositions returned about 800 to 1,000 vehicles; the public QLDTraffic key returned 570 events; Open-Meteo worked without a key; the Google Elevation API worked on the team key; and push was verified end to end only in headless Microsoft Edge, with a real subscription and a delivered test push. Those are developer checks, not participant evidence. The 2026-10-22 refinements were checked in headless Edge at 430 by 932 (dark and light), 360 and 1280 wide with no console errors: the home order, the Impact button, the clear buttons, adding, editing and deleting a saved place and using it as a destination chip, a real search showing the CO2 lines, badge and summary, next steps and trip logging, the dashboard with seeded fake trips, the Journey disrupted? screen, an avoid-line re-plan, the share sheet and the manifest name. The dashboard figures in that check came from fake trips seeded into localStorage for the screenshots only.
+The automated tests make no network calls, so they cannot verify external data, and they do not exercise the front end (`app.js`). Developer checks of live data and the earlier app version are described in the feature logs; those checks are not participant evidence. The current Google Maps migration, legal screens and new mode options still need browser testing with a valid, referrer-restricted browser key, and the current changes have not been checked on a real phone.
 
 Not verified: a real phone, iPhone and Safari (which require adding the app to the Home Screen before push works), an HTTPS deployment, the Dockerfile, the Render blueprint and the Cloudflare tunnel, real outdoor GPS directions, the wake lock, voice prompts, tapping a notification, and rotation of a bus marker by bearing.
 
-For manual review, also check a known Australian transit trip, a driving trip, an invalid deadline, an API error, a route without a fare, a train line alert, bad weather, a road closure, demo mode, keyboard navigation, dark and light themes, reduced motion and narrow mobile layouts. After changing front-end files, bump `VERSION` in `sw.js`, because the app shell is cached first and is refreshed in the background, so visitors would otherwise keep seeing the old files for one visit. Before any public deployment, provide the Terms of Use and Privacy Policy required by Google's Routes API policy, review key restrictions and quotas, and follow [`infra/plan-b-mvp/README.md`](../../infra/plan-b-mvp/README.md). Nothing has been deployed.
+For manual review, check the Terms, Privacy and About pages, the home shortcut from every screen, Google logo and attribution visibility, a known Australian transit trip, a driving trip, each cycling estimate, an invalid deadline, an API error, a route without a fare, a train line alert, bad weather, a road closure, demo mode, keyboard navigation, dark and light themes, reduced motion and narrow mobile layouts. Google requires public Terms of Use and Privacy Policy URLs for apps showing Routes API content; `/terms` and `/privacy` are present, but the team must review their accuracy and deployment-specific details before release. The app's `/about` page credits its data sources. Review key restrictions and quotas and follow [`infra/plan-b-mvp/README.md`](../../infra/plan-b-mvp/README.md). Nothing has been deployed.
 
 ## Limitations
 
@@ -188,9 +193,10 @@ For manual review, also check a known Australian transit trip, a driving trip, a
 - The weather widget uses Brisbane weather unless location access was already granted.
 - Traffic delay is an estimate from QLDTraffic events; the numbers (5 minutes, 2 minutes, 20-minute cap) are team design assumptions.
 - API costs shown in demo mode are list-price estimates before free monthly usage, and are shown only in demo mode.
-- A Terms of Use and Privacy Policy are still required before public deployment. The rate limits (`PLANB_PLAN_LIMIT_PER_HOUR` default 40 and `PLANB_DAILY_GOOGLE_CAP` default 1500) reduce but do not remove the risk of Google charges.
+- The Terms, Privacy and About pages need review against the final hosting and operating arrangements before public deployment. The rate limits (`PLANB_PLAN_LIMIT_PER_HOUR` default 40, `PLANB_DAILY_GOOGLE_CAP` default 50 and `PLANB_DAILY_AUTOCOMPLETE_CAP` default 500) reduce but do not remove the risk of Google charges.
 - The CO2 factors and the $0.50 flat fare are assumptions, not verified values.
 - Parking is the list of car parks Google returns, not live space availability, and parking prices are not available from Google.
+- E-scooter and e-bike hire availability and pricing are not provided; times use illustrative speeds on a cycling route. The team must verify whether it wants a specific Brisbane provider integration before making provider-specific claims.
 - The app does not show an Uber price. Rideshare cost is unknown unless a rider enters the estimate they saw on the ride board.
 - The ride board works on a single server, is unmoderated, and does not address identity, safety checks or moderation.
 - The impact history is stored per browser and is lost if browser data is cleared.

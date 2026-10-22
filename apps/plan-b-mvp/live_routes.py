@@ -43,6 +43,12 @@ DRIVE_FIELDS = ",".join((
     "routes.legs.steps.distanceMeters", "routes.legs.steps.polyline.encodedPolyline",
     "routes.travelAdvisory.tollInfo",
 ))
+BICYCLE_FIELDS = ",".join((
+    "routes.duration", "routes.distanceMeters", "routes.polyline.encodedPolyline",
+    "routes.legs.startLocation", "routes.legs.endLocation",
+    "routes.legs.steps.navigationInstruction.instructions", "routes.legs.steps.staticDuration",
+    "routes.legs.steps.distanceMeters", "routes.legs.steps.polyline.encodedPolyline",
+))
 
 # CO2 per litre burned (kg). Combustion-only factors; upstream fuel production is excluded.
 FUEL_CO2_PER_L = {"DIESEL": 2.68, "LPG": 1.51}
@@ -164,7 +170,7 @@ def validate(payload, now=None):
     modes = payload.get("modes")
     if not isinstance(modes, dict):
         raise InputError("Choose at least one way to travel in Settings.")
-    modes = {mode: modes.get(mode) is True for mode in ("transit", "drive", "rideshare")}
+    modes = {mode: modes.get(mode) is True for mode in ("transit", "drive", "rideshare", "scooter", "ebike", "bicycle")}
     if not any(modes.values()):
         raise InputError("Choose at least one way to travel in Settings.")
     transit_modes = payload.get("transit_modes") or {}
@@ -224,18 +230,20 @@ def request_body(journey, mode):
     body = {
         "origin": waypoint(journey["origin"], journey.get("origin_place_id")),
         "destination": waypoint(journey["destination"], journey.get("destination_place_id")),
-        "travelMode": "TRANSIT" if mode == "transit" else "DRIVE",
-        "departureTime": journey["departure"].isoformat(),
+        "travelMode": {"transit": "TRANSIT", "drive": "DRIVE", "bicycle": "BICYCLE"}[mode],
         "languageCode": "en-AU", "units": "METRIC", "computeAlternativeRoutes": True,
     }
     if mode == "transit":
+        body["departureTime"] = journey["departure"].isoformat()
         allowed = [kind for name, kinds in TRANSIT_MODE_FILTER.items() if journey["transit_modes"][name] for kind in kinds]
         if not all(journey["transit_modes"][name] for name in TRANSIT_MODE_FILTER):
             body["transitPreferences"] = {"allowedTravelModes": sorted(set(allowed))}
-    else:
+    elif mode == "drive":
+        body["departureTime"] = journey["departure"].isoformat()
         body["routingPreference"] = "TRAFFIC_AWARE"
-        body["extraComputations"] = ["TOLLS"]
         body["routeModifiers"] = {"vehicleInfo": {"emissionType": "DIESEL" if journey["fuel_type"] == "DIESEL" else "GASOLINE"}}
+        if journey["modes"]["drive"]:
+            body["extraComputations"] = ["TOLLS"]
     return body
 
 
@@ -445,6 +453,45 @@ def drive_option(route, index, journey):
     }
 
 
+def bicycle_option(route, index, journey, mode):
+    if not isinstance(route, dict):
+        raise RoutesError("Google returned an invalid cycling route.")
+    legs = route.get("legs") or [{}]
+    leg = legs[0] if isinstance(legs[0], dict) else {}
+    distance_m = route.get("distanceMeters") or 0
+    if not isinstance(distance_m, (int, float)) or distance_m <= 0:
+        raise RoutesError("Google returned a cycling route without a valid distance.")
+    distance_km = distance_m / 1000
+    profiles = {
+        "scooter": ("E-scooter", 15),
+        "ebike": ("E-bike", 20),
+        "bicycle": ("Push bike", 12),
+    }
+    label, speed_kmh = profiles[mode]
+    duration_minutes = max(1, math.ceil(distance_km / speed_kmh * 60))
+    encoded = (route.get("polyline") or {}).get("encodedPolyline")
+    points = decode_polyline(encoded) if encoded else []
+    path = "This is a Google Maps cycling-route estimate, not a route checked for scooter or bike access. Time uses an illustrative average speed of " \
+        f"{speed_kmh} km/h; check local rules, path access and conditions before travelling."
+    return {
+        "id": f"{mode}-{index}", "mode": mode, "kind": mode,
+        "title": label + (f" · route {index + 1}" if index else ""),
+        "subtitle": f"Cycling route estimate · {speed_kmh} km/h assumed",
+        "duration_minutes": duration_minutes,
+        "arrival_dt": journey["departure"] + timedelta(minutes=duration_minutes),
+        "walking_minutes": 0, "transfers": 0, "lines": [],
+        "distance_km": round(distance_km, 1),
+        "cost": None, "cost_known": False, "cost_label": "Hire and equipment costs not checked",
+        "cost_breakdown": [], "cost_unknown_text": "Availability and hire prices are not checked",
+        "directions_url": maps_link(journey["origin"], journey["destination"], mode),
+        "steps": [{"kind": mode, "title": path, "minutes": duration_minutes}],
+        "segments": [{"kind": mode, "points": points}] if points else [],
+        "walk_paths": [], "other_minutes": None,
+        "start": _latlng(leg.get("startLocation")), "end": _latlng(leg.get("endLocation")),
+        "nav": [],
+    }
+
+
 def uber_link(start, end, origin_label, destination_label):
     parameters = {"action": "setPickup"}
     if start:
@@ -458,7 +505,8 @@ def uber_link(start, end, origin_label, destination_label):
 
 def maps_link(origin, destination, mode):
     return "https://www.google.com/maps/dir/?" + urlencode({"api": "1", "origin": origin, "destination": destination,
-                                                           "travelmode": {"transit": "transit", "drive": "driving"}.get(mode, "driving")})
+                                                           "travelmode": {"transit": "transit", "drive": "driving", "scooter": "bicycling",
+                                                                          "ebike": "bicycling", "bicycle": "bicycling"}.get(mode, "driving")})
 
 
 # ── Enrichment: costs, parking, CO2, realtime and limits ────────────────────────
@@ -550,19 +598,26 @@ def _plan(payload, key, services, now, demo):
 
     def fetch(mode):
         try:
-            routes = services.routes(key, request_body(journey, mode), TRANSIT_FIELDS if mode == "transit" else DRIVE_FIELDS)
+            fields = {"transit": TRANSIT_FIELDS, "drive": DRIVE_FIELDS, "bicycle": BICYCLE_FIELDS}[mode]
+            if mode == "drive" and not journey["modes"]["drive"]:
+                fields = ",".join(field for field in DRIVE_FIELDS.split(",") if field != "routes.travelAdvisory.tollInfo")
+            routes = services.routes(key, request_body(journey, mode), fields)
             if not isinstance(routes, list):
                 raise RoutesError("Google returned an invalid route list.")
             return routes
         except RoutesError as error:
-            errors.append(f"{'Public transport' if mode == 'transit' else 'Driving'}: {error}")
+            label = {"transit": "Public transport", "drive": "Driving", "bicycle": "Cycling options"}[mode]
+            errors.append(f"{label}: {error}")
             return []
 
     # Driving is always fetched: it is the baseline for cost and CO2 savings, and it powers rideshare.
-    with ThreadPoolExecutor(max_workers=2) as pool:
+    with ThreadPoolExecutor(max_workers=3) as pool:
         transit_future = _submit(pool, fetch, "transit") if journey["modes"]["transit"] else None
-        drive_routes = _submit(pool, fetch, "drive").result()
+        drive_future = _submit(pool, fetch, "drive")
+        cycle_future = _submit(pool, fetch, "bicycle") if any(journey["modes"][mode] for mode in ("scooter", "ebike", "bicycle")) else None
+        drive_routes = drive_future.result()
         transit_routes = transit_future.result() if transit_future else []
+        cycle_routes = cycle_future.result() if cycle_future else []
 
     transit = []
     for index, route in enumerate(transit_routes[:4]):
@@ -585,8 +640,18 @@ def _plan(payload, key, services, now, demo):
             errors.append(f"Driving: {error}")
     drives.sort(key=lambda option: option["drive_seconds"])
 
-    start = next((option["start"] for option in drives + transit if option.get("start")), None)
-    end = next((option["end"] for option in drives + transit if option.get("end")), None)
+    cycle_options = []
+    for mode in ("scooter", "ebike", "bicycle"):
+        if not journey["modes"][mode]:
+            continue
+        for index, route in enumerate(cycle_routes[:2]):
+            try:
+                cycle_options.append(bicycle_option(route, index, journey, mode))
+            except RoutesError as error:
+                errors.append(f"Cycling options: {error}")
+
+    start = next((option["start"] for option in drives + transit + cycle_options if option.get("start")), None)
+    end = next((option["end"] for option in drives + transit + cycle_options if option.get("end")), None)
 
     # Enrich in parallel: fuel price near the start, car parks near the destination,
     # walking elevation for public transport, Translink realtime for each line, weather and road incidents.
@@ -759,7 +824,7 @@ def _plan(payload, key, services, now, demo):
                                   if parking else "Parking availability not checked")
 
     baseline = drives[0] if drives else None
-    options = [option for option in transit]
+    options = [option for option in transit + cycle_options]
     if journey["modes"]["drive"]:
         options.extend(drives)
 
@@ -790,7 +855,7 @@ def _plan(payload, key, services, now, demo):
         if baseline and option is not baseline:
             option["vs_drive"] = {
                 "minutes": round((option["arrival_dt"] - baseline["arrival_dt"]).total_seconds() / 60),
-                "co2_saved_kg": round(baseline["co2_kg"] - option["co2_kg"], 2),
+                "co2_saved_kg": round(baseline["co2_kg"] - option["co2_kg"], 2) if option.get("co2_kg") is not None else None,
                 "cost_saved": round(baseline["cost"] - option["cost"], 2) if baseline.get("cost_known") and option.get("cost_known") else None,
             }
 
