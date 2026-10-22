@@ -88,3 +88,26 @@ A review of the teammate's merged "Further refinements" (cycle options, home sho
 - The README and `infra/plan-b-mvp/README.md` were updated for the maps failure state, cycle options, the home shortcut, the service worker, logging (`PLANB_QUIET`) and the key warning, and the service worker cache was bumped to `planb-reroute-3` so installed copies pick up the changes.
 - Checked and unchanged: tolls are only requested while "My own car" is on (the field mask drops the toll field otherwise), the daily 429 message shows as a warning banner, and 50 searches a day shared by everyone is low for a demo but was requested by the team, so it was not changed.
 - Still not verified: a real two-finger pinch on a phone (a synthetic two-touch pinch and a programmatic zoom were used), a separate referrer-restricted browser key (the shared server key was used locally), Google's deprecation warning for `google.maps.Marker` (still supported; moving to `AdvancedMarkerElement` needs a Cloud map ID and would change the dark styling), and e-scooter or e-bike routing (Google has none, so both use a cycling route; three real searches on the shared key confirmed the cycling data, durations and steps).
+
+## Home button follow-up (2026-10-23)
+
+Done with Claude Code (Claude Opus 5.5) at the project lead's request. This was a developer check only; no participants were involved.
+
+- **Problem:** The Home shortcut was one floating button laid over every screen. It did not move with the page transitions. It also looked different from the other header buttons (a 12 px radius, a raised surface and a shadow), and each header had to reserve 96 to 108 px of empty space for it.
+- **Fix: one shared button built into each screen.** The button is now part of each screen's own header, so it slides with that screen, with Settings and with sheets. It has the same height, radius, surface and hover and pressed states as the Settings gear. A shared `homeButton` helper in `app.js` adds it in these places:
+  - every navbar with a Back button;
+  - the Journey disrupted? header, next to Exit;
+  - the live-directions banner;
+  - the Settings header, beside Done;
+  - every sheet header, beside the close button.
+
+  Settings and sheets show it only away from the home screen. The floating button, `updateHomeShortcut`, the `has-home-shortcut` padding rules and the expanded-map offset for the zoom buttons were removed.
+- **Fix: narrow screens.** Below 360 px the button shows only its icon, keeping its accessible name. On the Journey disrupted? header the same happens below 370 px, so "Fastest way now" stays on one line.
+- **Deviation:** The full-screen expanded map covers the page header, so it no longer shows the Home button. Closing the map with its own button brings the header back.
+- **Cache:** The service worker cache was bumped to `planb-reroute-4` so installed copies pick up the change.
+- **Checked** in Chrome at a 480 px app column and in 430, 390, 375, 360 and 320 px frames:
+  - the journey screen, Impact dashboard, Shared rides, Terms, Privacy, About and Journey disrupted?;
+  - Settings opened from the home screen and from another screen;
+  - the Translink alerts sheet, and the add-place sheet above Settings.
+
+  Halfway through a transition the button sat at the incoming page's offset. Pressing it from a sheet open above Settings closed both and returned home. No header overflowed. The live-directions header was checked with mock banner markup, not a real route. The 263 offline tests pass. The change was not tried on a real phone, in the light theme or with a screen reader.

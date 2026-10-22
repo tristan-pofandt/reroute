@@ -240,12 +240,17 @@ function pointAlong(line, fraction) {
 
 // ── Shared components ────────────────────────────────────────────────────────
 
+// Every page with a Back button also gets the Home button, so it slides with the page instead of floating above it.
 function navbar(back, right = "") {
   const backBtn = back ? `<button class="nav-back" data-action="back" aria-label="Back to ${esc(back)}">${I.chevronLeft(20)}<span>${esc(back)}</span></button>` : "";
-  return `<header class="navbar"><div class="side">${backBtn}</div><div class="side end">${right}</div></header>`;
+  return `<header class="navbar"><div class="side">${backBtn}</div><div class="side end">${back ? homeButton() : ""}${right}</div></header>`;
 }
 const legalBack = () => ({ terms: "Terms", privacy: "Privacy", sources: "About" })[state.stack[state.stack.length - 2]] || "Home";
 const gearButton = () => `<button class="icon-btn" data-action="open-settings" aria-label="Settings">${I.gear(20)}</button>`;
+const homeButton = () => `<button class="home-btn" data-action="go-home" aria-label="Go straight to the home screen" title="Home">${I.home(18)}<span>Home</span></button>`;
+// Sheets and Settings sit over the current screen, so they show the Home button only away from the home screen.
+const homeIfAway = () => (state.screen !== "home" ? homeButton() : "");
+const sheetClose = () => `${homeIfAway()}<button class="icon-btn" data-action="close-sheet" aria-label="Close">${I.x(18)}</button>`;
 const row = (icon, tone, label, value = "", extra = "") =>
   `<div class="row ${extra}"><span class="row-icon" style="--tone:${tone}">${icon}</span><span class="row-label">${label}</span>${value}</div>`;
 const valueSpan = (text, strong = false) => `<span class="row-value${strong ? " strong" : ""}">${esc(text)}</span>`;
@@ -586,13 +591,6 @@ function sourcesScreen() {
   </div>`;
 }
 
-function updateHomeShortcut() {
-  const button = document.getElementById("home-shortcut");
-  const visible = state.screen !== "home";
-  if (button) button.hidden = !visible;
-  app?.classList.toggle("has-home-shortcut", visible);
-}
-
 function placeChips(field) {
   const chips = [];
   if (field === "origin") chips.push(`<button class="chip" data-action="use-location">${I.locate(14)}Current location</button>`);
@@ -912,7 +910,7 @@ function sheetContent(o) {
   const elevation = o.elevation ? row(I.mountain(16), "var(--teal)", "Walking climb", valueSpan(`+${o.elevation.gain_m} m / −${o.elevation.loss_m} m`, true)) : "";
   return `
     <div class="grabber"><span></span></div>
-    <div class="sheet-head"><h3 id="sheet-title">${esc(o.title)}</h3><button class="icon-btn" data-action="close-sheet" aria-label="Close">${I.x(18)}</button></div>
+    <div class="sheet-head"><h3 id="sheet-title">${esc(o.title)}</h3>${sheetClose()}</div>
     <div class="sheet-scroll">
       <div class="big-arrival">
         <div><div class="t">${timeOf(o.arrival)}</div><div class="buffer ${b.cls}">${b.text}</div></div>
@@ -1032,7 +1030,7 @@ function nextScreen() {
 
 function panicScreen() {
   const pm = state.panic;
-  const top = `<div class="panic-top"><span class="panic-label">${I.bolt(14)}FASTEST WAY NOW</span><button class="panic-exit" data-action="exit-panic">Exit</button></div>`;
+  const top = `<div class="panic-top"><span class="panic-label">${I.bolt(14)}FASTEST WAY NOW</span><div class="panic-actions">${homeButton()}<button class="panic-exit" data-action="exit-panic">Exit</button></div></div>`;
   if (pm.phase === "answer" && state.plan) {
     const o = findOption(state.plan.recommended_id);
     if (o) {
@@ -1170,7 +1168,7 @@ function navScreen() {
   const n = state.nav, o = n && findOption(n.optionId);
   if (!o) return `${navbar("Home")}<div class="scroll"><div class="empty-card"><div class="empty-icon">${I.route(24)}</div><h3>No route to follow</h3><p>Choose an option with directions first.</p></div></div>`;
   return `<div class="nav-map" data-map="__nav"><div class="skeleton map-skeleton" role="status" aria-label="Loading map"></div></div>
-    <div class="nav-top"><div data-nav-banner>${navBannerHtml()}</div><div class="nav-stack" data-nav-notices>${navNoticesHtml()}</div></div>
+    <div class="nav-top"><div class="nav-top-row"><div data-nav-banner>${navBannerHtml()}</div>${homeButton()}</div><div class="nav-stack" data-nav-notices>${navNoticesHtml()}</div></div>
     <div class="nav-fabs" data-nav-fabs>${navFabsHtml()}</div>
     <div class="visually-hidden" aria-live="polite" data-nav-say></div>
     <div class="nav-sheet${n.sheetOpen ? " open" : ""}" data-nav-sheet>
@@ -1597,7 +1595,7 @@ function rideFormSheet() {
   const p = state.plan;
   const driveCost = p?.baseline?.cost;
   return `<div class="grabber"><span></span></div>
-    <div class="sheet-head"><h3 id="sheet-title">Share a ride</h3><button class="icon-btn" data-action="close-sheet" aria-label="Close">${I.x(18)}</button></div>
+    <div class="sheet-head"><h3 id="sheet-title">Share a ride</h3>${sheetClose()}</div>
     <div class="sheet-scroll"><div class="form-stack" id="ride-form">
       ${segmented("ride_kind", state.rideKind || "car", [["car", "I have a car"], ["uber", "Split an Uber"]], "ride-kind")}
       <div class="form-pair"><label>First name or nickname<input name="nickname" maxlength="24" required></label>
@@ -1621,7 +1619,7 @@ function placeFoot() {
 function placeSheet() {
   const d = state.placeDraft;
   return `<div class="grabber"><span></span></div>
-    <div class="sheet-head"><h3 id="sheet-title">${d.isNew ? "Add a place" : "Edit place"}</h3><button class="icon-btn" data-action="close-sheet" aria-label="Close">${I.x(18)}</button></div>
+    <div class="sheet-head"><h3 id="sheet-title">${d.isNew ? "Add a place" : "Edit place"}</h3>${sheetClose()}</div>
     <div class="sheet-scroll">
       <p class="hint" style="margin-bottom:16px">Give it a short name, like Gym or Mum's, and find its address. It will sit next to Home and Work/Uni when you plan a trip or tap Journey disrupted?.</p>
       <div class="group"><div class="group-card">
@@ -1693,7 +1691,7 @@ function alertsBody() {
 
 function alertsSheet() {
   return `<div class="grabber"><span></span></div>
-    <div class="sheet-head"><h3 id="sheet-title">Translink alerts</h3><button class="icon-btn" data-action="close-sheet" aria-label="Close">${I.x(18)}</button></div>
+    <div class="sheet-head"><h3 id="sheet-title">Translink alerts</h3>${sheetClose()}</div>
     <div class="sheet-scroll">
       <div class="group"><div class="group-card"><div class="row field-row"><span class="chev">${I.search(18)}</span><input type="text" data-alert-query value="${esc(state.alertQuery || "")}" placeholder="Filter by line, e.g. 412" aria-label="Filter alerts by line"></div></div></div>
       <div data-alert-results>${alertsBody()}</div>
@@ -1711,7 +1709,7 @@ function settingsContent() {
   const fuelPreview = state.fuelLoading ? `<div class="row" role="status" aria-label="Checking fuel prices"><div class="skel-stack" style="flex:1"><div class="skeleton skel-line w-60"></div><div class="skeleton skel-line sm w-80"></div></div></div>`
     : `<div class="row"><span class="row-label">${state.fuelPreview ? `Now about <b>$${state.fuelPreview.price.toFixed(2)}/L</b><small>Average of ${state.fuelPreview.stations} stations nearby · ${googleMapsAttribution()}</small>` : "Checked near your start point when you search"}</span></div>`;
   return `
-    ${navbar(null, `<button class="nav-action" data-action="close-settings">Done</button>`)}
+    ${navbar(null, `${homeIfAway()}<button class="nav-action" data-action="close-settings">Done</button>`)}
     <div class="settings-scroll">
       <p class="eyebrow">Preferences</p>
       <h2 class="large-title">Settings</h2>
@@ -1813,7 +1811,6 @@ function openSettings() {
   settingsEl.innerHTML = `<div class="settings-panel" role="dialog" aria-modal="true" aria-label="Settings">${settingsContent()}</div>`;
   enhanceClear(settingsEl);
   viewport.appendChild(settingsEl);
-  updateHomeShortcut();
   requestAnimationFrame(() => requestAnimationFrame(() => settingsEl?.classList.add("open")));
   settingsEl.querySelector(".nav-action").focus({ preventScroll: true });
   if (settings.fuel_price_mode === "auto" && !state.fuelPreview) previewFuel();
@@ -1830,7 +1827,6 @@ function closeSettings() {
   if (!settingsEl) return;
   const el = settingsEl;
   settingsEl = null;
-  updateHomeShortcut();
   el.classList.remove("open");
   setTimeout(() => el.remove(), 360);
   rerender();
@@ -1894,7 +1890,6 @@ function navigate(screen, direction = "forward", syncUrl = true) {
   if (direction === "forward" || direction === "up") state.stack.push(screen);
   else { while (state.stack.length > 1 && state.stack[state.stack.length - 1] !== screen) state.stack.pop(); if (state.stack[state.stack.length - 1] !== screen) state.stack = [screen]; }
   state.screen = screen;
-  updateHomeShortcut();
   const incoming = makePage(screen);
   const outgoing = currentPage;
   const inCls = { forward: "in-forward", back: "in-back", up: "in-up", down: "in-back" }[direction];
@@ -2189,7 +2184,6 @@ function openSheet(html) {
   sheetEl.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">${html}</div>`;
   enhanceClear(sheetEl);
   viewport.appendChild(sheetEl);
-  updateHomeShortcut();
   requestAnimationFrame(() => requestAnimationFrame(() => sheetEl?.classList.add("open")));
   mountMaps(sheetEl);
   sheetEl.querySelector(".icon-btn")?.focus({ preventScroll: true });
@@ -2200,7 +2194,6 @@ function closeSheet(immediate = false) {
   collapseExpanded();
   const el = sheetEl;
   sheetEl = null;
-  updateHomeShortcut();
   if (immediate) { el.remove(); cleanMaps(); return; }
   el.classList.remove("open");
   setTimeout(() => { el.remove(); cleanMaps(); }, 320);
@@ -2441,7 +2434,7 @@ const actions = {
   "open-sheet": (el) => { const o = findOption(el.dataset.id); if (o) { openSheet(sheetContent(o)); sheetEl.dataset.option = o.id; } },
   "close-sheet": () => closeSheet(),
   backdrop: (el, event) => { if (event.target === el) closeSheet(); },
-  "map-overview": () => openSheet(`<div class="grabber"><span></span></div><div class="sheet-head"><h3 id="sheet-title">All routes</h3><button class="icon-btn" data-action="close-sheet" aria-label="Close">${I.x(18)}</button></div><div class="sheet-scroll">${mapBlock("__all", "The first option in the list is drawn strongest. Tap a line for details.")}</div>`),
+  "map-overview": () => openSheet(`<div class="grabber"><span></span></div><div class="sheet-head"><h3 id="sheet-title">All routes</h3>${sheetClose()}</div><div class="sheet-scroll">${mapBlock("__all", "The first option in the list is drawn strongest. Tap a line for details.")}</div>`),
   choose: (el) => {
     state.chosenId = el.dataset.id;
     const o = findOption(state.chosenId);
@@ -2804,7 +2797,7 @@ function demoSheet() {
   const group = (name, label, hint = "") => `<div class="opt-group"><p>${label}</p><div class="opt-chips" role="group" aria-label="${label}">${DEMO_CHOICES[name].map(([v, l]) => `<button class="chip" data-action="demo-set" data-name="${name}" data-value="${v}" aria-pressed="${String(d[name]) === String(v)}">${esc(l)}</button>`).join("")}</div>${hint ? `<p class="fine" style="margin-top:8px">${hint}</p>` : ""}</div>`;
   const push = state.demoPush;
   return `<div class="grabber"><span></span></div>
-    <div class="sheet-head"><h3 id="sheet-title">Demo mode</h3><button class="icon-btn" data-action="close-sheet" aria-label="Close">${I.x(18)}</button></div>
+    <div class="sheet-head"><h3 id="sheet-title">Demo mode</h3>${sheetClose()}</div>
     <div class="sheet-scroll">
       <div class="group demo-master"><div class="group-card"><div class="row"><span class="row-icon" style="--tone:var(--accent)">${I.flask(18)}</span><span class="row-label">Demo mode<small>Simulate conditions for a walkthrough. Every simulated value is labelled "Simulated".</small></span>${toggle("demo.on", d.on, "Demo mode")}</div></div></div>
       ${d.on ? `
@@ -2866,7 +2859,7 @@ function shareSheet() {
   const url = state.status?.public_url || location.origin;
   const local = /^(localhost|127\.|\[::1\])/.test(location.hostname) && !state.status?.public_url;
   return `<div class="grabber"><span></span></div>
-    <div class="sheet-head"><h3 id="sheet-title">Share Reroute</h3><button class="icon-btn" data-action="close-sheet" aria-label="Close">${I.x(18)}</button></div>
+    <div class="sheet-head"><h3 id="sheet-title">Share Reroute</h3>${sheetClose()}</div>
     <div class="sheet-scroll">
       <p class="hint" style="margin-bottom:20px">Scan with a phone camera to open Reroute, then add it to the home screen.</p>
       <div class="qr-card"><img src="/qr.svg" alt="QR code that opens Reroute at ${esc(url)}" loading="lazy" width="244" height="244" onload="this.parentElement.classList.add('ready')" onerror="this.parentElement.classList.add('ready')"></div>
@@ -2895,7 +2888,7 @@ const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.
 const canInstall = () => !standalone() && (!!state.installEvent || isIos());
 function installSheet() {
   return `<div class="grabber"><span></span></div>
-    <div class="sheet-head"><h3 id="sheet-title">Install Reroute</h3><button class="icon-btn" data-action="close-sheet" aria-label="Close">${I.x(18)}</button></div>
+    <div class="sheet-head"><h3 id="sheet-title">Install Reroute</h3>${sheetClose()}</div>
     <div class="sheet-scroll">
       <p class="hint" style="margin-bottom:20px">Add Reroute to your Home Screen to open it like an app and to get background disruption alerts.</p>
       <ol class="install-steps">
@@ -3010,7 +3003,6 @@ function openAlternatives(id) {
 
 async function boot() {
   applyTheme();
-  updateHomeShortcut();
   renderDemoPill();
   rerender();
   if ("serviceWorker" in navigator) {
