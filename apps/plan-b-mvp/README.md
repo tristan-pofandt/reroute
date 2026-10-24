@@ -224,3 +224,9 @@ The [interview scenario](demo.html) starts at a fictional 8:20 am Bus 412 cancel
 | Rideshare | 22 min | 8:42 am | $18 | 2 min | Walk 2, wait 4, drive 16 min |
 
 These scenario values are invented, not current fares, service availability, pickup times or mapped directions. The $0 waiting option assumes no added payment in the exercise. Its arrival estimate includes the final walk to the destination.
+
+## Saved journeys
+
+Choose a route and select **Save journey for offline viewing**, then name it. Open **Saved journeys** from Home to expand saved steps or delete a journey. Up to 20 text snapshots are stored only in this browser, including their save time, original arrival estimate and simulation label. Clearing browser data removes them. Maps and live updates are not saved. Open the app online first so its service worker can cache the shell; offline reopening requires that cache and a supported secure origin. Saved services and arrival estimates must be checked again before travel.
+
+User evaluation protocol: [offline journeys test card](../../docs/discovery/experiments/test%20cards/test-card-offline-journeys.md). Participant testing remains pending.
