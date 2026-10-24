@@ -602,6 +602,7 @@ function homeScreen() {
         <div class="home-actions">${profileButton()}</div>
       </div>
       ${homeHero(alerts.length)}
+      <button class="btn btn-secondary" data-action="go" data-screen="backups">Saved journeys · offline steps</button>
       <button class="interactive-element primary trip-btn" data-action="start" data-purpose="regular">
         <span class="trip-icon">${I.route(24)}</span>
         <span class="trip-text"><strong>Plan a trip</strong><small>Everyday routes, public transport first</small></span>
@@ -1149,6 +1150,7 @@ function nextScreen() {
         </div>
       </div>
       ${impactPanel(o, logged)}
+      <button class="btn btn-secondary" data-action="save-backup">Save journey for offline viewing</button>
       ${o.weather_warning ? notice(`<b>Weather:</b> ${esc(o.weather_warning)}${state.plan.weather?.simulated ? " (Simulated)" : ""}`) : ""}
       ${o.traffic?.closure ? notice("<b>Road closure on this route.</b> Check the closure before you leave.", "error") : o.traffic?.added_delay_min ? notice(`<b>Traffic incidents:</b> about ${o.traffic.added_delay_min} min added${o.traffic.source === "Simulated" ? " (Simulated)" : ""}.`) : ""}
       <div class="actions">
@@ -2242,7 +2244,51 @@ function applyTheme() {
 // Rendering, navigation, sheets and maps
 // ══════════════════════════════════════════════════════════════════════════════
 
-const SCREENS = { home: homeScreen, journey: journeyScreen, results: resultsScreen, next: nextScreen, panic: panicScreen, nav: navScreen, dashboard: dashboardScreen, rides: ridesScreen, weather: weatherScreen, terms: termsScreen, privacy: privacyScreen, sources: sourcesScreen };
+
+// Offline journeys store text snapshots only; opening them never requests routing or maps.
+const BACKUP_KEY = "planb.backupJourneys.v1";
+function readBackups() {
+  try {
+    const value = JSON.parse(localStorage.getItem(BACKUP_KEY) || "[]");
+    return Array.isArray(value) ? value.filter(j => j && typeof j.id === "string" && typeof j.title === "string" && Array.isArray(j.steps)).slice(0, 20) : [];
+  } catch { return []; }
+}
+function writeBackups(journeys) {
+  try { localStorage.setItem(BACKUP_KEY, JSON.stringify(journeys)); return true; }
+  catch { toast("Could not save changes. Browser storage is unavailable or full.", "warning"); return false; }
+}
+function saveBackup() {
+  const o = findOption(state.chosenId);
+  if (!o) return;
+  const journeys = readBackups();
+  if (journeys.length >= 20) return toast("You can save 20 journeys. Delete one first.", "warning");
+  const title = prompt("Name this saved journey", o.title);
+  if (title === null) return;
+  if (!title.trim()) return toast("Enter a journey name.", "warning");
+  const snapshot = {
+    id: crypto.randomUUID(), title: title.trim().slice(0, 100), savedAt: new Date().toISOString(),
+    origin: state.form.origin, destination: state.form.destination,
+    arrival: o.arrival, simulated: demoOn() || anySimulated(o),
+    steps: (o.steps || []).map(step => ({ title: String(step.title || ""), minutes: step.minutes, board: step.board_time || "" }))
+  };
+  if (!snapshot.steps.length) return toast("This option has no steps to save.", "warning");
+  if (writeBackups([snapshot, ...journeys])) toast("Journey saved. Open Saved journeys from Home to view its steps offline.");
+}
+function backupsScreen() {
+  const journeys = readBackups();
+  return navbar(true) + '<div class="scroll"><h2>Saved journeys</h2>'
+    + notice("Saved snapshots, not live directions. Check current services before travelling. Maps and live updates need internet. Open Reroute online once to cache the app before using it offline.")
+    + '<p class="hint">Stored only in this browser. Clearing browser data removes these journeys. Up to 20 journeys.</p>'
+    + (journeys.length ? journeys.map(j => '<details class="group"><summary class="row">' + esc(j.title) + '</summary><div class="group-card" style="padding:16px">'
+      + '<p>' + esc(j.origin || "") + ' → ' + esc(j.destination || "") + '</p>'
+      + '<p class="hint">Saved ' + esc(new Date(j.savedAt).toLocaleString("en-AU")) + (j.simulated ? ' · Simulated journey' : '') + '</p>'
+      + '<p>Original estimated arrival: ' + esc(j.arrival ? new Date(j.arrival).toLocaleString("en-AU") : 'Unknown') + ' — not a current estimate.</p>'
+      + '<ol>' + j.steps.filter(step => step && typeof step.title === "string").map(step => '<li>' + esc(step.title) + (step.minutes ? ' · ' + esc(String(step.minutes)) + ' min' : '') + (step.board ? ' · Saved boarding time: ' + esc(step.board) : '') + '</li>').join('') + '</ol>'
+      + '<button class="btn btn-secondary" data-action="delete-backup" data-id="' + esc(j.id) + '">Delete journey</button></div></details>').join('')
+      : '<p>No saved journeys yet. Choose a route, then select “Save journey for offline viewing”.</p>') + '</div>';
+}
+
+const SCREENS = { backups: backupsScreen, home: homeScreen, journey: journeyScreen, results: resultsScreen, next: nextScreen, panic: panicScreen, nav: navScreen, dashboard: dashboardScreen, rides: ridesScreen, weather: weatherScreen, terms: termsScreen, privacy: privacyScreen, sources: sourcesScreen };
 const pageClass = (screen) => `page${screen === "panic" || screen === "nav" ? ` ${screen}` : ""}`;
 const viewport = document.getElementById("viewport");
 const app = document.getElementById("app");
@@ -2889,6 +2935,8 @@ function setPath(object, path, value) {
 }
 
 const actions = {
+  "save-backup": saveBackup,
+  "delete-backup": (el) => { if (confirm("Delete this saved journey?")) { if (writeBackups(readBackups().filter(j => j.id !== el.dataset.id))) rerender(); } },
   back: goBack,
   // Straight home from any screen: closes sheets and Settings, stops live directions (watcher, timer, wake lock) and forgets a finished panic answer.
   "go-home": () => {
