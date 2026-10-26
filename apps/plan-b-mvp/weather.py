@@ -1,6 +1,6 @@
 """Open-Meteo forecasts (no key) and the "bad weather" rules used for walking warnings.
 
-A forecast is cached for ten minutes per roughly 1 km cell. Every failure returns None so the app keeps working
+A forecast (with the next hour's rain in 15-minute steps for the radar) is cached for ten minutes per roughly 1 km cell. Every failure returns None so the app keeps working
 without weather. Demo mode can replace the forecast with a clearly flagged simulated one.
 """
 
@@ -19,6 +19,12 @@ HOURLY = "temperature_2m,apparent_temperature,precipitation_probability,precipit
 CURRENT = "temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,is_day,relative_humidity_2m,wind_direction_10m"
 DAILY = ("weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,"
          "wind_gusts_10m_max,wind_direction_10m_dominant,uv_index_max,sunrise,sunset")
+# The next hour's predicted rain for the radar, in 15-minute steps. Open-Meteo's 15-minute data is native only in Central Europe and North
+# America; for Australia it is interpolated from hourly model data. It is a model forecast, not radar.
+MINUTELY = "precipitation,precipitation_probability"
+MINUTELY_STEPS = 8  # two hours of 15-minute steps, so the next hour is still covered while a cached answer ages for 10 minutes
+NEXT_HOUR_STEPS = 4
+WET_MM = 0.1  # the smallest amount Open-Meteo reports for 15 minutes
 COMPASS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
 
 LABELS = {0: "Clear sky", 1: "Mostly clear", 2: "Partly cloudy", 3: "Overcast", 45: "Fog", 48: "Freezing fog",
@@ -159,8 +165,45 @@ def compass(degrees):
     return COMPASS[round((degrees % 360) / 45) % 8]
 
 
+def _series_value(series, index):
+    return series[index] if series and index < len(series) else None
+
+
+def next_hour(raw, now=None):
+    """The next hour's predicted rain (a model forecast, not radar): up to four 15-minute steps, each the rain in the 15 minutes up to its
+    end time, from Open-Meteo's minutely_15 data. Without that data it falls back to the next hourly step. None when neither is present."""
+    now = now or datetime.now(BRISBANE)
+    minutely = raw.get("minutely_15") or {}
+    steps, minutes = [], 15
+    for index, stamp in enumerate(minutely.get("time") or []):
+        end = _hour(stamp)
+        mm = _series_value(minutely.get("precipitation"), index)
+        if end <= now or mm is None:
+            continue
+        steps.append({"start": (end - timedelta(minutes=15)).isoformat(), "end": end.isoformat(), "precip_mm": mm,
+                      "precip_prob": _series_value(minutely.get("precipitation_probability"), index)})
+        if len(steps) == NEXT_HOUR_STEPS:
+            break
+    if not steps:
+        hourly, minutes = raw.get("hourly") or {}, 60
+        for index, stamp in enumerate(hourly.get("time") or []):
+            end = _hour(stamp)
+            mm = _series_value(hourly.get("precipitation"), index)
+            if end > now and mm is not None:
+                steps = [{"start": (end - timedelta(hours=1)).isoformat(), "end": end.isoformat(), "precip_mm": mm,
+                          "precip_prob": _series_value(hourly.get("precipitation_probability"), index)}]
+                break
+    if not steps:
+        return None
+    chances = [step["precip_prob"] for step in steps if step["precip_prob"] is not None]
+    wet = next((step for step in steps if step["precip_mm"] >= WET_MM), None)
+    return {"steps": steps, "step_minutes": minutes, "total_mm": round(sum(step["precip_mm"] for step in steps), 1),
+            "max_prob": max(chances) if chances else None, "rain_from": wet["start"] if wet else None,
+            "interpolated": True, "source": "Open-Meteo model forecast"}
+
+
 def detail(raw, now=None):
-    """The weather page: the home widget's object plus humidity, wind direction, the next 24 hours and up to 7 days."""
+    """The weather page: the home widget's object plus humidity, wind direction, the next 24 hours, up to 7 days and the next hour's rain."""
     now = now or datetime.now(BRISBANE)
     base = build(raw, None, now)
     if base is None:
@@ -196,7 +239,7 @@ def detail(raw, now=None):
     current["humidity"] = cur.get("relative_humidity_2m")
     current["wind_dir"] = cur.get("wind_direction_10m")
     current["wind_from"] = compass(cur.get("wind_direction_10m"))
-    return {**base, "current": current, "hourly": hourly, "days": days}
+    return {**base, "current": current, "hourly": hourly, "days": days, "next_hour": next_hour(raw, now)}
 
 
 def simulate_detail(kind, now=None):
@@ -213,7 +256,12 @@ def simulate_detail(kind, now=None):
              "wind_kmh": preset["wind"], "gust_kmh": preset["gust"], "wind_dir": 135, "wind_from": "SE", "uv": 8, "sunrise": None, "sunset": None}
             for offset in range(7)]
     current = {**base["current"], "humidity": 85 if preset["prob"] >= 50 else 50, "wind_dir": 135, "wind_from": "SE"}
-    return {**base, "current": current, "hourly": hourly, "days": days}
+    quarter = now.replace(minute=now.minute - now.minute % 15, second=0, microsecond=0)
+    steps = [{"start": (quarter + timedelta(minutes=15 * offset)).isoformat(), "end": (quarter + timedelta(minutes=15 * (offset + 1))).isoformat(),
+              "precip_mm": round(preset["mm"] / 4, 1), "precip_prob": preset["prob"]} for offset in range(NEXT_HOUR_STEPS)]
+    soon = {"steps": steps, "step_minutes": 15, "total_mm": round(sum(step["precip_mm"] for step in steps), 1), "max_prob": preset["prob"],
+            "rain_from": steps[0]["start"] if steps[0]["precip_mm"] >= WET_MM else None, "interpolated": False, "source": "Simulated"}
+    return {**base, "current": current, "hourly": hourly, "days": days, "next_hour": soon}
 
 
 def public(weather):
@@ -245,7 +293,8 @@ class Weather:
             if hit and not force and self._clock() - hit[0] < CACHE_SECONDS:
                 return hit[1]
         query = urlencode({"latitude": f"{lat:.3f}", "longitude": f"{lng:.3f}", "current": CURRENT, "hourly": HOURLY, "daily": DAILY,
-                           "forecast_days": 7, "timezone": "Australia/Brisbane", "wind_speed_unit": "kmh"})
+                           "minutely_15": MINUTELY, "forecast_minutely_15": MINUTELY_STEPS, "forecast_days": 7, "timezone": "Australia/Brisbane",
+                           "wind_speed_unit": "kmh"})
         try:
             data = self._fetch(f"{URL}?{query}")
         except (URLError, TimeoutError, OSError, ValueError):

@@ -153,6 +153,55 @@ class WeatherPageTests(unittest.TestCase):
         self.assertIsNone(Weather(fetch=lambda url: {"unexpected": 1}).details(-27.47, 153.02, now=NOW))
 
 
+def with_minutely(raw, mm=(0.0, 0.0, 0.3, 0.6, 0.2, 0.0, 0.0, 0.0), prob=(10, 15, 40, 55, 50, 30, 20, 10), start="2026-10-21T08:00"):
+    """Adds Open-Meteo minutely_15 series: eight 15-minute steps from `start`, each the rain in the 15 minutes up to its time."""
+    first = datetime.fromisoformat(start)
+    raw["minutely_15"] = {"time": [(first + timedelta(minutes=15 * n)).strftime("%Y-%m-%dT%H:%M") for n in range(len(mm))],
+                          "precipitation": list(mm), "precipitation_probability": list(prob)}
+    return raw
+
+
+class NextHourRainTests(unittest.TestCase):
+    def test_the_next_four_quarter_hours_after_now(self):
+        result = weather.next_hour(with_minutely(forecast(hours=48)), now=NOW)  # 8:10, so the 8:00 step (7:45 to 8:00) is past
+        self.assertEqual([s["end"] for s in result["steps"]], ["2026-10-21T08:15:00+10:00", "2026-10-21T08:30:00+10:00", "2026-10-21T08:45:00+10:00", "2026-10-21T09:00:00+10:00"])
+        self.assertEqual(result["steps"][0], {"start": "2026-10-21T08:00:00+10:00", "end": "2026-10-21T08:15:00+10:00", "precip_mm": 0.0, "precip_prob": 15})
+        self.assertEqual((result["total_mm"], result["max_prob"], result["rain_from"], result["step_minutes"]), (1.1, 55, "2026-10-21T08:15:00+10:00", 15))
+        self.assertEqual((result["interpolated"], result["source"]), (True, "Open-Meteo model forecast"))
+
+    def test_a_dry_hour_has_no_rain_start(self):
+        result = weather.next_hour(with_minutely(forecast(hours=48), mm=(0.0,) * 8, prob=(0,) * 8), now=NOW)
+        self.assertEqual((result["total_mm"], result["max_prob"], result["rain_from"]), (0.0, 0, None))
+
+    def test_missing_values_are_skipped_and_probability_is_optional(self):
+        raw = with_minutely(forecast(hours=48), mm=(0.0, None, 0.4, 0.0, 0.0, 0.0, 0.0, 0.0))
+        del raw["minutely_15"]["precipitation_probability"]
+        result = weather.next_hour(raw, now=NOW)
+        self.assertEqual(len(result["steps"]), 4)
+        self.assertEqual(result["steps"][0]["end"], "2026-10-21T08:30:00+10:00")
+        self.assertEqual((result["steps"][0]["precip_prob"], result["max_prob"]), (None, None))
+
+    def test_without_15_minute_data_the_next_hourly_step_is_used(self):
+        result = weather.next_hour(forecast(prob=35, mm=0.4, hours=48), now=NOW)
+        self.assertEqual((result["step_minutes"], len(result["steps"])), (60, 1))
+        self.assertEqual(result["steps"][0], {"start": "2026-10-21T08:00:00+10:00", "end": "2026-10-21T09:00:00+10:00", "precip_mm": 0.4, "precip_prob": 35})
+        self.assertIsNone(weather.next_hour({"hourly": {"time": []}}, now=NOW))
+
+    def test_detail_includes_the_next_hour_and_the_request_asks_for_it(self):
+        result = weather.detail(with_minutely(with_days(forecast(hours=48))), now=NOW)
+        self.assertEqual(len(result["next_hour"]["steps"]), 4)
+        urls = []
+        Weather(fetch=lambda url: urls.append(url) or with_days(forecast(hours=48))).details(-27.47, 153.02, now=NOW)
+        self.assertIn("minutely_15=precipitation%2Cprecipitation_probability", urls[0])
+        self.assertIn("forecast_minutely_15=8", urls[0])
+
+    def test_simulated_next_hour_is_flagged_and_follows_the_preset(self):
+        storm = weather.simulate_detail("storm", now=NOW)["next_hour"]
+        self.assertEqual((storm["source"], storm["interpolated"], storm["steps"][0]["start"], storm["steps"][0]["precip_mm"]), ("Simulated", False, "2026-10-21T08:00:00+10:00", 2.2))
+        self.assertEqual(storm["rain_from"], "2026-10-21T08:00:00+10:00")
+        self.assertIsNone(weather.simulate_detail("clear", now=NOW)["next_hour"]["rain_from"])
+
+
 class WeatherClientTests(unittest.TestCase):
     def test_forecast_is_cached_for_ten_minutes_per_kilometre_cell(self):
         calls, clock = [], [0.0]

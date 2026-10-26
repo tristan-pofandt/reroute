@@ -160,6 +160,10 @@ class ReadOnlyRouteTests(unittest.TestCase):
         self.assertNotIn("kind", live)
         demo = client.get("/api/weather?lat=-27.47&lng=153.03&detail=1&demo=heat").get_json()
         self.assertEqual((demo["simulated"], len(demo["days"])), (True, 7))
+        self.assertEqual((len(demo["next_hour"]["steps"]), demo["next_hour"]["source"], demo["next_hour"]["rain_from"]), (4, "Simulated", None))
+        rain = client.get("/api/weather?lat=-27.47&lng=153.03&detail=1&demo=rain").get_json()["next_hour"]
+        self.assertEqual((rain["steps"][0]["precip_mm"], rain["max_prob"]), (1.1, 90))
+        self.assertIsNotNone(rain["rain_from"])
         self.assertNotIn("hourly", client.get("/api/weather?lat=-27.47&lng=153.03").get_json())
 
     def test_place_lookup_for_the_map_picker(self):
@@ -177,19 +181,40 @@ class ReadOnlyRouteTests(unittest.TestCase):
         _, keyless = make_app(key=None)
         self.assertEqual(keyless.get("/api/place?id=ChIJ1234567890").status_code, 503)
 
-    def test_place_details_reads_googles_answer_and_asks_for_only_four_fields(self):
+    def test_place_details_reads_googles_answer_and_asks_for_six_pro_fields(self):
         seen = {}
 
         def fake_get(url, timeout=15, headers=None):
             seen.update(url=url, headers=headers)
             return {"id": "ChIJabcdefghij", "displayName": {"text": "Great Court"}, "formattedAddress": "St Lucia QLD 4067, Australia",
-                    "location": {"latitude": -27.4975, "longitude": 153.0137}}
+                    "location": {"latitude": -27.4975, "longitude": 153.0137},
+                    "iconMaskBaseUri": "https://maps.gstatic.com/mapfiles/place_api/icons/v2/school_pinlet", "iconBackgroundColor": "#7b9eb0"}
 
         with patch.object(server.google_api, "_get_json", fake_get):
             found = server.google_api.place_details("k", "ChIJabcdefghij")
-        self.assertEqual(found, {"place_id": "ChIJabcdefghij", "name": "Great Court", "address": "St Lucia QLD 4067, Australia", "location": [-27.4975, 153.0137]})
-        self.assertEqual(seen["headers"]["X-Goog-FieldMask"], "id,displayName,formattedAddress,location")
+        self.assertEqual(found, {"place_id": "ChIJabcdefghij", "name": "Great Court", "address": "St Lucia QLD 4067, Australia", "location": [-27.4975, 153.0137],
+                                 "icon": {"mask": "https://maps.gstatic.com/mapfiles/place_api/icons/v2/school_pinlet.svg", "background": "#7B9EB0"}})
+        self.assertEqual(seen["headers"]["X-Goog-FieldMask"], "id,displayName,formattedAddress,location,iconMaskBaseUri,iconBackgroundColor")
         self.assertTrue(seen["url"].startswith("https://places.googleapis.com/v1/places/ChIJabcdefghij?"))
+
+    def test_place_icon_is_dropped_unless_it_is_a_google_glyph_and_a_hex_colour(self):
+        glyph = "https://maps.gstatic.com/mapfiles/place_api/icons/v2/cafe_pinlet"
+        icon = server.google_api._place_icon
+        self.assertEqual(icon({"iconMaskBaseUri": glyph, "iconBackgroundColor": "#FF9E67"}), {"mask": f"{glyph}.svg", "background": "#FF9E67"})
+        self.assertIsNone(icon({}))
+        self.assertIsNone(icon({"iconMaskBaseUri": glyph}))
+        self.assertIsNone(icon({"iconMaskBaseUri": "https://example.com/icons/cafe_pinlet", "iconBackgroundColor": "#FF9E67"}))
+        self.assertIsNone(icon({"iconMaskBaseUri": "javascript:alert(1)", "iconBackgroundColor": "#FF9E67"}))
+        self.assertIsNone(icon({"iconMaskBaseUri": glyph, "iconBackgroundColor": "red;background:url(x)"}))
+        self.assertIsNone(icon({"iconMaskBaseUri": f"{glyph}.png", "iconBackgroundColor": "#FF9E67"}))
+
+    def test_place_details_without_icon_fields_still_works(self):
+        def fake_get(url, timeout=15, headers=None):
+            return {"id": "ChIJabcdefghij", "displayName": {"text": "Somewhere"}, "location": {"latitude": -27.5, "longitude": 153.0}}
+
+        with patch.object(server.google_api, "_get_json", fake_get):
+            found = server.google_api.place_details("k", "ChIJnoiconhere")
+        self.assertEqual((found["name"], found["icon"]), ("Somewhere", None))
 
     def test_weather_unavailable_is_a_502_with_a_message(self):
         class Down:

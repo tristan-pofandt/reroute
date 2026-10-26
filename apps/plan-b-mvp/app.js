@@ -682,8 +682,8 @@ function privacyScreen() {
     <p>If you post or join a shared ride, the server stores a nickname, broad start and destination labels, coordinates rounded to about 100 metres, departure time, meeting point, optional note, seat and cost details, and random membership tokens. Posts are visible to users of the same server and are removed about 30 minutes after their departure time; people who join a post add a nickname. If you enable background disruption alerts, the server stores your browser push endpoint and encryption keys with the watched trip: its start and destination text, the destination place ID, the deadline, line names, route IDs, a label and an expiry (at most 24 hours). These records are stored in the server's data directory; the server operator can access them. Unsubscribe in the app to remove a push subscription.</p>
     <h2>Third-party services</h2>
     <ul>
-      <li><b>Google Maps Platform:</b> the server sends route endpoints, the departure time and the travel mode (public transport, driving, cycling) to the Routes API; toll estimates are only requested when your own car is switched on. It sends partial typed addresses, a random autocomplete session token and an approximate location bias to Places, the Google place ID of a place you tap on the map (to look up its name and address), coordinates near the trip endpoints for fuel and car-park searches, and sampled walking coordinates to Google Elevation when enabled.</li>
-      <li><b>Google Maps JavaScript (the map):</b> your browser loads the map script and map tiles directly from Google using a browser map key that the Reroute server hands to every visitor. Google receives your IP address, browser details, this site's address and the area of the map you view, and may use its own cookies or similar technologies. Opening a Google Maps or Uber link sends the relevant trip places or coordinates to that service.</li>
+      <li><b>Google Maps Platform:</b> the server sends route endpoints, the departure time and the travel mode (public transport, driving, cycling) to the Routes API; toll estimates are only requested when your own car is switched on. It sends partial typed addresses, a random autocomplete session token and an approximate location bias to Places, the Google place ID of a place you tap on the map (to look up its name, address and category icon), coordinates near the trip endpoints for fuel and car-park searches, and sampled walking coordinates to Google Elevation when enabled.</li>
+      <li><b>Google Maps JavaScript (the map):</b> your browser loads the map script and map tiles directly from Google using a browser map key that the Reroute server hands to every visitor. Google receives your IP address, browser details, this site's address and the area of the map you view, and may use its own cookies or similar technologies. When you tap a place in Choose on map, your browser also loads that place's category icon from Google (maps.gstatic.com). Opening a Google Maps or Uber link sends the relevant trip places or coordinates to that service.</li>
       <li><b>RainViewer (rain radar):</b> on the weather page your browser downloads radar images directly from RainViewer (api.rainviewer.com and tilecache.rainviewer.com). RainViewer receives your IP address, browser details and which map area you view. Reroute sends it nothing else.</li>
       <li><b>Lime and Neuron:</b> the hire buttons open the Apple App Store, Google Play or the operator's website. Reroute sends no trip details to Lime or Neuron; those sites and apps have their own privacy policies.</li>
       <li><b>Translink:</b> the server downloads public schedule and live alert, delay and vehicle feeds. It does not send your trip details to Translink.</li>
@@ -705,11 +705,11 @@ function sourcesScreen() {
     <p class="eyebrow">About this prototype</p><h1 class="large-title">About / Data Sources</h1>
     <p class="subtitle">Reroute is a student prototype for comparing journey options and responding to disruptions. It is not an official Translink or Queensland Government service.</p>
     <div class="group"><div class="group-card">
-      <div class="row"><span class="row-label"><b>Google Maps Platform</b><small>Routes (public transport, driving and cycling), places/autocomplete, the name and address of a place you tap when choosing on the map (Place Details), fuel and car-park listings, optional elevation, and the interactive maps (Maps JavaScript API). Google route content is shown on a Google map so Google's own logo and attribution stay visible.</small><a href="https://developers.google.com/maps/documentation/routes/policies" target="_blank" rel="noopener noreferrer">Routes API policies</a> · <a href="https://developers.google.com/maps/documentation/places/web-service/policies" target="_blank" rel="noopener noreferrer">Places policies</a></span></div>
+      <div class="row"><span class="row-label"><b>Google Maps Platform</b><small>Routes (public transport, driving and cycling), places/autocomplete, the name, address and category icon and colour of a place you tap when choosing on the map (Place Details), fuel and car-park listings, optional elevation, and the interactive maps (Maps JavaScript API). Google route content is shown on a Google map so Google's own logo and attribution stay visible.</small><a href="https://developers.google.com/maps/documentation/routes/policies" target="_blank" rel="noopener noreferrer">Routes API policies</a> · <a href="https://developers.google.com/maps/documentation/places/web-service/policies" target="_blank" rel="noopener noreferrer">Places policies</a></span></div>
       <div class="row"><span class="row-label"><b>Translink</b><small>South East Queensland static GTFS schedules and GTFS-Realtime alerts, trip updates and vehicle positions, used to identify route stops and show live disruption/vehicle information. Data is licensed under Creative Commons Attribution 4.0 International (CC BY 4.0).</small><a href="https://translink.com.au/about-translink/open-data" target="_blank" rel="noopener noreferrer">Translink open data and feed links</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a></span></div>
       <div class="row"><span class="row-label"><b>QLDTraffic / Queensland Government</b><small>Public road events are used to flag incidents and estimate additional driving delay. Contains information from the QLDTraffic GeoJSON API dataset, Transport and Main Roads, Queensland Government, licensed under Creative Commons Attribution 4.0 International (CC BY 4.0). The data is provided “as is”. The app requests events from the server without sending trip details.</small><a href="https://www.data.qld.gov.au/dataset/131940-traffic-and-travel-information-geojson-api" target="_blank" rel="noopener noreferrer">QLDTraffic GeoJSON API dataset</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a> · <a href="https://qldtraffic.qld.gov.au/more/Disclaimer/index.html" target="_blank" rel="noopener noreferrer">QLDTraffic disclaimer</a></span></div>
-      <div class="row"><span class="row-label"><b>Open-Meteo</b><small>Weather forecasts for the home widget, the weather page (the next 24 hours and 7 days) and walking warnings; elevation is a fallback when Google Elevation is unavailable. Weather and elevation data are attributed to Open-Meteo and are subject to its applicable terms and CC BY 4.0 attribution requirements.</small><a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a> · <a href="https://open-meteo.com/en/licence" target="_blank" rel="noopener noreferrer">Licence and attribution</a></span></div>
-      <div class="row"><span class="row-label"><b>RainViewer</b><small>The rain radar on the weather page: composite radar for the last two hours, one image every 10 minutes, loaded by your browser. RainViewer's free API is for personal and educational use, serves map zoom levels up to 7 (closer zooms enlarge those images) and does not guarantee availability.</small><a href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a> · <a href="https://www.rainviewer.com/api.html" target="_blank" rel="noopener noreferrer">API terms</a></span></div>
+      <div class="row"><span class="row-label"><b>Open-Meteo</b><small>Weather forecasts for the home widget, the weather page (the next 24 hours and 7 days), the next hour's predicted rain shown after the radar (a model forecast in 15-minute steps that Open-Meteo interpolates from hourly data for Australia, not radar) and walking warnings; elevation is a fallback when Google Elevation is unavailable. Weather and elevation data are attributed to Open-Meteo and are subject to its applicable terms and CC BY 4.0 attribution requirements.</small><a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a> · <a href="https://open-meteo.com/en/licence" target="_blank" rel="noopener noreferrer">Licence and attribution</a></span></div>
+      <div class="row"><span class="row-label"><b>RainViewer</b><small>The rain radar on the weather page: composite radar for the last two hours, one image every 10 minutes, loaded by your browser. RainViewer no longer offers future radar frames on its free API, so the next hour after the radar is Open-Meteo's forecast instead. RainViewer's free API is for personal and educational use, serves map zoom levels up to 7 (closer zooms enlarge those images) and does not guarantee availability.</small><a href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a> · <a href="https://www.rainviewer.com/api.html" target="_blank" rel="noopener noreferrer">API terms</a></span></div>
       <div class="row"><span class="row-label"><b>Lime and Neuron (shared e-scooters and e-bikes)</b><small>Brisbane City Council's shared e-mobility scheme is run by Lime and Neuron. Neither publishes a vehicle or price feed for Brisbane, so Reroute does not show vehicle locations. E-scooter and e-bike hire costs are estimates from assumed prices you can change in Settings, on a Google cycling route at assumed speeds; push-bike time is Google's cycling estimate and the push bike is only offered up to ${PUSH_BIKE_MAX_KM} km. The buttons open each operator's app store listing or website. Check availability, the real price and safe access in their app. The CO₂ shown counts tailpipe emissions only. Reroute is not affiliated with Lime or Neuron.</small><a href="https://www.brisbane.qld.gov.au/transport-and-parking/public-transport/e-mobility" target="_blank" rel="noopener noreferrer">Brisbane City Council e-mobility</a></span></div>
       <div class="row"><span class="row-label"><b>Uber</b><small>The app can open Uber with pickup and drop-off details when you choose that option. It does not query Uber for a fare or availability before opening the link.</small><a href="https://m.uber.com/ul/" target="_blank" rel="noopener noreferrer">Uber universal link</a></span></div>
       <div class="row"><span class="row-label"><b>Google Fonts</b><small>Inter typeface used in the interface.</small><a href="https://fonts.google.com/specimen/Inter" target="_blank" rel="noopener noreferrer">Inter</a></span></div>
@@ -1709,7 +1709,9 @@ const dayName = (date, i) => (i === 0 ? "Today" : new Intl.DateTimeFormat("en-AU
 const localClock = (local) => (local ? timeOf(`${local.slice(0, 16)}:00+10:00`) : "–");
 const uvLabel = (uv) => (uv < 3 ? "Low" : uv < 6 ? "Moderate" : uv < 8 ? "High" : uv < 11 ? "Very high" : "Extreme");
 // Wind direction is where the wind comes from; the arrow points where it blows.
-const windArrow = (deg) => (deg === null || deg === undefined ? "" : `<span class="wind-arrow" style="transform:rotate(${(deg + 180) % 360}deg)" aria-hidden="true">${I.arrowUp(14)}</span>`);
+const windArrow = (deg) => (deg === null || deg === undefined ? "" : `<span class="wind-arrow" style="transform:rotate(${(deg + 180) % 360}deg)" aria-hidden="true">${I.arrowUp(12)}</span>`);
+// The compass direction and its arrow get their own line in the Wind card, so a narrow card never pushes the arrow outside it.
+const windDir = (c) => (c.wind_from ? `<span class="wind-dir">${windArrow(c.wind_dir)}From ${esc(c.wind_from)}</span>` : "");
 const wxStat = (icon, label, value, sub = "") => `<div class="wxp-stat"><span class="wxp-stat-label">${icon}${label}</span><b>${value}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
 
 function weatherTopInner() {
@@ -1727,7 +1729,7 @@ function weatherTopInner() {
     </section>
     ${warn}
     <div class="wxp-stats">
-      ${wxStat(I.wind(14), "Wind", `${Math.round(c.wind_kmh)} km/h${c.wind_from ? ` ${esc(c.wind_from)}` : ""}${windArrow(c.wind_dir)}`, `Gusts ${Math.round(c.gust_kmh)} km/h`)}
+      ${wxStat(I.wind(14), "Wind", `${Math.round(c.wind_kmh)} km/h`, `${windDir(c)}Gusts ${Math.round(c.gust_kmh)} km/h`)}
       ${wxStat(I.droplet(14), "Humidity", c.humidity === null || c.humidity === undefined ? "–" : `${Math.round(c.humidity)}%`)}
       ${wxStat(I.rain(14), "Rain chance", now?.precip_prob === null || now?.precip_prob === undefined ? "–" : `${now.precip_prob}%`, today?.precip_mm ? `${today.precip_mm} mm today` : "No rain expected today")}
       ${wxStat(I.sun(14), "UV index", today?.uv === null || today?.uv === undefined ? "–" : `${Math.round(today.uv)}`, today?.uv === null || today?.uv === undefined ? "" : `${uvLabel(today.uv)} today`)}
@@ -1752,7 +1754,7 @@ function weatherRestInner() {
     <div class="wxp-hours" role="list" aria-label="Next 24 hours">${hours}</div>
     <p class="section-header">Next 7 days</p>
     <div class="group"><div class="group-card">${dayRows}</div></div>
-    <p class="fine">Forecast by <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a> (CC BY 4.0)${d.simulated ? " · Simulated for demo mode" : ` · updated ${timeOf(d.fetched_at)}`}. Rain radar by <a href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a>${demoOn() && d.simulated ? ", which stays live in demo mode" : ""}.</p>`;
+    <p class="fine">Forecast and next-hour rain by <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a> (CC BY 4.0)${d.simulated ? " · Simulated for demo mode" : ` · updated ${timeOf(d.fetched_at)}`}. Rain radar (the past two hours only) by <a href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a>${demoOn() && d.simulated ? ", which stays live in demo mode" : ""}.</p>`;
 }
 const GUST_WARN_KMH = 50; // the same gust limit the server uses for bad-weather warnings
 
@@ -1773,6 +1775,11 @@ function renderWeatherPage() {
   if (eyebrow) eyebrow.innerHTML = `${I.cloud(14)}Weather · ${esc(state.weatherPlace)}${state.weatherDetail?.simulated ? simTag(true) : ""}`;
   setHTML(currentPage.querySelector("[data-wxp-top]"), weatherTopInner());
   setHTML(currentPage.querySelector("[data-wxp-rest]"), weatherRestInner());
+  // The next-hour steps arrive with the forecast, so the time slider gains its forecast steps here (unless it is playing).
+  setHTML(currentPage.querySelector("[data-radar-next]"), nextHourInner());
+  const bar = currentPage.querySelector("[data-radar-bar]");
+  if (bar && !radar.playing && radar.frames.length) bar.innerHTML = radarBarInner();
+  if (radar.frames.length) showRadarFrame(radar.index);
   const entry = radarEntry();
   if (entry && state.weatherAt) { entry.here?.setPosition(toLatLng(state.weatherAt)); if (!entry.moved) entry.map.setCenter(toLatLng(state.weatherAt)); }
 }
@@ -1794,26 +1801,73 @@ async function loadWeatherDetail() {
 // Rain radar: RainViewer's last two hours of composite radar, one frame every 10 minutes. Since 1 January 2026 RainViewer serves tiles
 // only up to zoom 7 and in one colour scheme (Universal Blue), so closer zooms enlarge the zoom-7 tile instead of asking for a missing one.
 // The newest frame shows first; Play loads the older frames (RainViewer allows about 100 tile requests a minute from one address).
+// RainViewer stopped serving future (nowcast) frames to free users on 1 January 2026, so the next hour comes from Open-Meteo instead: its
+// predicted rain in 15-minute steps (a model forecast, interpolated from hourly data for Australia) follows "Latest" on the time slider.
+// During those steps the map keeps the latest radar frame and the bar and the chart below say "Forecast"; model data is never drawn as radar.
 const RADAR_API = "https://api.rainviewer.com/public/weather-maps.json";
 const RADAR_MAX_ZOOM = 7;
 const radar = { host: "", frames: [], index: 0, playing: false, timer: null, error: null, loadedAt: 0 };
+// The next hour's steps that have not ended yet (a forecast kept after a failed refresh, or served offline, can be old).
+const upcomingSteps = () => (state.weatherDetail?.next_hour?.steps || []).filter((s) => Date.parse(s.end) > Date.now())
+  .map((s) => ({ ...s, precip_mm: Number(s.precip_mm) || 0, precip_prob: Number.isFinite(Number(s.precip_prob)) && s.precip_prob !== null ? Math.round(Number(s.precip_prob)) : null }));
+const radarForecast = () => (radar.frames.length ? upcomingSteps() : []);
+const radarCount = () => radar.frames.length + radarForecast().length;
+const radarStep = (i = radar.index) => radarForecast()[i - radar.frames.length] || null;
+const radarPlayLabel = () => (radar.playing ? "Pause the radar" : radarForecast().length ? "Play the last two hours of radar and the next hour's forecast" : "Play the last two hours of radar");
 function radarBlock() {
   return `<div class="map-wrap radar-wrap" data-map-wrap="__radar"><div class="map radar-map" data-map="__radar"><div class="skeleton map-skeleton" role="status" aria-label="Loading the rain radar"></div></div>
+      <span class="radar-fc-tag" data-radar-tag ${radarStep() ? "" : "hidden"}>${I.clock(14)}Forecast · map shows the latest radar</span>
       <div class="map-controls">
         <button data-action="map-zoom" data-delta="1" aria-label="Zoom in">${I.plus(18)}</button>
         <button data-action="map-zoom" data-delta="-1" aria-label="Zoom out">${I.minus(18)}</button>
         <button data-action="map-expand" aria-label="Expand map">${I.expand()}</button>
       </div>
       <div class="radar-bar" data-radar-bar>${radarBarInner()}</div></div>
-    <div class="map-legend radar-legend"><span><i class="radar-scale"></i>Light to heavy rain</span><span>Past 2 hours</span><span>Radar: <a href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a></span></div>`;
+    <div class="map-legend radar-legend"><span><i class="radar-scale"></i>Light to heavy rain</span><span>Past 2 hours</span><span>Radar: <a href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a></span></div>
+    <div data-radar-next>${nextHourInner()}</div>`;
 }
-const radarTime = () => { const f = radar.frames[radar.index]; return f ? `${radar.index === radar.frames.length - 1 ? "Latest · " : ""}${timeOf(new Date(f.time * 1000).toISOString())}` : ""; };
+// [kind, clock] for the time label: "Latest" or "Forecast" sits above the clock time, so the slider keeps its width on a phone.
+function radarTimeParts() {
+  const s = radarStep();
+  if (s) return ["Forecast", timeOf(s.end)];
+  const f = radar.frames[radar.index];
+  return f ? [radar.index === radar.frames.length - 1 ? "Latest" : "", timeOf(new Date(f.time * 1000).toISOString())] : ["", ""];
+}
+const radarTime = () => radarTimeParts().filter(Boolean).join(" · ");
+const radarTimeInner = () => { const [kind, clock] = radarTimeParts(); return `${kind ? `<small>${kind}</small>` : ""}${clock}`; };
+const radarValueText = () => { const s = radarStep(); return s ? `Forecast rain from ${timeOf(s.start)} to ${timeOf(s.end)}: ${rainAmount(s.precip_mm)}. A model forecast, not radar.` : radarTime(); };
 function radarBarInner() {
   if (radar.error) return `<span class="radar-time">${esc(radar.error)}</span>`;
   if (!radar.frames.length) return skelBar("Loading the radar frames", 140);
-  return `<button class="radar-play" data-action="radar-play" aria-pressed="${radar.playing}" aria-label="${radar.playing ? "Pause the radar" : "Play the last two hours of radar"}">${radar.playing ? I.pause(16) : I.play(16)}</button>
-    <input type="range" class="radar-slider" min="0" max="${radar.frames.length - 1}" step="1" value="${radar.index}" data-radar-slider aria-label="Radar time" aria-valuetext="${esc(radarTime())}">
-    <span class="radar-time" data-radar-time>${radarTime()}</span>`;
+  return `<button class="radar-play" data-action="radar-play" aria-pressed="${radar.playing}" aria-label="${radarPlayLabel()}">${radar.playing ? I.pause(16) : I.play(16)}</button>
+    <input type="range" class="radar-slider" min="0" max="${radarCount() - 1}" step="1" value="${radar.index}" data-radar-slider aria-label="Radar time" aria-valuetext="${esc(radarValueText())}">
+    <span class="radar-time${radarStep() ? " is-forecast" : ""}" data-radar-time>${radarTimeInner()}</span>`;
+}
+
+// The next hour's predicted rain under the radar: one bar per step (rain in that step, on a scale of at least 1 mm), with the chance of
+// rain beneath. The step chosen on the time slider is highlighted. A sentence and a hidden list give the same numbers as text.
+const rainAmount = (mm) => (mm >= 0.1 ? `${mm.toFixed(1)} mm` : "no rain");
+const chanceText = (p) => (p === null ? "" : `${p}%`);
+function nextHourInner() {
+  const nh = state.weatherDetail?.next_hour, steps = upcomingSteps();
+  if (!steps.length) return "";
+  const top = Math.max(1, ...steps.map((s) => s.precip_mm)), chosen = radarStep(), simulated = nh.source === "Simulated";
+  const wet = steps.find((s) => s.precip_mm >= 0.1), total = steps.reduce((sum, s) => sum + s.precip_mm, 0);
+  const summary = wet ? `Rain forecast ${Date.parse(wet.start) <= Date.now() ? "now" : `from ${timeOf(wet.start)}`}, about ${total.toFixed(1)} mm in the next hour.` : "No rain forecast for the next hour.";
+  const bars = steps.map((s, n) => `<div class="nh-step${chosen && n === radar.index - radar.frames.length ? " on" : ""}">
+      <span class="nh-mm">${s.precip_mm >= 0.1 ? s.precip_mm.toFixed(1) : ""}</span>
+      <span class="nh-track"><i style="height:${s.precip_mm >= 0.1 ? Math.max(6, (s.precip_mm / top) * 100) : 0}%"></i></span>
+      <span class="nh-time">${timeOf(s.end)}</span><small>${chanceText(s.precip_prob) || "–"}</small></div>`).join("");
+  const list = steps.map((s) => `<li>${timeOf(s.start)} to ${timeOf(s.end)}: ${rainAmount(s.precip_mm)}${s.precip_prob === null ? "" : `, ${s.precip_prob}% chance`}</li>`).join("");
+  const how = simulated ? "Simulated for demo mode, not a forecast."
+    : `A model forecast from <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>, not radar. For Australia ${nh.step_minutes === 15 ? "its 15-minute steps are interpolated from hourly model data" : "only an hourly value is available"} (native 15-minute data covers only Central Europe and North America), so the timing within the hour is approximate.`;
+  return `<section class="nh-card" aria-labelledby="nh-title">
+      <div class="nh-head"><h3 id="nh-title">Next hour · forecast${simTag(simulated)}</h3><span>Rain, mm</span></div>
+      <p class="nh-summary">${summary}</p>
+      <div class="nh-chart" aria-hidden="true">${bars}</div>
+      <ul class="visually-hidden">${list}</ul>
+      <p class="nh-foot">Bars end at the time shown; the percentage is the chance of rain. ${how}</p>
+    </section>`;
 }
 function radarEntry() { for (const entry of maps.values()) if (entry.radar) return entry; return null; }
 async function loadRadarFrames() {
@@ -1857,26 +1911,31 @@ function addRadarFrame(entry, i) {
   entry.layers.set(i, layer);
   entry.map.overlayMapTypes.push(layer);
 }
+// A forecast step keeps the latest radar frame on the map and shows the "Forecast" tag, so model rain is never drawn as radar.
 function showRadarFrame(i) {
   const entry = radarEntry();
-  radar.index = Math.max(0, Math.min(radar.frames.length - 1, i));
-  if (entry) { addRadarFrame(entry, radar.index); entry.map.getDiv().dataset.frame = String(radar.index); }
+  radar.index = Math.max(0, Math.min(radarCount() - 1, i));
+  const frame = Math.min(radar.index, radar.frames.length - 1), forecast = !!radarStep();
+  if (entry && frame >= 0) { addRadarFrame(entry, frame); entry.map.getDiv().dataset.frame = String(frame); }
+  const tag = currentPage?.querySelector("[data-radar-tag]");
+  if (tag) tag.hidden = !forecast;
   const bar = currentPage?.querySelector("[data-radar-bar]");
   const time = bar?.querySelector("[data-radar-time]"), slider = bar?.querySelector("[data-radar-slider]");
-  if (time) time.textContent = radarTime();
-  if (slider) { if (Number(slider.value) !== radar.index) slider.value = String(radar.index); slider.setAttribute("aria-valuetext", radarTime()); }
+  if (time) { time.innerHTML = radarTimeInner(); time.classList.toggle("is-forecast", forecast); }
+  if (slider) { slider.max = String(radarCount() - 1); if (Number(slider.value) !== radar.index) slider.value = String(radar.index); slider.setAttribute("aria-valuetext", radarValueText()); }
+  currentPage?.querySelectorAll("[data-radar-next] .nh-step").forEach((el, n) => el.classList.toggle("on", n === radar.index - radar.frames.length));
 }
 function radarPlay(on = !radar.playing) {
   const entry = radarEntry();
   clearInterval(radar.timer);
-  radar.playing = on && !!entry && radar.frames.length > 1;
+  radar.playing = on && !!entry && radarCount() > 1;
   if (radar.playing) {
     radar.frames.forEach((_, i) => addRadarFrame(entry, i));
-    if (radar.index === radar.frames.length - 1) showRadarFrame(0);
+    if (radar.index >= radarCount() - 1) showRadarFrame(0);
     let hold = 0;
     radar.timer = setInterval(() => {
       if (document.hidden) return;
-      if (radar.index === radar.frames.length - 1) { if (++hold < 3) return; hold = 0; showRadarFrame(0); } else showRadarFrame(radar.index + 1);
+      if (radar.index >= radarCount() - 1) { if (++hold < 3) return; hold = 0; showRadarFrame(0); } else showRadarFrame(radar.index + 1);
     }, 600);
   }
   const bar = currentPage?.querySelector("[data-radar-bar]");
@@ -2872,13 +2931,14 @@ async function loadMyRides() {
   state.rides.loading = false;
 }
 
+// To starts empty (only the demo preset fills it); saved places are chips under it and recent places are suggestions when it is focused.
+// Journey disrupted?, alternatives from a notification and re-planning set their own destination over this.
 function freshForm() {
   const now = brisbaneNowLocal();
   const preset = demoOn() && state.demo.start === "preset";
   return {
     origin: preset ? DEMO_PRESET.origin : CURRENT_PLACE, originPlaceId: null, originCoords: null, originLocating: false, originNote: null, destinationCoords: null,
-    destination: preset ? DEMO_PRESET.destination : store.get("lastDestination", "") || savedPlace("work")?.address || "",
-    destinationPlaceId: preset ? null : store.get("lastDestination", "") ? store.get("lastDestinationPlaceId", null) : savedPlace("work")?.place_id || null,
+    destination: preset ? DEMO_PRESET.destination : "", destinationPlaceId: null,
     leave_now: true, departure: addMinutes(now, 10), deadline: "",
     budget: settings.budget, walking: settings.walking, avoid: "",
   };
@@ -3299,7 +3359,7 @@ document.addEventListener("input", (event) => {
       clearInterval(radar.timer);
       radar.playing = false;
       const play = t.parentElement.querySelector(".radar-play");
-      if (play) { play.innerHTML = I.play(16); play.setAttribute("aria-pressed", "false"); play.setAttribute("aria-label", "Play the last two hours of radar"); }
+      if (play) { play.innerHTML = I.play(16); play.setAttribute("aria-pressed", "false"); play.setAttribute("aria-label", radarPlayLabel()); }
     }
     showRadarFrame(Number(t.value));
   }
@@ -3861,7 +3921,7 @@ const storesText = (path) => /^(places|draft)\./.test(path);
 // A tall pop-up with a Google map that shows places. Tap a place icon to choose it (its Google place ID is used for routing and the
 // server looks up its name), or press and hold anywhere to drop a pin (its coordinates are used). The pin can be dragged to adjust it.
 // Maps JavaScript has no long-press event and iOS Safari never fires contextmenu, so a press timer on the map's own element detects it.
-const picker = { path: null, map: null, marker: null, me: null, overlay: null, choice: null, lastPress: 0, req: 0 };
+const picker = { path: null, map: null, me: null, overlay: null, choice: null, lastPress: 0, req: 0 };
 const PICKER_FOR = { "form.origin": "your start", "form.destination": "your destination", "panic.origin": "where you are", "panic.dest": "your destination", "places.home": "Home", "places.work": "Work/Uni", "draft.address": "this place" };
 function pickerCardInner() {
   const c = picker.choice;
@@ -3918,7 +3978,9 @@ function openMapPicker(path) {
       center: toLatLng(start.c), zoom: start.zoom, gestureHandling: "greedy", clickableIcons: true,
       mapTypeControl: false, streetViewControl: false, fullscreenControl: false, zoomControl: false, rotateControl: false, cameraControl: false, styles: pickerStyles(),
     });
-    picker.overlay = Object.assign(new google.maps.OverlayView(), { onAdd() {}, draw() {}, onRemove() {} });
+    picker.overlay = pickerOverlay(map);
+    picker.overlay.onDragStart = () => { picker.req++; }; // a place lookup still on its way is now out of date
+    picker.overlay.onDrop = (latLng) => { picker.req++; picker.choice = { kind: "pin", lat: latLng.lat(), lng: latLng.lng() }; paintPicker(); };
     picker.overlay.setMap(map);
     if (state.biasCoords) picker.me = new google.maps.Marker({ position: toLatLng(state.biasCoords), map, icon: mapIcon("here"), clickable: false, zIndex: 5, title: "Your location" });
     map.addListener("click", (event) => {
@@ -3936,6 +3998,7 @@ function bindLongPress(el) {
   el.addEventListener("pointerdown", (e) => {
     if (press) return cancel(); // a second finger means a pinch, not a press
     if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (e.target.closest?.(".pick-marker") || picker.overlay?.dragging?.()) return; // pressing the pin drags it instead
     const box = el.getBoundingClientRect(), x = e.clientX, y = e.clientY;
     press = { id: e.pointerId, x, y, timer: setTimeout(() => {
       press = null;
@@ -3949,23 +4012,80 @@ function bindLongPress(el) {
     if (picker.pressing) setTimeout(() => { picker.pressing = false; }, 300); // the click that follows a long press is ignored
   }, true));
 }
-function setPickerMarker(latLng) {
-  if (!picker.map) return;
-  if (!picker.marker) {
-    picker.marker = new google.maps.Marker({ position: latLng, map: picker.map, icon: mapIcon("end"), draggable: true, zIndex: 10, title: "Chosen place" });
-    picker.marker.addListener("dragend", (event) => { picker.req++; picker.choice = { kind: "pin", lat: event.latLng.lat(), lng: event.latLng.lng() }; paintPicker(); });
-  } else picker.marker.setPosition(latLng);
+// The chosen spot, drawn as HTML in a custom overlay (it works without a Map ID) so it can change shape, which a Marker icon cannot.
+// A tapped place grows from its own icon into a large pin in the place's Google colour with its own glyph. A dropped pin has the shape of
+// a Google Maps pin, with its tip exactly on the spot. While it is dragged it turns into a plain circle and the map stops panning; when it
+// is put down it bounces back into a pin. The animations are CSS, so the reduced-motion setting shortens them like every other animation.
+const PLACE_LOADING_COLOUR = "#7B9EB0"; // Google's neutral place colour, shown while a tapped place is looked up
+function pickerOverlay(map) {
+  const view = new google.maps.OverlayView();
+  const el = document.createElement("div");
+  el.className = "pick-marker";
+  el.hidden = true;
+  el.innerHTML = `<span class="pick-shadow"></span><span class="pick-lift" role="img" aria-label="Chosen place"><span class="pick-shape"><i class="pick-dot"></i></span></span>`;
+  google.maps.OverlayView.preventMapHitsAndGesturesFrom(el);
+  const lift = el.querySelector(".pick-lift"), shape = el.querySelector(".pick-shape");
+  let pos = null, drag = null;
+  const draw = () => { const p = pos && view.getProjection()?.fromLatLngToDivPixel(pos); if (p) { el.style.left = `${p.x}px`; el.style.top = `${p.y}px`; } };
+  const replay = (name) => { el.classList.remove("pop", "drop", "land"); void el.offsetWidth; if (name) el.classList.add(name); };
+  // look: { kind: "pin" } or { kind: "place", colour, glyph }. The glyph and colour come from the server, which only passes a Google
+  // gstatic icon address and a #RRGGBB colour, and they are set as properties rather than as HTML.
+  const setLook = (look) => {
+    el.classList.toggle("is-place", look.kind === "place");
+    if (look.colour) el.style.setProperty("--pin", look.colour); else el.style.removeProperty("--pin");
+    if (look.glyph) { const img = document.createElement("img"); img.alt = ""; img.decoding = "async"; img.src = look.glyph; img.onerror = () => { img.replaceWith(dot()); }; shape.replaceChildren(img); }
+    else if (!shape.querySelector(".pick-dot")) shape.replaceChildren(dot());
+    lift.setAttribute("aria-label", look.kind === "place" ? "Chosen place" : "Dropped pin");
+  };
+  const dot = () => Object.assign(document.createElement("i"), { className: "pick-dot" });
+  view.place = (latLng, look, motion = "") => { if (drag?.moved) return; pos = latLng; el.hidden = false; setLook(look); draw(); if (motion) replay(motion); };
+  view.dragging = () => !!drag;
+  Object.assign(view, { onAdd() { view.getPanes().overlayMouseTarget.appendChild(el); }, draw, onRemove() { el.remove(); } });
+  // Dragging: pointer capture keeps the moves coming to the pin, and pixel moves are turned into positions with the overlay's projection.
+  lift.addEventListener("pointerdown", (e) => {
+    if (drag || (e.pointerType === "mouse" && e.button !== 0)) return;
+    const start = view.getProjection()?.fromLatLngToDivPixel(pos);
+    if (!start) return;
+    e.preventDefault();
+    e.stopPropagation();
+    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, start, moved: false, gestures: map.get("gestureHandling") || "greedy" };
+    try { lift.setPointerCapture(e.pointerId); } catch { /* the pointer already ended */ }
+    map.setOptions({ gestureHandling: "none" });
+  });
+  lift.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+    if (!drag.moved) { drag.moved = true; view.onDragStart?.(); replay(); setLook({ kind: "pin" }); el.classList.add("dragging"); }
+    pos = view.getProjection()?.fromDivPixelToLatLng(new google.maps.Point(drag.start.x + dx, drag.start.y + dy)) || pos;
+    draw();
+  });
+  const end = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const moved = drag.moved;
+    map.setOptions({ gestureHandling: drag.gestures });
+    drag = null;
+    if (!moved) return;
+    el.classList.remove("dragging");
+    replay("land");
+    try { navigator.vibrate?.(8); } catch { /* optional */ }
+    view.onDrop?.(pos);
+  };
+  ["pointerup", "pointercancel", "lostpointercapture"].forEach((type) => lift.addEventListener(type, end));
+  return view;
 }
 function dropPin(latLng) {
+  if (!picker.overlay) return;
   try { navigator.vibrate?.(12); } catch { /* optional */ }
   picker.req++;
-  setPickerMarker(latLng);
+  picker.overlay.place(latLng, { kind: "pin" }, "drop");
   picker.choice = { kind: "pin", lat: latLng.lat(), lng: latLng.lng() };
   paintPicker();
 }
 async function choosePoi(placeId, latLng) {
+  if (!picker.overlay) return;
   const req = ++picker.req;
-  setPickerMarker(latLng);
+  picker.overlay.place(latLng, { kind: "place", colour: PLACE_LOADING_COLOUR }, "pop");
   picker.choice = { kind: "loading" };
   paintPicker();
   try {
@@ -3974,9 +4094,11 @@ async function choosePoi(placeId, latLng) {
     if (req !== picker.req) return;
     if (!r.ok || !data.name) throw new Error(data.error || "That place's name isn't available right now.");
     picker.choice = { kind: "place", placeId, name: data.name, address: data.address || "", lat: data.location?.[0] ?? latLng.lat(), lng: data.location?.[1] ?? latLng.lng() };
+    picker.overlay?.place(latLng, { kind: "place", colour: data.icon?.background || null, glyph: data.icon?.mask || null });
   } catch (error) {
     if (req !== picker.req) return;
     picker.choice = { kind: "pin", lat: latLng.lat(), lng: latLng.lng(), note: `${error.message} The pin's position will be used instead.` };
+    picker.overlay?.place(latLng, { kind: "pin" }, "land");
   }
   paintPicker();
 }
@@ -3994,10 +4116,10 @@ function usePickedPlace() {
   else rerender();
 }
 function disposePicker() {
-  [picker.marker, picker.me].forEach((m) => { if (m) { google.maps.event.clearInstanceListeners(m); m.setMap(null); } });
+  if (picker.me) { google.maps.event.clearInstanceListeners(picker.me); picker.me.setMap(null); }
   picker.overlay?.setMap(null);
   if (picker.map) google.maps.event.clearInstanceListeners(picker.map);
-  Object.assign(picker, { map: null, marker: null, me: null, overlay: null, choice: null, path: null, req: picker.req + 1 });
+  Object.assign(picker, { map: null, me: null, overlay: null, choice: null, path: null, req: picker.req + 1 });
 }
 
 function acAttrs(path) {

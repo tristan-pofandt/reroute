@@ -8,6 +8,7 @@ from contextlib import contextmanager
 import contextvars
 import json
 import math
+import re
 import threading
 import time
 from urllib.error import HTTPError, URLError
@@ -26,7 +27,7 @@ FUEL_TYPES = {"SP91": "Unleaded 91", "SP91_E10": "E10", "SP95": "Premium 95", "S
 
 # Approximate Google Maps Platform list prices in USD per 1,000 billable requests, before the free
 # monthly usage caps. Open-Meteo, Translink and QLDTraffic are free. Re-check before relying on them.
-PRICES_CHECKED = "2026-10-21"
+PRICES_CHECKED = "2026-10-21"  # Place Details Pro re-checked on 2026-10-26: still US$17 per 1,000 after 5,000 free a month
 PRICES = {
     ("Routes API", "Compute Routes Essentials"): 5.00,
     ("Routes API", "Compute Routes Pro"): 10.00,
@@ -232,12 +233,27 @@ def autocomplete(key, text, session, lat=-27.4698, lng=153.0251):
     return cached(("autocomplete", text.casefold(), round(lat, 1), round(lng, 1)), 300, compute)
 
 
+# Place Details fields for a place tapped on the map. displayName, iconMaskBaseUri and iconBackgroundColor are all Place Details Pro fields
+# (id is IDs Only, formattedAddress and location are Essentials), so the request stays a single Pro request (checked 2026-10-26).
+PLACE_FIELDS = "id,displayName,formattedAddress,location,iconMaskBaseUri,iconBackgroundColor"
+PLACE_ICON_BASE = re.compile(r"^https://maps\.gstatic\.com/mapfiles/place_api/icons/[A-Za-z0-9_/.-]+$")
+HEX_COLOUR = re.compile(r"^#[0-9A-Fa-f]{6}$")
+
+
+def _place_icon(data):
+    """Google's glyph for the place's category (a one-colour SVG mask that the app draws in white; Google asks for .svg or .png to be appended) and its background colour."""
+    base, colour = data.get("iconMaskBaseUri") or "", data.get("iconBackgroundColor") or ""
+    if not PLACE_ICON_BASE.match(base) or not HEX_COLOUR.match(colour) or base.endswith((".svg", ".png")):
+        return None
+    return {"mask": f"{base}.svg", "background": colour.upper()}
+
+
 def place_details(key, place_id):
-    """Name, address and position of one place (a place icon tapped on the map). displayName makes this a Place Details Pro request."""
+    """Name, address, position and category icon of one place (a place icon tapped on the map). One Place Details Pro request."""
     def compute():
         try:
             data = _get_json(f"{PLACES_DETAILS_URL}{place_id}?{urlencode({'languageCode': 'en-AU'})}", timeout=8,
-                             headers={"X-Goog-Api-Key": key, "X-Goog-FieldMask": "id,displayName,formattedAddress,location"})
+                             headers={"X-Goog-Api-Key": key, "X-Goog-FieldMask": PLACE_FIELDS})
             record_request("Places API (New)", "Place Details Pro")
         except HTTPError as error:
             if error.code == 404:
@@ -250,7 +266,8 @@ def place_details(key, place_id):
         if not name and not data.get("formattedAddress"):
             return None
         return {"place_id": data.get("id") or place_id, "name": name or data["formattedAddress"], "address": data.get("formattedAddress") or "",
-                "location": [location["latitude"], location["longitude"]] if "latitude" in location and "longitude" in location else None}
+                "location": [location["latitude"], location["longitude"]] if "latitude" in location and "longitude" in location else None,
+                "icon": _place_icon(data)}
     return cached(("place", place_id), 86400, compute)
 
 

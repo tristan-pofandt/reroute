@@ -1009,6 +1009,28 @@ button.row:disabled { opacity: 0.45; cursor: default; }
 .picker-choice small { display: block; font-size: 13px; color: var(--text-muted); margin-top: 2px; line-height: 1.45; overflow-wrap: anywhere; }
 .picker-choice small.warn-text { color: var(--warning-text); }
 .picker-attr { display: block; margin-top: 6px; }
+/* The chosen spot on the picker map (an HTML overlay). The head is a square with three round corners turned 45 degrees, so its sharp
+   corner points down; it sits so that corner is exactly on the spot (its centre is --s × 0.7071 above it). A tapped place is a larger
+   head in the place's own colour with its Google glyph; a dropped pin is red with a dark centre, like the Google Maps pin.
+   Dragging rounds the last corner into a plain circle; putting it down bounces it back into the pin. */
+.pick-marker { --s: 30px; --pin: #EA4335; position: absolute; width: 0; height: 0; }
+.pick-marker[hidden] { display: none; }
+.pick-marker.is-place { --s: 40px; --pin: var(--accent); }
+.pick-lift { position: absolute; left: -24px; bottom: 0; width: 48px; height: calc(var(--s) * 1.2071 + 4px); touch-action: none; cursor: grab; transform-origin: 50% 100%; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4)); -webkit-tap-highlight-color: transparent; transition: transform 0.2s var(--ease-out); }
+.pick-shape { position: absolute; left: calc(50% - var(--s) / 2); bottom: calc(var(--s) * 0.2071); width: var(--s); height: var(--s); display: flex; align-items: center; justify-content: center; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--pin); box-shadow: inset 0 0 0 1.5px rgba(0, 0, 0, 0.18); transition: border-radius 0.2s var(--ease-out), background-color 0.25s ease, width 0.2s var(--ease-out), height 0.2s var(--ease-out), left 0.2s var(--ease-out), bottom 0.2s var(--ease-out); }
+.pick-dot { width: 36%; height: 36%; border-radius: 50%; background: rgba(0, 0, 0, 0.42); }
+.pick-shape img { width: 56%; height: 56%; transform: rotate(45deg); pointer-events: none; filter: brightness(0) invert(1); animation: glyphIn 0.2s ease; }
+@keyframes glyphIn { from { opacity: 0; } }
+.pick-shadow { position: absolute; left: -6px; top: -3px; width: 12px; height: 6px; border-radius: 50%; background: rgba(0, 0, 0, 0.35); transition: transform 0.2s var(--ease-out), opacity 0.2s ease; }
+.pick-marker.dragging .pick-lift { cursor: grabbing; transform: translateY(-10px) scale(1.06); }
+.pick-marker.dragging .pick-shape { border-radius: 50%; }
+.pick-marker.dragging .pick-shadow { transform: scale(1.4); opacity: 0.6; }
+.pick-marker.drop .pick-lift { animation: pinDrop 0.5s var(--ease-out); }
+.pick-marker.land .pick-lift { animation: pinLand 0.42s var(--ease-out); }
+.pick-marker.pop .pick-lift { animation: placePop 0.36s var(--ease-out); }
+@keyframes pinDrop { 0% { opacity: 0; transform: translateY(-28px) scale(0.5); } 55% { opacity: 1; transform: translateY(0) scale(1.1, 0.88); } 78% { transform: translateY(-6px) scale(0.97, 1.04); } 100% { transform: none; } }
+@keyframes pinLand { 0% { transform: translateY(-10px) scale(1.06); } 45% { transform: translateY(0) scale(1.12, 0.86); } 72% { transform: translateY(-4px) scale(0.98, 1.03); } 100% { transform: none; } }
+@keyframes placePop { 0% { opacity: 0.6; transform: scale(0.35); } 65% { opacity: 1; transform: scale(1.1); } 100% { transform: none; } }
 
 /* Translink alerts: clamp long text, then "Show more" opens the whole alert */
 .alert-row .row-label { overflow-wrap: anywhere; }
@@ -1038,10 +1060,15 @@ button.row:disabled { opacity: 0.45; cursor: default; }
 [data-wxp-top] .wx-warn { margin: 0 0 16px; }
 .wxp-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 32px; }
 .wxp-stat { padding: 12px; border-radius: 16px; background: var(--bg-surface); border: 1px solid var(--border-subtle); min-width: 0; animation: rise 0.45s 0.05s var(--ease-out) backwards; }
-.wxp-stat-label { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
-.wxp-stat b { display: flex; align-items: center; gap: 4px; margin-top: 6px; font-size: 17px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.wxp-stat small { display: block; font-size: 11px; color: var(--text-muted); margin-top: 2px; line-height: 1.35; }
-.wind-arrow { display: inline-flex; color: var(--teal); }
+.wxp-stat-label { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); min-width: 0; }
+.wxp-stat b { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 4px; margin-top: 6px; font-size: 17px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.wxp-stat small { display: block; font-size: 11px; color: var(--text-muted); margin-top: 2px; line-height: 1.35; overflow-wrap: anywhere; }
+/* Wind direction sits on its own line inside the Wind card, with the arrow beside the compass point */
+.wind-dir { display: flex; align-items: center; gap: 4px; margin-bottom: 1px; color: var(--text-main); font-weight: 600; }
+.wxp-stat-label svg { flex-shrink: 0; }
+.wind-arrow { display: inline-flex; flex-shrink: 0; color: var(--teal); }
+/* On phone widths the label icon sits above the label, so a long label such as Humidity is never cut or pushed outside its card */
+@media (max-width: 400px) { .wxp-stat-label { flex-direction: column; align-items: flex-start; gap: 4px; } }
 @media (max-width: 359px) { .wxp-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .wxp-hours { display: flex; gap: 8px; overflow-x: auto; margin: 0 calc(var(--gutter) * -1) 32px; padding: 2px var(--gutter) 4px; scrollbar-width: none; scroll-snap-type: x proximity; }
 .wxp-hours::-webkit-scrollbar { display: none; }
@@ -1079,12 +1106,33 @@ button.row:disabled { opacity: 0.45; cursor: default; }
 .radar-play:active { transform: scale(0.94); }
 .radar-play:focus-visible { box-shadow: 0 0 0 4px var(--accent-glow); }
 .radar-slider { flex: 1; min-width: 0; accent-color: var(--accent); height: 28px; }
-.radar-time { flex-shrink: 0; font-size: 12px; font-weight: 600; color: var(--text-main); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.radar-time { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; line-height: 1.25; font-size: 12px; font-weight: 600; color: var(--text-main); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.radar-time small { font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
 .radar-bar .radar-time:only-child { white-space: normal; padding-left: 8px; color: var(--text-muted); }
 .map-wrap.map-failed .radar-bar { display: none; }
 .radar-legend { align-items: center; }
 .radar-legend a { color: var(--accent-text); }
 .radar-scale { display: inline-block; width: 44px !important; height: 6px !important; border-radius: 3px; margin-right: 6px; vertical-align: middle; background: linear-gradient(90deg, #A6E3F7, #3D8BEF, #1C3FB8, #F5D547, #E64B2E) !important; }
+/* Next-hour forecast steps after "Latest": the map keeps the latest radar frame and a tag says so; the chart below holds the forecast */
+.radar-time.is-forecast, .radar-time.is-forecast small { color: var(--violet); }
+.radar-fc-tag { position: absolute; z-index: 500; top: 12px; left: 12px; width: fit-content; max-width: calc(100% - 80px); display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; color: var(--text-main); background: color-mix(in srgb, var(--bg-pop) 94%, transparent); border: 1px solid var(--border-strong); box-shadow: var(--shadow-pop); animation: fbIn 0.2s var(--ease-out); }
+.radar-fc-tag[hidden] { display: none; }
+.radar-fc-tag svg { flex-shrink: 0; color: var(--violet); }
+.nh-card { margin: -8px 0 32px; padding: 16px; border-radius: 18px; background: var(--bg-surface); border: 1px solid var(--border-subtle); }
+.nh-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.nh-head h3 { font-size: 15px; font-weight: 600; }
+.nh-head span { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.nh-summary { font-size: 14px; color: var(--text-main); margin-top: 4px; line-height: 1.45; }
+.nh-chart { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.nh-step { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 2px; border-radius: 12px; font-variant-numeric: tabular-nums; transition: background-color 0.2s ease; }
+.nh-step.on { background: var(--accent-soft); }
+.nh-mm { min-height: 16px; font-size: 12px; font-weight: 600; color: var(--text-main); }
+.nh-track { position: relative; width: 14px; height: 56px; border-radius: 4px; background: var(--fill-strong); overflow: hidden; }
+.nh-track i { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 4px 4px 0 0; background: var(--accent); transform-origin: bottom; animation: grow 0.45s var(--ease-out) backwards; }
+.nh-time { font-size: 12px; font-weight: 600; color: var(--text-main); white-space: nowrap; }
+.nh-step small { font-size: 11px; color: var(--text-muted); }
+.nh-foot { font-size: 12px; line-height: 1.5; color: var(--text-muted); margin-top: 12px; }
+.nh-foot a { color: var(--accent-text); }
 
 /* Lime and Neuron hire buttons on scooter and e-bike options */
 .hire-links { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
