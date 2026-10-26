@@ -18,7 +18,7 @@ web
 
 Reroute plans everyday trips with public transport first, shows the CO2 each option avoids compared with driving alone, and helps a traveller choose a practical alternative when a public-transport journey is disrupted.
 
-The team leads with everyday planning and the CO2 focus (team decision, 2026-10-27). That lead rests on untested hypotheses H-P14 to H-P18. The evidence-backed core is the disruption-recovery comparison (H-T01 and H-T03 accepted; H-P04 uncertain; H-P05 provisionally supported within five draft accounts). The interim Iteration 2 synthesis cautions against claiming mode shift as an outcome.
+The team leads with everyday planning and the CO2 focus (confirmed, 2026-10-27). That lead rests on untested hypotheses H-P14 to H-P18. The evidence-backed core is the disruption-recovery comparison (H-T01 and H-T03 accepted; H-P04 uncertain; H-P05 provisionally supported within five draft accounts). The interim Iteration 2 synthesis cautions against claiming mode shift as an outcome.
 
 Success measures have not been agreed. The MVP scope says to agree them before any test.
 
@@ -74,4 +74,4 @@ None of the following exists, so it must not be invented: participant use of Rer
 
 ## Accessibility & Inclusion
 
-The target is WCAG 2.2 AA (team decision, 2026-10-27). Conformance has not been verified. The app already has 44 px tap targets, visible focus rings, a reduced-motion setting, and Auto, Light and Dark themes. Colour must always be paired with a text label. Not yet tested: screen readers, keyboard-only use across every screen, and real phones.
+The target is WCAG 2.2 AA (confirmed, 2026-10-27). Conformance has not been verified. The app already has 44 px tap targets, visible focus rings, a reduced-motion setting, and Auto, Light and Dark themes. Colour must always be paired with a text label. Not yet tested: screen readers, keyboard-only use across every screen, and real phones.
