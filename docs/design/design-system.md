@@ -1,3 +1,5 @@
+> **Current design system:** [`DESIGN.md`](../../DESIGN.md), recorded from the Reroute code on 2026-10-27. This file is the original design brief and is kept as the record of intent; DESIGN.md's appendix lists where the code differs from it.
+
 Act as a Principal Interaction Designer. Audit this UI and implement comprehensive micro-interactions and strict state management. Do not leave any element static. For every interactive component, explicitly define and code:
 - Pressed/Active states (scale down slightly to 0.98 for mobile tactility, shift alpha values).
 - Focus states with high-contrast, accessible rings.
