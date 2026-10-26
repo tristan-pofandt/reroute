@@ -38,6 +38,9 @@ class FakeStatic:
     def status(self):
         return {"state": "ready", "updated": "2026-10-21T00:00:00+00:00", "routes": 3}
 
+    def offline_status(self):
+        return "loading"
+
 
 class FakeWeather:
     def __init__(self):

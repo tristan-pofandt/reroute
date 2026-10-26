@@ -1,11 +1,16 @@
-"""Translink SEQ static GTFS: exact route and stop ids for the steps Google returns.
+"""Translink SEQ static GTFS: exact route and stop ids for the steps Google returns, and timetables for offline areas.
 
 The static feed is about 37 MB zipped. It is downloaded in a background thread (never on a request),
 reduced to a small JSON index (routes, stops and which routes serve each stop) and cached in
 data/gtfs/index.json so a restart is quick. Requests only ever read the in-memory index; until it is
 ready, `match_transit` returns None and the planner falls back to keyword matching.
+
+The zip itself is kept as data/gtfs/SEQ_GTFS.zip (replaced atomically by each new download) so that an
+offline area's timetable can be cut from it later: `area_timetable` streams stop_times.txt once and keeps
+only the stops inside the area and the trips that run on the chosen days (a few seconds for a dense area).
 """
 
+from collections import Counter, OrderedDict
 import csv
 import io
 import json
@@ -13,12 +18,14 @@ import math
 from pathlib import Path
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import re
 import zipfile
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from gtfs_rt import line_keys, train_codes, train_key_matches
+from offline_area import clip_runs, flat, simplify
 
 URL = "https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip"
 MAX_AGE = 7 * 86400
@@ -29,6 +36,13 @@ CELL = 0.002  # degrees, about 220 m
 STOP_RADIUS_M = 150
 MAX_ROUTE_IDS = 60
 MAX_STOPS = 8
+DAY_SECONDS = 86400
+ARCHIVE = "SEQ_GTFS.zip"
+EXTRACT_CACHE = 4  # timetable extracts kept in memory (as JSON bytes, a few MB each)
+SHAPE_TOLERANCE_M = 5
+BRISBANE = timezone(timedelta(hours=10), "AEST")
+WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+HEX_COLOUR = re.compile(r"^[0-9A-Fa-f]{6}$")
 # GTFS route_type for each category used by the planner (basic codes plus the common extended ones).
 ROUTE_TYPES = {"bus": {3, 700, 701, 702, 703, 704, 705, 706, 707, 708, 709, 710, 711, 712, 713, 714, 715},
                "rail": {1, 2, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109},
@@ -122,6 +136,15 @@ class Static:
         self.error = None
         self.data = None
         self.grid = {}
+        self.archive_ready = False  # the zip is on disk, so offline timetables can be extracted
+        self.archive_error = False
+        self._extract_lock = threading.Lock()  # one extract at a time, and never while a new zip replaces the old one
+        self._cache_lock = threading.Lock()
+        self._extracts = OrderedDict()
+
+    @property
+    def archive_path(self):
+        return self.directory / ARCHIVE
 
     # ── Status ──────────────────────────────────────────────────────────────
 
@@ -133,6 +156,14 @@ class Static:
 
     def ready(self):
         return self.state == "ready" and self.data is not None
+
+    def offline_status(self):
+        """"ready" when offline timetables can be extracted, "unavailable" after a failed download, else "loading"."""
+        if self.ready() and self.archive_ready:
+            return "ready"
+        if self.state == "error" or self.archive_error:
+            return "unavailable"
+        return "loading"
 
     # ── Loading (always off the request path) ───────────────────────────────
 
@@ -153,11 +184,16 @@ class Static:
                 self.error = str(error)
                 if not self.ready():
                     self.state = "error"
+                self.archive_error = not self.archive_ready
                 wait = RETRY_AFTER
             time.sleep(wait)
 
     def ensure(self):
-        """Load the cached index if there is one, and rebuild it from a fresh download when it is older than 7 days."""
+        """Load the cached index if there is one, and rebuild it from a fresh download when it is older than 7 days.
+
+        An older install kept only index.json; when the zip is missing it is downloaded again (and the index rebuilt from it, so both
+        describe the same feed). Matching keeps using the current index throughout.
+        """
         path = self.directory / "index.json"
         if self.data is None and path.exists():
             try:
@@ -165,20 +201,28 @@ class Static:
             except (OSError, ValueError, KeyError):
                 pass
         if self.data is not None and self._clock() - self.data["built_at"] < MAX_AGE:
-            return
+            if not self.archive_ready and zipfile.is_zipfile(self.archive_path):
+                self.archive_ready, self.archive_error = True, False
+            if self.archive_ready:
+                return
         self.directory.mkdir(parents=True, exist_ok=True)
-        archive_path = self.directory / "SEQ_GTFS.zip.part"
+        part = self.directory / (ARCHIVE + ".part")
         try:
-            with self._open(self.url) as response, open(archive_path, "wb") as out:
+            with self._open(self.url) as response, open(part, "wb") as out:
                 while True:
                     chunk = response.read(1 << 20)
                     if not chunk:
                         break
                     out.write(chunk)
-            with zipfile.ZipFile(archive_path) as archive:
+            with zipfile.ZipFile(part) as archive:
                 index = build_index(archive, self._clock())
+            with self._extract_lock:  # an extract may be reading the old zip (and Windows cannot replace an open file)
+                part.replace(self.archive_path)
+                with self._cache_lock:
+                    self._extracts.clear()
+                self.archive_ready, self.archive_error = True, False
         finally:
-            archive_path.unlink(missing_ok=True)
+            part.unlink(missing_ok=True)
         temporary = path.with_suffix(".tmp")
         temporary.write_text(json.dumps(index, separators=(",", ":")), encoding="utf-8")
         temporary.replace(path)
@@ -267,3 +311,248 @@ class Static:
         shorts = sorted({routes[route][0] for route in candidates})
         return {"route_ids": ordered, "stop_id": boarding, "dep_stop_ids": departure[:MAX_STOPS], "arr_stop_ids": arrival[:MAX_STOPS],
                 "colour": f"#{colour}" if colour else None, "text_colour": f"#{text}" if text else None, "short_names": shorts}
+
+    # ── Offline area timetables ─────────────────────────────────────────────
+
+    def area_timetable(self, bbox, days, today):
+        """The offline pack's `transit` object for bbox [south, west, north, east] and `days` Brisbane dates from `today` (not cached)."""
+        if self.offline_status() != "ready":
+            raise NotReady(self.offline_status())
+        dates = [today + timedelta(days=offset) for offset in range(days)]
+        with self._extract_lock:
+            with zipfile.ZipFile(self.archive_path) as archive:
+                return extract_area(archive, bbox, dates, self.data["built_at"])
+
+    def cached_timetable(self, bbox, days, today):
+        """The remembered `area_timetable_json` bytes for this area and these days, else None. Never reads the zip."""
+        data = self.data
+        if data is None:
+            return None
+        with self._cache_lock:
+            key = (tuple(bbox), days, today.isoformat(), data["built_at"])
+            if key in self._extracts:
+                self._extracts.move_to_end(key)
+                return self._extracts[key]
+        return None
+
+    def area_timetable_json(self, bbox, days, today):
+        """`area_timetable` as compact JSON bytes, remembered for the last few areas until the next feed download."""
+        if self.offline_status() != "ready":
+            raise NotReady(self.offline_status())
+        key = (tuple(bbox), days, today.isoformat(), self.data["built_at"])
+        hit = self.cached_timetable(bbox, days, today)
+        if hit is not None:
+            return hit
+        text = json.dumps(self.area_timetable(bbox, days, today), separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        with self._cache_lock:
+            self._extracts[key] = text
+            while len(self._extracts) > EXTRACT_CACHE:
+                self._extracts.popitem(last=False)
+        return text
+
+
+class NotReady(Exception):
+    """The timetable zip is not on disk yet (still downloading) or could not be downloaded. The argument is the offline status."""
+
+
+def _lines(raw, size=1 << 22):
+    """Lines of a binary file without their newline, read in large chunks (much faster than iterating a zip member line by line)."""
+    rest = b""
+    while True:
+        chunk = raw.read(size)
+        if not chunk:
+            break
+        lines = (rest + chunk).split(b"\n")
+        rest = lines.pop()
+        yield from lines
+    if rest:
+        yield rest
+
+
+def _columns(raw, *names):
+    """(indexes of the named columns, whether one of them is the last column, so its values may end in a carriage return)."""
+    header = raw.readline().decode("utf-8-sig").strip().split(",")
+    indexes = [header.index(name) for name in names]
+    return indexes, max(indexes) == len(header) - 1
+
+
+def _quoted(line):
+    """The values of a byte line that has quotes, through the csv module (the slow path; Translink quotes only a few names)."""
+    return [value.encode("utf-8") for value in next(csv.reader([line.decode("utf-8")]), [])]
+
+
+def _seconds(text):
+    """Seconds after midnight of the service day for b"HH:MM:SS" (hours may be 24 or more), or None when blank."""
+    text = text.strip()
+    if not text:
+        return None
+    hours, minutes, seconds = text.split(b":")
+    return int(hours) * 3600 + int(minutes) * 60 + int(seconds)
+
+
+def running_services(archive, dates):
+    """{YYYYMMDD: set of service_ids running that day} from calendar.txt with calendar_dates.txt exceptions applied (1 adds, 2 removes)."""
+    wanted = {date.strftime("%Y%m%d"): WEEKDAYS[date.weekday()] for date in dates}
+    running = {day: set() for day in wanted}
+    names = set(archive.namelist())
+    if "calendar.txt" in names:
+        for row in _csv_rows(archive, "calendar.txt"):
+            service = row.get("service_id", "")
+            for day, weekday in wanted.items():
+                if service and (row.get("start_date") or "").strip() <= day <= (row.get("end_date") or "").strip() and (row.get(weekday) or "").strip() == "1":
+                    running[day].add(service)
+    if "calendar_dates.txt" in names:
+        for row in _csv_rows(archive, "calendar_dates.txt"):
+            day, service, kind = (row.get("date") or "").strip(), row.get("service_id", ""), (row.get("exception_type") or "").strip()
+            if day in running and service:
+                if kind == "1":
+                    running[day].add(service)
+                elif kind == "2":
+                    running[day].discard(service)
+    return running
+
+
+def _colour(text):
+    text = (text or "").strip()
+    return f"#{text.upper()}" if HEX_COLOUR.match(text) else None
+
+
+def extract_area(archive, bbox, dates, built_at=None, now=None):
+    """Cut the contract's `transit` object out of an open GTFS zip.
+
+    Keeps the stops inside bbox [south, west, north, east], the trips whose service runs on one of `dates` and that call at two or more
+    of those stops (only their in-box calls, in order, as [stop index, arrival s, departure s, ...]), the routes they belong to, and one
+    simplified in-box shape per route (the shape most of its kept trips use). Each GTFS trip is stored once with its service, so a
+    trip that runs on several of the days is not repeated. stop_times.txt and shapes.txt are each streamed once.
+
+    The day before the first date is added to `services` (not to `days`) when some of its trips are still running in the box after
+    midnight (times above 24:00), so a trip just after midnight on day one can be planned: offline.js already looks at the previous
+    service day's trips. Of a service that runs only on that previous day, only those after-midnight trips are kept.
+    """
+    south, west, north, east = bbox
+    previous = dates[0] - timedelta(days=1)
+    running = running_services(archive, [previous, *dates])
+    late = running.pop(previous.strftime("%Y%m%d"))
+    active = set().union(*running.values()) if running else set()
+    trips = {}
+    for row in _csv_rows(archive, "trips.txt"):
+        if (row.get("service_id") in active or row.get("service_id") in late) and row.get("trip_id"):
+            trips[row["trip_id"].encode("utf-8")] = (row.get("route_id", ""), row["service_id"], (row.get("trip_headsign") or "").strip(),
+                                                     (row.get("shape_id") or "").strip())
+    stops = {}
+    for row in _csv_rows(archive, "stops.txt"):
+        lat, lng = _float(row.get("stop_lat")), _float(row.get("stop_lon"))
+        if lat is None or lng is None or row.get("location_type") not in (None, "", "0"):
+            continue
+        if south <= lat <= north and west <= lng <= east:
+            stops[row["stop_id"].encode("utf-8")] = (row.get("stop_name", "").strip(), round(lat, 6), round(lng, 6))
+    calls = {}
+    with archive.open("stop_times.txt") as raw:
+        columns, ends_line = _columns(raw, "trip_id", "arrival_time", "departure_time", "stop_id", "stop_sequence")
+        trip_col, arrival_col, departure_col, stop_col, sequence_col = columns
+        last = max(columns)
+        # The hot loop (3.5 million rows for SEQ) is written out in full: a helper call per row costs about a second.
+        for line in _lines(raw):
+            if ends_line:
+                line = line.rstrip(b"\r")
+            parts = line.split(b",", last + 1) if b'"' not in line else _quoted(line)
+            if len(parts) <= last:
+                continue
+            stop = parts[stop_col]
+            if stop in stops:
+                trip = parts[trip_col]
+                if trip in trips:
+                    calls.setdefault(trip, []).append((int(parts[sequence_col]), stop, parts[arrival_col], parts[departure_col]))
+    patterns = []
+    for trip, rows in calls.items():
+        if len(rows) < 2:
+            continue
+        rows.sort()
+        sequence = []
+        for _, stop, arrival, departure in rows:
+            arrive, depart = _seconds(arrival), _seconds(departure)
+            if arrive is None and depart is None:
+                continue  # an untimed stop: Translink times every stop, so this is rare
+            sequence.append((stop, depart if arrive is None else arrive, arrive if depart is None else depart))
+        if len(sequence) >= 2:
+            route_id, service, headsign, shape = trips[trip]
+            if service not in active and sequence[-1][2] < DAY_SECONDS:
+                continue  # a previous-day-only service: only its trips still running after midnight matter
+            patterns.append((route_id, service, headsign, shape, sequence))
+    route_rows = {}
+    used_routes = {pattern[0] for pattern in patterns}
+    for row in _csv_rows(archive, "routes.txt"):
+        if row.get("route_id") in used_routes:
+            try:
+                kind = int(row.get("route_type") or -1)
+            except ValueError:
+                kind = -1
+            route_rows[row["route_id"]] = [row.get("route_short_name", "").strip(), row.get("route_long_name", "").strip(), kind,
+                                           _colour(row.get("route_color")), _colour(row.get("route_text_color"))]
+    patterns = [pattern for pattern in patterns if pattern[0] in route_rows]
+    route_ids = sorted(route_rows, key=lambda route: (route_rows[route][2], route_rows[route][0], route))
+    route_index = {route: index for index, route in enumerate(route_ids)}
+    service_ids = sorted({pattern[1] for pattern in patterns})
+    service_index = {service: index for index, service in enumerate(service_ids)}
+    stop_ids = sorted({stop for pattern in patterns for stop, _, _ in pattern[4]})
+    stop_index = {stop: index for index, stop in enumerate(stop_ids)}
+    seen, out_trips, shape_votes = set(), [], {}
+    for route_id, service, headsign, shape, sequence in sorted(patterns, key=lambda p: (route_index[p[0]], p[4][0][2], p[2], p[1])):
+        times = []
+        for stop, arrive, depart in sequence:
+            times.extend((stop_index[stop], arrive, depart))
+        key = (route_id, service, headsign, tuple(times))
+        if key in seen:
+            continue  # the same journey listed twice under one service
+        seen.add(key)
+        out_trips.append([route_index[route_id], service_index[service], headsign, times])
+        if shape:
+            shape_votes.setdefault(route_index[route_id], Counter())[shape] += 1
+    shapes = _area_shapes(archive, bbox, {route: votes.most_common(1)[0][0] for route, votes in shape_votes.items()})
+    services = {}
+    if any(pattern[1] in late and pattern[4][-1][2] >= DAY_SECONDS for pattern in patterns):
+        services[previous.isoformat()] = sorted(service_index[service] for service in late if service in service_index)
+    for date in dates:
+        day = date.strftime("%Y%m%d")
+        services[date.isoformat()] = sorted(service_index[service] for service in running.get(day, ()) if service in service_index)
+    feed_built = datetime.fromtimestamp(built_at, timezone.utc).isoformat() if built_at is not None else None
+    return {"source": "Translink SEQ static GTFS", "attribution": "Translink (CC BY 4.0)", "feed_built_at": feed_built,
+            "generated_at": (now or datetime.now(BRISBANE)).isoformat(timespec="seconds"), "timezone": "Australia/Brisbane",
+            "days": [date.isoformat() for date in dates], "routes": [route_rows[route] for route in route_ids],
+            "stops": [[stop.decode("utf-8"), *stops[stop]] for stop in stop_ids], "services": services, "service_ids": service_ids,
+            "trips": out_trips, "shapes": shapes}
+
+
+def _area_shapes(archive, bbox, wanted):
+    """{str(route index): flat in-box polyline} for the chosen shape of each route, clipped to the box and simplified to about 5 m."""
+    if not wanted or "shapes.txt" not in archive.namelist():
+        return {}
+    by_shape = {}
+    for route, shape in wanted.items():
+        by_shape.setdefault(shape.encode("utf-8"), []).append(route)
+    points = {}
+    with archive.open("shapes.txt") as raw:
+        columns, ends_line = _columns(raw, "shape_id", "shape_pt_lat", "shape_pt_lon", "shape_pt_sequence")
+        shape_col, lat_col, lng_col, sequence_col = columns
+        last = max(columns)
+        for line in _lines(raw):
+            if ends_line:
+                line = line.rstrip(b"\r")
+            parts = line.split(b",", last + 1) if b'"' not in line else _quoted(line)
+            if len(parts) > last and parts[shape_col] in by_shape:
+                try:
+                    points.setdefault(parts[shape_col], []).append((int(parts[sequence_col]), float(parts[lat_col]), float(parts[lng_col])))
+                except ValueError:
+                    continue
+    shapes = {}
+    for shape, rows in points.items():
+        rows.sort()
+        line = [(lat, lng) for _, lat, lng in rows]
+        kept = []
+        for start, end in clip_runs(line, bbox):
+            run = line[start:end]
+            kept.extend(run[index] for index in simplify(run, SHAPE_TOLERANCE_M))
+        if len(kept) >= 2:
+            for route in by_shape[shape]:
+                shapes[str(route)] = flat(kept)
+    return dict(sorted(shapes.items(), key=lambda item: int(item[0])))

@@ -1,8 +1,8 @@
 /* Reroute service worker: offline app shell, network-first API reads, and Web Push notifications. */
 "use strict";
 
-const VERSION = "planb-reroute-7"; // keep the planb- prefix: activate() deletes older planb- caches
-const SHELL = ["/", "/app.css", "/app.js", "/favicon.svg", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png"];
+const VERSION = "planb-reroute-8"; // keep the planb- prefix: activate() deletes older planb- caches
+const SHELL = ["/", "/app.css", "/app.js", "/offline.js", "/favicon.svg", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(VERSION).then((cache) => Promise.all(SHELL.map((url) => cache.add(url).catch(() => {})))).then(() => self.skipWaiting()));
@@ -20,7 +20,8 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(req.url);
   if (req.method !== "GET" || url.origin !== self.location.origin || url.pathname === "/sw.js") return;
   if (url.pathname.startsWith("/api/") || url.pathname === "/qr.svg") {
-    if (url.pathname.startsWith("/api/push/") || url.pathname.startsWith("/api/rides")) return;
+    // Offline area downloads are large and are stored by the app itself (IndexedDB), so they are not copied into this cache too.
+    if (url.pathname.startsWith("/api/push/") || url.pathname.startsWith("/api/rides") || url.pathname.startsWith("/api/offline/")) return;
     event.respondWith(networkFirst(req));
     return;
   }
@@ -35,8 +36,12 @@ async function networkFirst(req) {
     return res;
   } catch (error) {
     const hit = await cache.match(req);
-    if (hit) return hit;
-    throw error;
+    // No saved copy either: answer like the server would, marked offline, instead of an uncaught network error.
+    if (!hit) return new Response(JSON.stringify({ error: "You're offline, and there is no saved copy of this information." }), { status: 503, headers: { "Content-Type": "application/json", "X-Reroute-Offline": "1" } });
+    // Marked so the app knows this answer is a saved copy and the network is down (it then offers offline maps).
+    const headers = new Headers(hit.headers);
+    headers.set("X-Reroute-Offline", "1");
+    return new Response(hit.body, { status: hit.status, statusText: hit.statusText, headers });
   }
 }
 

@@ -344,7 +344,7 @@ function weatherInner() {
       <div class="wx-now"><strong>${esc(c.label)}</strong><span>Feels like ${Math.round(c.apparent_c)}° · Wind ${Math.round(c.wind_kmh)} km/h${c.gust_kmh > c.wind_kmh + 10 ? `, gusts ${Math.round(c.gust_kmh)}` : ""}${c.precip_mm > 0 ? ` · ${c.precip_mm} mm rain` : ""}</span></div>
       <span class="wx-icon" style="--tone:${WX_TONE[c.icon] || "var(--accent)"}">${wxIcon(c.icon, 28)}</span></div>
     ${warn}${hours ? `<div class="wx-hours" aria-label="Next hours">${hours}</div>` : ""}
-    <p class="fine wx-foot">${esc(w.source)}${w.simulated ? "" : ` · updated ${timeOf(w.fetched_at)}`}</p>`;
+    <p class="fine wx-foot">${esc(w.source)}${w.simulated ? "" : ` · updated ${timeOf(w.fetched_at)}`}${state.offline || !offline.online ? " · saved copy, not live" : ""}</p>`;
 }
 // The whole widget opens the weather page (week ahead, wind, rain radar).
 const weatherCard = () => `<button class="wx wx-btn" data-wx data-action="go" data-screen="weather" aria-describedby="wx-hint">${weatherInner()}</button><span class="visually-hidden" id="wx-hint">Opens the weather page with the week ahead, wind and the rain radar.</span>`;
@@ -456,6 +456,7 @@ function heroArt() {
 function homeHero(alertCount) {
   const live = state.alertsError ? `<span class="banner-chip">${I.signal(14)}Live alerts unavailable</span>`
     : !state.alerts ? `<span class="skeleton skel-chip" role="status" aria-label="Checking Translink alerts"></span>`
+    : state.offline ? `<span class="banner-chip">${I.signal(14)}Offline · scheduled times only</span>`
     : `<button class="banner-chip" data-action="open-alerts"><span class="live-dot"></span>Translink live · ${plural(alertCount, "alert")}</button>`;
   return `
     <section class="hero" aria-labelledby="hero-title">
@@ -602,7 +603,6 @@ function homeScreen() {
         <div class="home-actions">${profileButton()}</div>
       </div>
       ${homeHero(alerts.length)}
-      <button class="btn btn-secondary" data-action="go" data-screen="backups">Saved journeys · offline steps</button>
       <button class="interactive-element primary trip-btn" data-action="start" data-purpose="regular">
         <span class="trip-icon">${I.route(24)}</span>
         <span class="trip-text"><strong>Plan a trip</strong><small>Everyday routes, public transport first</small></span>
@@ -657,6 +657,7 @@ function termsScreen() {
     <p class="subtitle">A student prototype for exploring journey options. It is not an official transport service or a substitute for your own judgement.</p>
     <h2>Estimates, not guarantees</h2>
     <p>Route times, fares, parking availability, fuel costs, weather, live vehicle positions and disruption information can be incomplete, delayed or wrong. E-scooter and e-bike times use a Google Maps cycling route with an assumed average speed (15 and 20 km/h), not a measured one, and their hire cost is an estimate from assumed prices (an unlock fee plus a price per minute, editable in Settings), not a quote from Lime or Neuron. Push-bike times use Google's own cycling estimate, and the push bike is only offered for trips up to ${PUSH_BIKE_MAX_KM} km. The app does not check hire availability, real hire prices, local access rules or safe paths for any of them. The rain radar shows the last two hours of radar and is not a forecast. The CO₂ shown for them counts tailpipe emissions only, so charging and manufacturing are not counted. Check current signs, services, fares, prices and conditions before leaving.</p>
+    <p>Offline maps use an area you downloaded earlier. Offline routes and times are estimates from that saved OpenStreetMap map and Translink's published timetables: they do not include live delays, cancellations, disruptions, road closures or traffic, and the timetables only cover the days you downloaded. Check signs, services and conditions when you can.</p>
     <p>Do not use the app while driving, riding or crossing a road. In-app directions and location readings may be inaccurate. Follow road rules and use your own judgement.</p>
     <h2>Third-party services</h2>
     <p>Route search and maps use Google Maps Platform, and route results are shown on a Google map. Use is also subject to the <a href="https://policies.google.com/terms" target="_blank" rel="noopener noreferrer">Google Terms of Service</a>, the <a href="https://www.google.com/intl/en-US_US/help/terms_maps/" target="_blank" rel="noopener noreferrer">Google Maps Additional Terms</a> and Google's <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>. Public-transport alerts and schedules come from Translink; traffic events come from QLDTraffic; weather and fallback elevation come from Open-Meteo; the rain radar comes from RainViewer. The Lime and Neuron buttons open those companies' app store listings or websites, which have their own terms. Their services may change or be unavailable.</p>
@@ -675,6 +676,7 @@ function privacyScreen() {
     <p class="subtitle">This prototype has no accounts or sign-in (the profile button is a placeholder that stores nothing). This page describes what the current code stores and sends; it is not a promise about third-party services or the hosting provider.</p>
     <h2>On your device</h2>
     <p>Reroute saves settings (including travel modes, budget and walking limits, fuel and parking estimates, theme and accessibility choices), saved places and their Google place IDs, recent places, the last entered trip places, demo preferences, trip and CO₂ history, ride-board membership tokens, and disruption-watch details in this browser's local storage. This information is not synced to an account. Anyone with access to this browser profile may be able to see it. You can clear browser storage to remove it; clearing it may also stop local watch and ride-board controls from working. The app's service worker also keeps copies on this device of the app files and of recent read-only server answers (live alerts, weather, fuel prices, the address suggestions you asked for, app status and map settings) so the app can open offline.</p>
+    <p>If you download an area for offline use (Settings → Offline info), the map, place names, road and path network and Translink timetables for that area are stored in this browser's IndexedDB storage, together with the names, addresses and coordinates of your saved places inside the area. The download asks the Reroute server only for the area's corners and the number of days; for saved places that have a Google place ID, the app asks the server for their position (Google Place Details). Delete offline data in Settings, or clear browser storage, to remove it. While you have no internet, Reroute notices that its live data could not be reached and offers offline maps. In offline mode, routes are worked out on this device from the downloaded data; the app still checks for live alerts every minute (without trip details) so it can tell you when you are back online.</p>
     <p>The app asks for device location when a feature needs it: opening Plan a trip (the From field starts at your current location), current-location routing, Journey disrupted?, the map picker's locate button, live directions and a nearby weather forecast (the weather widget and weather page only use it if you have already allowed it). The browser controls that permission; if you block it, type your start or choose it on the map. Your position is not stored by Reroute. When it is used it is sent to the Reroute server as a starting point, to bias address suggestions or for weather, and from there to Google or Open-Meteo as described below. Live-directions positions stay on the device unless you tap Re-plan from here, which sends your position as a new starting point. A pin you drop on the map is sent the same way, as coordinates, only when you search.</p>
     <h2>Sent to Reroute</h2>
     <p>For route searches, the server receives the entered origin, destination, optional place IDs, departure time and deadline, selected modes and limits, your vehicle and fare settings, avoided lines and the ride-board tokens needed for matching. It processes the route request and does not save a route-search history. The server keeps visitor IP addresses in memory for hourly abuse limits and counts the day's searches (a number only), and it keeps recent Google and weather answers in memory for a few minutes.</p>
@@ -687,6 +689,7 @@ function privacyScreen() {
       <li><b>RainViewer (rain radar):</b> on the weather page your browser downloads radar images directly from RainViewer (api.rainviewer.com and tilecache.rainviewer.com). RainViewer receives your IP address, browser details and which map area you view. Reroute sends it nothing else.</li>
       <li><b>Lime and Neuron:</b> the hire buttons open the Apple App Store, Google Play or the operator's website. Reroute sends no trip details to Lime or Neuron; those sites and apps have their own privacy policies.</li>
       <li><b>Translink:</b> the server downloads public schedule and live alert, delay and vehicle feeds. It does not send your trip details to Translink.</li>
+      <li><b>OpenStreetMap (Overpass API):</b> when you download an offline area, the Reroute server sends the area's corners to the Overpass API to fetch its map data. No trip details or location are sent.</li>
       <li><b>QLDTraffic:</b> the server requests public road-event data without sending your trip details.</li>
       <li><b>Open-Meteo:</b> the server sends the location used for weather (your device location if allowed, the trip start or Brisbane) rounded to three decimal places, or sampled walking-route coordinates for fallback elevation.</li>
       <li><b>Browser push provider:</b> when you opt in, an encrypted disruption notification is sent to the browser's subscription endpoint, which may be operated by Google, Mozilla, Apple or another provider.</li>
@@ -712,6 +715,7 @@ function sourcesScreen() {
       <div class="row"><span class="row-label"><b>RainViewer</b><small>The rain radar on the weather page: composite radar for the last two hours, one image every 10 minutes, loaded by your browser. RainViewer no longer offers future radar frames on its free API, so the next hour after the radar is Open-Meteo's forecast instead. RainViewer's free API is for personal and educational use, serves map zoom levels up to 7 (closer zooms enlarge those images) and does not guarantee availability.</small><a href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a> · <a href="https://www.rainviewer.com/api.html" target="_blank" rel="noopener noreferrer">API terms</a></span></div>
       <div class="row"><span class="row-label"><b>Lime and Neuron (shared e-scooters and e-bikes)</b><small>Brisbane City Council's shared e-mobility scheme is run by Lime and Neuron. Neither publishes a vehicle or price feed for Brisbane, so Reroute does not show vehicle locations. E-scooter and e-bike hire costs are estimates from assumed prices you can change in Settings, on a Google cycling route at assumed speeds; push-bike time is Google's cycling estimate and the push bike is only offered up to ${PUSH_BIKE_MAX_KM} km. The buttons open each operator's app store listing or website. Check availability, the real price and safe access in their app. The CO₂ shown counts tailpipe emissions only. Reroute is not affiliated with Lime or Neuron.</small><a href="https://www.brisbane.qld.gov.au/transport-and-parking/public-transport/e-mobility" target="_blank" rel="noopener noreferrer">Brisbane City Council e-mobility</a></span></div>
       <div class="row"><span class="row-label"><b>Uber</b><small>The app can open Uber with pickup and drop-off details when you choose that option. It does not query Uber for a fare or availability before opening the link.</small><a href="https://m.uber.com/ul/" target="_blank" rel="noopener noreferrer">Uber universal link</a></span></div>
+      <div class="row"><span class="row-label"><b>OpenStreetMap</b><small>Offline maps: the base map, suburb and major place names and the road and path network used for offline walking, cycling and driving routes in a downloaded area, fetched by the server through the Overpass API. © OpenStreetMap contributors, available under the Open Database Licence (ODbL). Translink timetables for the offline area come from the same static GTFS feed credited above.</small><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a> · <a href="https://opendatacommons.org/licenses/odbl/" target="_blank" rel="noopener noreferrer">ODbL</a></span></div>
       <div class="row"><span class="row-label"><b>Google Fonts</b><small>Inter typeface used in the interface.</small><a href="https://fonts.google.com/specimen/Inter" target="_blank" rel="noopener noreferrer">Inter</a></span></div>
       <div class="row"><span class="row-label"><b>Web Push providers</b><small>Browser vendors deliver opt-in background notifications. No separate analytics provider is used by the app.</small></span></div>
     </div></div>
@@ -766,7 +770,7 @@ function journeyScreen() {
       ${state.error ? notice(esc(state.error), state.errorKind) : ""}
     </div>
     <footer class="sticky">
-      <button class="btn btn-primary${state.loading ? " is-loading" : ""}" data-action="search" ${state.loading || !state.status?.live_available ? "disabled" : ""} ${state.loading ? 'aria-busy="true"' : ""}>
+      <button class="btn btn-primary${state.loading ? " is-loading" : ""}" data-action="search" ${state.loading || (!state.offline && !state.status?.live_available) ? "disabled" : ""} ${state.loading ? 'aria-busy="true"' : ""}>
         ${state.loading ? skelBar("Checking routes and live services", 120) : "Show routes"}
       </button>
     </footer>`;
@@ -860,11 +864,11 @@ function co2Summary(options) {
 
 function tradeoff(o) {
   if (o.mode === "rideshare") return "Open Uber for the live price and pickup time. It's door to door, but costs more than public transport.";
-  if (o.cost_estimated) return `Estimated hire cost and time on a Google Maps cycling route at an assumed speed. Check that a vehicle is nearby, its real price and local rules in the Lime or Neuron app.`;
-  if (["scooter", "ebike", "bicycle"].includes(o.mode)) return "Illustrative time on a Google Maps cycling route. Check vehicle access, local rules, availability and conditions; hire costs are not checked.";
+  if (o.cost_estimated) return `Estimated hire cost and time on ${o.offline ? "an OpenStreetMap" : "a Google Maps"} cycling route at an assumed speed. Check that a vehicle is nearby, its real price and local rules in the Lime or Neuron app.`;
+  if (["scooter", "ebike", "bicycle"].includes(o.mode)) return `Illustrative time on ${o.offline ? "an OpenStreetMap" : "a Google Maps"} cycling route. Check vehicle access, local rules, availability and conditions; hire costs are not checked.`;
   const parts = [];
   if (o.buffer_minutes !== undefined) parts.push(`Arrives ${bufferInfo(o).text}`);
-  else parts.push(`About ${o.duration_minutes} minutes`);
+  else parts.push(`About ${plural(o.duration_minutes, "minute")}`);
   if (o.mode === "transit") {
     parts.push(o.transfers ? plural(o.transfers, "change") : "no changes");
     if (o.walking_minutes !== null) parts.push(`${o.walking_minutes} min walking${o.elevation && o.elevation.gain_m >= 30 ? " with a climb" : ""}`);
@@ -972,7 +976,7 @@ function resultsScreen() {
       ${p.deadline ? `<span class="chip">${I.clock(14)}By ${timeOf(p.deadline)}</span>` : ""}
       <span class="chip">${I.dollar(14)}$${f.budget} max</span>
       <span class="chip">${I.walk(14)}${f.walking} min walk</span>
-      ${state.alerts ? `<span class="chip live"><span class="live-dot"></span>Translink live</span>` : ""}
+      ${p.offline ? `<span class="chip">${I.signal(14)}Offline estimate</span>` : state.alerts ? `<span class="chip live"><span class="live-dot"></span>Translink live</span>` : ""}
     </div>`;
   const sortChips = `<div class="chips" role="group" aria-label="Sort options">${SORTS.map(([v, label]) => `<button class="chip" data-action="sort" data-value="${v}" aria-pressed="${state.sort === v}">${esc(label)}</button>`).join("")}</div>`;
   const lowest = lowestCo2(p.options);
@@ -988,7 +992,7 @@ function resultsScreen() {
       + (settings.show.co2 ? co2Summary(p.options) : "")
       + `<div class="cards">${options.map((o, i) => optionCard(o, i, i === 0 && o.fits ? "best" : "", lowest)).join("")}</div>`;
   }
-  const rides = p.rides?.length ? ridesTile(`${plural(p.rides.length, "shared ride")} heading your way`, "Share a car or split an Uber. It costs less for everyone and means fewer cars.")
+  const rides = p.offline ? "" : p.rides?.length ? ridesTile(`${plural(p.rides.length, "shared ride")} heading your way`, "Share a car or split an Uber. It costs less for everyone and means fewer cars.")
     : ridesTile("Going this way with others?", "Offer spare seats or start a split Uber on the shared ride board.");
   const fuel = p.fuel?.price ? `Driving cost uses ${p.fuel.manual ? "your fuel price of" : `the average ${esc(p.fuel.fuel_type)} price near your start (${p.fuel.stations} stations, Google Places):`} $${p.fuel.price.toFixed(2)}/L at ${settings.fuel_l_per_100km} L/100 km.` : "Fuel price unavailable. Driving cost is incomplete.";
   return `
@@ -1007,7 +1011,8 @@ function resultsScreen() {
       ${rides}
       ${p.errors.length && options.length ? notice(esc(p.errors.join(" ")), "error") : ""}
       ${p.notes.map((n) => notice(esc(n), "info")).join("")}
-      <p class="fine results-attribution" style="margin:16px 4px 0">${googleMapsAttribution()}<span>Route times checked ${timeOf(p.queried_at)}. ${fuel} CO₂ figures are estimates (see Settings). Always check services before you travel.</span></p>
+      ${p.offline ? `<p class="fine" style="margin:16px 4px 0">Offline estimate from your downloaded area, worked out ${timeOf(p.queried_at)}: scheduled Translink times and an OpenStreetMap route, with no live delays, disruptions or traffic. Map data © OpenStreetMap contributors; timetables from Translink. CO₂ figures are estimates (see Settings).</p>`
+        : `<p class="fine results-attribution" style="margin:16px 4px 0">${googleMapsAttribution()}<span>Route times checked ${timeOf(p.queried_at)}. ${fuel} CO₂ figures are estimates (see Settings). Always check services before you travel.</span></p>`}
     </div>`;
 }
 
@@ -1034,7 +1039,7 @@ function mapBlock(id, caption = "") {
 function legendFor(o) {
   const kinds = [...new Set(o.segments.map((s) => s.kind))];
   return kinds.map((k) => `<span><i class="${k === "walk" ? "dash" : ""}" style="background:${SEGMENT_COLOUR[k] || "var(--accent)"}"></i>${KIND_NAME[k] || k}</span>`).join("")
-    + `<span><i class="dot" style="background:var(--success)"></i>Start</span><span><i class="dot" style="background:var(--error)"></i>Destination found by Google</span>`;
+    + `<span><i class="dot" style="background:var(--success)"></i>Start</span><span><i class="dot" style="background:var(--error)"></i>${o.offline ? "Destination" : "Destination found by Google"}</span>`;
 }
 
 function sheetContent(o) {
@@ -1150,19 +1155,18 @@ function nextScreen() {
         </div>
       </div>
       ${impactPanel(o, logged)}
-      <button class="btn btn-secondary" data-action="save-backup">Save journey for offline viewing</button>
       ${o.weather_warning ? notice(`<b>Weather:</b> ${esc(o.weather_warning)}${state.plan.weather?.simulated ? " (Simulated)" : ""}`) : ""}
       ${o.traffic?.closure ? notice("<b>Road closure on this route.</b> Check the closure before you leave.", "error") : o.traffic?.added_delay_min ? notice(`<b>Traffic incidents:</b> about ${o.traffic.added_delay_min} min added${o.traffic.source === "Simulated" ? " (Simulated)" : ""}.`) : ""}
       <div class="actions">
         ${o.nav?.length ? `<button class="btn btn-primary" data-action="start-nav" data-id="${esc(o.id)}">${I.navArrow(18)}Start directions</button>` : ""}
         ${o.hire_providers?.length ? hireButtons(o) : ""}
         <button class="btn ${logged ? "btn-secondary" : "btn-success"}" data-action="log-trip" ${logged ? "disabled" : ""}>${logged ? `${I.check(16)}Added to your impact` : `${I.leaf(18)}I'm taking this trip`}</button>
-        <div class="btn-row">
+        ${o.offline ? "" : `<div class="btn-row">
           <a class="btn btn-secondary" href="${esc(o.maps_url)}" target="_blank" rel="noopener noreferrer" aria-label="Open in Google Maps">Google Maps ${I.external(16)}</a>
           <a class="btn btn-secondary" href="https://jp.translink.com.au/plan-your-journey/journey-planner" target="_blank" rel="noopener noreferrer">Translink ${I.external(16)}</a>
-        </div>
+        </div>`}
       </div>
-      ${o.mode === "transit" ? `<div class="group"><div class="group-card">
+      ${o.mode === "transit" && !o.offline ? `<div class="group"><div class="group-card">
         <div class="row"><span class="row-icon" style="--tone:var(--error)">${I.signal(18)}</span><span class="row-label">Watch for disruptions<small>Checks Translink every minute while this app is open</small></span>${toggle("watch", settings.watch, "Watch for disruptions")}</div>
         <div class="row"><span class="row-icon" style="--tone:var(--accent)">${I.bell(18)}</span><span class="row-label">Watch this trip in the background<small>Get a notification even when Reroute is closed</small></span>${toggle("bg.watch", bgWatchActive(o), "Watch this trip in the background")}</div>
         <div class="bg-slot" data-bg-slot>${bgSlotInner()}</div>
@@ -1170,7 +1174,7 @@ function nextScreen() {
       <div class="section-live"><p class="section-header">Step-by-step</p>${hasLive(o) ? liveAge() : ""}</div>
       <div class="timeline">${steps}</div>
       ${o.segments?.length ? `<p class="section-header">Route map</p>${mapBlock(o.id, legendFor(o))}` : ""}
-      ${ridesTile("Share this trip", "Have spare seats, or want to split an Uber? Post it to the shared ride board.")}
+      ${o.offline ? "" : ridesTile("Share this trip", "Have spare seats, or want to split an Uber? Post it to the shared ride board.")}
       ${notice("Estimates only. Check the service, stops and walking path before you travel.")}
     </div>
     <footer class="sticky"><button class="btn btn-primary" data-action="done">Done</button></footer>`;
@@ -1199,10 +1203,10 @@ function panicScreen() {
         <ol class="panic-steps">${steps}</ol>
         <div class="actions">
           ${o.nav?.length ? `<button class="panic-go" data-action="start-nav" data-id="${esc(o.id)}">Start directions</button>` : `<a class="panic-go" href="${esc(o.maps_url)}" target="_blank" rel="noopener noreferrer">Start directions</a>`}
-          <a class="btn btn-secondary" href="${esc(o.maps_url)}" target="_blank" rel="noopener noreferrer">Open in Google Maps ${I.external(16)}</a>
+          ${o.offline ? "" : `<a class="btn btn-secondary" href="${esc(o.maps_url)}" target="_blank" rel="noopener noreferrer">Open in Google Maps ${I.external(16)}</a>`}
           <button class="btn btn-secondary" data-action="panic-others">See other options</button>
         </div>
-        ${notice("Estimate from Google and Translink. Check signs at the stop.")}
+        ${notice(o.offline ? "Offline estimate from Translink's timetable and an OpenStreetMap route, not live. Check signs at the stop." : "Estimate from Google and Translink. Check signs at the stop.")}
       </div>`;
     }
   }
@@ -1367,15 +1371,15 @@ function buildNavMap(el) {
   if (!n) return;
   el.replaceChildren();
   const map = makeGoogleMap(el);
-  const entry = { map, bounds: new google.maps.LatLngBounds(), lines: [], markers: [], optionId: n.optionId, vehicles: new Map(), nav: true, me: null, zoomIdx: -1 };
+  const entry = { map, bounds: new GM.LatLngBounds(), lines: [], markers: [], optionId: n.optionId, vehicles: new Map(), nav: true, me: null, zoomIdx: -1 };
   entry.restyle = () => { map.setOptions({ styles: mapStyles() }); navLines(entry); };
   n.steps.forEach((s) => {
     if (s.arrive) return;
-    entry.lines.push({ line: new google.maps.Polyline({ path: s.poly.map(toLatLng), map, geodesic: true }), step: s });
+    entry.lines.push({ line: new GM.Polyline({ path: s.poly.map(toLatLng), map, geodesic: true }), step: s });
     s.poly.forEach((point) => entry.bounds.extend(toLatLng(point)));
   });
-  entry.markers.push(new google.maps.Marker({ position: toLatLng(n.steps[0].start), map, icon: mapIcon("start"), clickable: false }));
-  entry.markers.push(new google.maps.Marker({ position: toLatLng(n.steps.at(-1).end), map, icon: mapIcon("end"), clickable: false }));
+  entry.markers.push(new GM.Marker({ position: toLatLng(n.steps[0].start), map, icon: mapIcon("start"), clickable: false }));
+  entry.markers.push(new GM.Marker({ position: toLatLng(n.steps.at(-1).end), map, icon: mapIcon("end"), clickable: false }));
   fitMap(entry, { top: 48, right: 48, bottom: 48, left: 48 });
   map.addListener("dragstart", () => { if (state.nav?.following) { state.nav.following = false; navPaint(); } });
   maps.set(el, entry);
@@ -1389,7 +1393,7 @@ function navMap() {
   if (entry.lineIdx !== n.idx) { entry.lineIdx = n.idx; navLines(entry); }
   if (n.pos) {
     if (!entry.me) {
-      entry.me = new google.maps.Marker({ position: toLatLng(n.pos), map: entry.map, icon: mapIcon("me", n.heading), clickable: false, zIndex: 1000 });
+      entry.me = new GM.Marker({ position: toLatLng(n.pos), map: entry.map, icon: mapIcon("me", n.heading), clickable: false, zIndex: 1000 });
     } else {
       entry.me.setPosition(toLatLng(n.pos));
       entry.me.setIcon(mapIcon("me", n.heading));
@@ -1403,9 +1407,9 @@ function navMap() {
         if (entry.fitSig !== sig) {
           entry.fitSig = sig;
           entry.zoomIdx = null;
-          const bounds = new google.maps.LatLngBounds().extend(toLatLng(n.pos)).extend({ lat: v.lat, lng: v.lng });
+          const bounds = new GM.LatLngBounds().extend(toLatLng(n.pos)).extend({ lat: v.lat, lng: v.lng });
           entry.map.fitBounds(bounds, { top: 210, right: 48, bottom: 170, left: 48 });
-          google.maps.event.addListenerOnce(entry.map, "idle", () => { if (entry.map.getZoom() > 16) entry.map.setZoom(16); });
+          GM.event.addListenerOnce(entry.map, "idle", () => { if (entry.map.getZoom() > 16) entry.map.setZoom(16); });
         }
       } else {
         const key = `${n.idx}${riding ? "r" : ""}`, zoom = s?.transit ? 15 : s?.mode === "drive" ? 16 : 17;
@@ -1507,7 +1511,7 @@ async function navReplan() {
   navPaint();
   try {
     const origin = `${n.pos[0].toFixed(6)},${n.pos[1].toFixed(6)}`;
-    const plan = await postJSON("/api/plan", payload({ origin, origin_place_id: null, leave_now: true }));
+    const plan = await requestPlan(payload({ origin, origin_place_id: null, leave_now: true }));
     const pool = plan.options.filter((x) => x.nav?.length);
     const pick = pool.find((x) => x.mode === o.mode && x.fits) || pool.find((x) => x.mode === o.mode) || pool.find((x) => x.id === plan.recommended_id) || pool[0];
     if (!pick) throw new Error("No route was found from here. Try again in a moment.");
@@ -1885,7 +1889,7 @@ async function loadRadarFrames() {
 // A custom map type rather than ImageMapType, so a tile above zoom 7 can show the right part of its enlarged zoom-7 parent.
 function radarLayer(frame, i) {
   return {
-    tileSize: new google.maps.Size(256, 256), maxZoom: 12, name: "Rain radar", alt: "Rain radar",
+    tileSize: new GM.Size(256, 256), maxZoom: 12, name: "Rain radar", alt: "Rain radar",
     getTile(coord, zoom, doc) {
       const tile = doc.createElement("div");
       tile.className = "radar-tile";
@@ -1946,9 +1950,9 @@ function buildRadarMap(el) {
   const map = makeGoogleMap(el);
   const c = state.weatherAt || state.biasCoords || BRISBANE;
   map.setOptions({ center: toLatLng(c), zoom: 8, minZoom: 4, maxZoom: 11 });
-  const entry = { map, bounds: new google.maps.LatLngBounds(), lines: [], markers: [], vehicles: new Map(), optionId: null, radar: true, layers: new Map(), moved: false };
+  const entry = { map, bounds: new GM.LatLngBounds(), lines: [], markers: [], vehicles: new Map(), optionId: null, radar: true, layers: new Map(), moved: false };
   entry.restyle = () => map.setOptions({ styles: mapStyles() });
-  entry.here = new google.maps.Marker({ position: toLatLng(c), map, icon: mapIcon("here"), clickable: false, title: "Weather location" });
+  entry.here = new GM.Marker({ position: toLatLng(c), map, icon: mapIcon("here"), clickable: false, title: "Weather location" });
   entry.markers.push(entry.here);
   entry.dispose = () => { clearInterval(radar.timer); radar.playing = false; };
   map.addListener("dragstart", () => { entry.moved = true; });
@@ -2218,6 +2222,8 @@ function settingsContent() {
         <div class="row"><span class="row-icon" style="--tone:var(--error)">${I.signal(18)}</span><span class="row-label">Watch my chosen trip<small>Alerts you in the app if Translink posts a disruption</small></span>${toggle("watch", s.watch, "Watch my chosen trip")}</div>
       </div></div>
 
+      ${offlineSettings()}
+
       <p class="section-header">Directions</p>
       <div class="group"><div class="group-card">
         <div class="row"><span class="row-icon" style="--tone:var(--accent)">${I.volume(18)}</span><span class="row-label">Voice prompts<small>Speak each turn aloud during live directions</small></span>${toggle("voice", s.voice, "Voice prompts")}</div>
@@ -2304,50 +2310,8 @@ function applyTheme() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 
-// Offline journeys store text snapshots only; opening them never requests routing or maps.
-const BACKUP_KEY = "planb.backupJourneys.v1";
-function readBackups() {
-  try {
-    const value = JSON.parse(localStorage.getItem(BACKUP_KEY) || "[]");
-    return Array.isArray(value) ? value.filter(j => j && typeof j.id === "string" && typeof j.title === "string" && Array.isArray(j.steps)).slice(0, 20) : [];
-  } catch { return []; }
-}
-function writeBackups(journeys) {
-  try { localStorage.setItem(BACKUP_KEY, JSON.stringify(journeys)); return true; }
-  catch { toast("Could not save changes. Browser storage is unavailable or full.", "warning"); return false; }
-}
-function saveBackup() {
-  const o = findOption(state.chosenId);
-  if (!o) return;
-  const journeys = readBackups();
-  if (journeys.length >= 20) return toast("You can save 20 journeys. Delete one first.", "warning");
-  const title = prompt("Name this saved journey", o.title);
-  if (title === null) return;
-  if (!title.trim()) return toast("Enter a journey name.", "warning");
-  const snapshot = {
-    id: crypto.randomUUID(), title: title.trim().slice(0, 100), savedAt: new Date().toISOString(),
-    origin: state.form.origin, destination: state.form.destination,
-    arrival: o.arrival, simulated: demoOn() || anySimulated(o),
-    steps: (o.steps || []).map(step => ({ title: String(step.title || ""), minutes: step.minutes, board: step.board_time || "" }))
-  };
-  if (!snapshot.steps.length) return toast("This option has no steps to save.", "warning");
-  if (writeBackups([snapshot, ...journeys])) toast("Journey saved. Open Saved journeys from Home to view its steps offline.");
-}
-function backupsScreen() {
-  const journeys = readBackups();
-  return navbar(true) + '<div class="scroll"><h2>Saved journeys</h2>'
-    + notice("Saved snapshots, not live directions. Check current services before travelling. Maps and live updates need internet. Open Reroute online once to cache the app before using it offline.")
-    + '<p class="hint">Stored only in this browser. Clearing browser data removes these journeys. Up to 20 journeys.</p>'
-    + (journeys.length ? journeys.map(j => '<details class="group"><summary class="row">' + esc(j.title) + '</summary><div class="group-card" style="padding:16px">'
-      + '<p>' + esc(j.origin || "") + ' → ' + esc(j.destination || "") + '</p>'
-      + '<p class="hint">Saved ' + esc(new Date(j.savedAt).toLocaleString("en-AU")) + (j.simulated ? ' · Simulated journey' : '') + '</p>'
-      + '<p>Original estimated arrival: ' + esc(j.arrival ? new Date(j.arrival).toLocaleString("en-AU") : 'Unknown') + ' — not a current estimate.</p>'
-      + '<ol>' + j.steps.filter(step => step && typeof step.title === "string").map(step => '<li>' + esc(step.title) + (step.minutes ? ' · ' + esc(String(step.minutes)) + ' min' : '') + (step.board ? ' · Saved boarding time: ' + esc(step.board) : '') + '</li>').join('') + '</ol>'
-      + '<button class="btn btn-secondary" data-action="delete-backup" data-id="' + esc(j.id) + '">Delete journey</button></div></details>').join('')
-      : '<p>No saved journeys yet. Choose a route, then select “Save journey for offline viewing”.</p>') + '</div>';
-}
 
-const SCREENS = { backups: backupsScreen, home: homeScreen, journey: journeyScreen, results: resultsScreen, next: nextScreen, panic: panicScreen, nav: navScreen, dashboard: dashboardScreen, rides: ridesScreen, weather: weatherScreen, terms: termsScreen, privacy: privacyScreen, sources: sourcesScreen };
+const SCREENS = { "offline-area": offlineAreaScreen, home: homeScreen, journey: journeyScreen, results: resultsScreen, next: nextScreen, panic: panicScreen, nav: navScreen, dashboard: dashboardScreen, rides: ridesScreen, weather: weatherScreen, terms: termsScreen, privacy: privacyScreen, sources: sourcesScreen };
 const pageClass = (screen) => `page${screen === "panic" || screen === "nav" ? ` ${screen}` : ""}`;
 const viewport = document.getElementById("viewport");
 const app = document.getElementById("app");
@@ -2374,6 +2338,7 @@ function navigate(screen, direction = "forward", syncUrl = true) {
   if (state.screen === "nav") navStop();
   if (screen === "panic") startPanicLocate();
   if (screen === "weather") loadWeatherDetail();
+  if (state.screen === "offline-area") disposeAreaMap();
   collapseExpanded();
   closeSheet(true);
   closeDialog();
@@ -2392,6 +2357,7 @@ function navigate(screen, direction = "forward", syncUrl = true) {
   outgoing?.classList.add(outCls);
   currentPage = incoming;
   mountMaps(incoming);
+  if (screen === "offline-area") buildAreaMap();
   bindCharts(incoming);
   setTimeout(() => {
     outgoing?.remove();
@@ -2447,12 +2413,20 @@ function rerender() {
 // Google Maps is loaded only when a map is opened, with the separate browser key from /api/config (the server key is never sent to the browser).
 // Any failure (no key, no connection, a rejected key) leaves a calm message in the map slot; the steps, results and directions text keep working.
 // A failed load is not retried for 30 seconds so re-renders do not hammer the server; a rejected key is not retried until the page reloads.
+// Every map call goes through GM: Google Maps online, or the offline map in offline.js (the same subset of the API, drawn from the
+// downloaded OpenStreetMap area) while "Use Offline Maps" is on. Google map content is never stored for offline use.
+let GM = null;
 let googleMapsPromise = null;
 let mapsFailure = null;
 const MAPS_LOAD_TIMEOUT_MS = 15000;
 function loadGoogleMaps() {
+  if (state.offline) {
+    if (!window.RerouteOffline) return Promise.reject(new Error("The offline map could not start."));
+    GM = RerouteOffline.maps;
+    return Promise.resolve();
+  }
   if (mapsFailure && (mapsFailure.permanent || Date.now() - mapsFailure.at < 30000)) return Promise.reject(new Error(mapsFailure.message));
-  if (window.google?.maps?.Map && window.google.maps.Marker) return Promise.resolve();
+  if (window.google?.maps?.Map && window.google.maps.Marker) { GM = window.google.maps; return Promise.resolve(); }
   if (!googleMapsPromise) {
     googleMapsPromise = fetch("/api/config").then(async (response) => {
       const config = await response.json().catch(() => ({}));
@@ -2463,7 +2437,7 @@ function loadGoogleMaps() {
       const script = document.createElement("script");
       const fail = (message) => { clearTimeout(timer); script.remove(); delete window.__rerouteMapsReady; reject(new Error(message)); };
       const timer = setTimeout(() => fail("Google Maps took too long to load."), MAPS_LOAD_TIMEOUT_MS);
-      window.__rerouteMapsReady = () => { clearTimeout(timer); Promise.all([google.maps.importLibrary("maps"), google.maps.importLibrary("marker")]).then(() => resolve(), (error) => fail(error.message || "Google Maps could not start.")); };
+      window.__rerouteMapsReady = () => { clearTimeout(timer); Promise.all([google.maps.importLibrary("maps"), google.maps.importLibrary("marker")]).then(() => { if (!state.offline) GM = window.google.maps; resolve(); }, (error) => fail(error.message || "Google Maps could not start.")); };
       window.gm_authFailure = () => failMaps("Google rejected the map key. Check that the Maps JavaScript API is enabled for it and that this address is an allowed referrer.", true);
       script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&loading=async&callback=__rerouteMapsReady`;
       script.async = true;
@@ -2499,7 +2473,7 @@ const mapStyles = () => (document.documentElement.dataset.theme === "light" ? []
 const mapPadding = { top: 24, right: 72, bottom: 24, left: 24 };
 function makeGoogleMap(el) {
   el.classList.add("google-map");
-  return new google.maps.Map(el, {
+  return new GM.Map(el, {
     center: { lat: -27.4698, lng: 153.0251 }, zoom: 13, gestureHandling: "greedy",
     mapTypeControl: false, streetViewControl: false, fullscreenControl: false, zoomControl: false, rotateControl: false, cameraControl: false,
     styles: mapStyles(),
@@ -2509,7 +2483,7 @@ function fitMap(entry, padding = mapPadding) {
   if (entry?.bounds && !entry.bounds.isEmpty()) entry.map.fitBounds(entry.bounds, padding);
 }
 function resizeMap(entry) {
-  if (entry?.map) google.maps.event.trigger(entry.map, "resize");
+  if (entry?.map) GM.event.trigger(entry.map, "resize");
 }
 function mapIcon(kind, bearingDeg = null, vehicle = null) {
   const colours = {
@@ -2524,7 +2498,7 @@ function mapIcon(kind, bearingDeg = null, vehicle = null) {
         : kind === "traffic" || kind === "closure" ? '<path d="M22 12v12M22 29v1" stroke="#1C1303" stroke-width="3" stroke-linecap="round"/>'
           : '<circle cx="22" cy="22" r="6" fill="#fff"/>';
   const svgText = `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="16" fill="${colour}" stroke="#F1F5F9" stroke-width="3"/><g>${body}</g></svg>`;
-  return { url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svgText)}`, scaledSize: new google.maps.Size(44, 44), anchor: new google.maps.Point(22, 22) };
+  return { url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svgText)}`, scaledSize: new GM.Size(44, 44), anchor: new GM.Point(22, 22) };
 }
 
 function mountMaps(root) {
@@ -2546,19 +2520,19 @@ function buildMap(el) {
   if (!options.length) return;
   el.replaceChildren();
   const map = makeGoogleMap(el);
-  const entry = { map, bounds: new google.maps.LatLngBounds(), lines: [], markers: [], optionId: id === "__all" ? null : id, vehicles: new Map() };
+  const entry = { map, bounds: new GM.LatLngBounds(), lines: [], markers: [], optionId: id === "__all" ? null : id, vehicles: new Map() };
   entry.restyle = () => {
     map.setOptions({ styles: mapStyles() });
     entry.lines.forEach(({ line, kind, colour }) => line.setOptions({ strokeColor: colour || cssColour(SEGMENT_COLOUR[kind] || "var(--accent)") }));
   };
-  const info = entry.info = new google.maps.InfoWindow();
+  const info = entry.info = new GM.InfoWindow();
   options.forEach((o, index) => {
     const faded = id === "__all" && index > 0;
     (o.segments || []).forEach((s) => {
       if (!s.points?.length) return;
       const colour = s.colour || cssColour(SEGMENT_COLOUR[s.kind] || "var(--accent)");
       const path = s.points.map(toLatLng);
-      const line = new google.maps.Polyline({
+      const line = new GM.Polyline({
         path, map, strokeColor: colour, strokeWeight: s.kind === "walk" ? 4 : 6, strokeOpacity: faded ? 0.35 : 0.92,
         clickable: id === "__all", geodesic: true,
       });
@@ -2574,19 +2548,19 @@ function buildMap(el) {
   const first = options[0];
   const pts = (first.segments || []).flatMap((s) => s.points || []);
   if (pts.length) {
-    entry.markers.push(new google.maps.Marker({ position: toLatLng(pts[0]), map, icon: mapIcon("start"), clickable: false }));
-    entry.markers.push(new google.maps.Marker({ position: toLatLng(pts[pts.length - 1]), map, icon: mapIcon("end"), clickable: false }));
+    entry.markers.push(new GM.Marker({ position: toLatLng(pts[0]), map, icon: mapIcon("start"), clickable: false }));
+    entry.markers.push(new GM.Marker({ position: toLatLng(pts[pts.length - 1]), map, icon: mapIcon("end"), clickable: false }));
   }
   if (id !== "__all") (first.traffic?.events || []).forEach((ev) => {
     const position = { lat: Number(ev.lat), lng: Number(ev.lng) };
-    entry.markers.push(new google.maps.Marker({ position, map, icon: mapIcon(ev.closure ? "closure" : "traffic"),
+    entry.markers.push(new GM.Marker({ position, map, icon: mapIcon(ev.closure ? "closure" : "traffic"),
       title: `${ev.title}${ev.road ? ` · ${ev.road}` : ""}${ev.simulated ? " · Simulated" : ""}` }));
     entry.bounds.extend(position);
   });
   if (first.mode === "drive" && first.parking?.parks) {
     first.parking.parks.forEach((pk) => {
       const position = toLatLng(pk.location);
-      entry.markers.push(new google.maps.Marker({ position, map, icon: mapIcon("park"), title: `${pk.name} · ${pk.distance_m} m` }));
+      entry.markers.push(new GM.Marker({ position, map, icon: mapIcon("park"), title: `${pk.name} · ${pk.distance_m} m` }));
       entry.bounds.extend(position);
     });
   }
@@ -2600,7 +2574,7 @@ function buildMap(el) {
 // Native Google map markers stay attached to geographic coordinates during pinch zoom.
 function syncVehicles(entry, fromStep = 0) {
   const o = entry.optionId && findOption(entry.optionId);
-  if (!o?.nav || !window.google?.maps) return;
+  if (!o?.nav || !GM) return;
   const seen = new Set();
   o.nav.forEach((n, i) => {
     const v = n.transit && i >= fromStep ? rtOf(o, i).vehicle : null;
@@ -2609,7 +2583,7 @@ function syncVehicles(entry, fromStep = 0) {
     const text = `${KIND_NAME[n.transit.vehicle] || "Vehicle"} ${n.transit.line}${v.stops_away === null || v.stops_away === undefined ? "" : ` · ${plural(v.stops_away, "stop")} away`}`;
     let marker = entry.vehicles.get(i);
     if (!marker) {
-      marker = new google.maps.Marker({ position: { lat: v.lat, lng: v.lng }, map: entry.map, icon: mapIcon("vehicle", v.bearing, n.transit), title: text, zIndex: 700 });
+      marker = new GM.Marker({ position: { lat: v.lat, lng: v.lng }, map: entry.map, icon: mapIcon("vehicle", v.bearing, n.transit), title: text, zIndex: 700 });
       entry.vehicles.set(i, marker);
     } else {
       marker.setPosition({ lat: v.lat, lng: v.lng });
@@ -2629,13 +2603,13 @@ function collapseExpanded() {
 }
 // Removes every overlay and listener a map owns, so a closed sheet or left screen leaves nothing running.
 function disposeMap(entry) {
-  const clear = (item) => { google.maps.event.clearInstanceListeners(item); item.setMap(null); };
+  const clear = (item) => { GM.event.clearInstanceListeners(item); item.setMap(null); };
   entry.lines.forEach(({ line }) => clear(line));
   [...(entry.markers || []), ...entry.vehicles.values(), entry.me].forEach((marker) => marker && clear(marker));
   entry.info?.close();
   entry.dispose?.();
   if (entry.layers) entry.map.overlayMapTypes.clear();
-  google.maps.event.clearInstanceListeners(entry.map);
+  GM.event.clearInstanceListeners(entry.map);
 }
 function cleanMaps() {
   maps.forEach((entry, el) => {
@@ -2843,7 +2817,7 @@ async function search(extra = {}) {
   state.costOpen = false;
   rerender();
   try {
-    state.plan = await postJSON("/api/plan", payload(extra));
+    state.plan = await requestPlan(payload(extra));
     store.set("lastDestination", f.destinationCoords ? coordText(f.destinationCoords) : f.destination.trim());
     store.set("lastDestinationPlaceId", f.destinationPlaceId || null);
     state.sort = f.avoid ? "best" : "pt";
@@ -2860,6 +2834,7 @@ async function search(extra = {}) {
 
 async function fetchAlerts() {
   const r = await fetch("/api/alerts").catch(() => null);
+  if (r) noteResponse(r); else setOnline(false);
   const data = await r?.json().catch(() => ({}));
   if (!r?.ok) throw new Error(data?.error || "Live Translink alerts are unavailable.");
   state.alerts = data;
@@ -2995,10 +2970,31 @@ function setPath(object, path, value) {
 }
 
 const actions = {
-  "save-backup": saveBackup,
-  "delete-backup": (el) => { if (confirm("Delete this saved journey?")) { if (writeBackups(readBackups().filter(j => j.id !== el.dataset.id))) rerender(); } },
   back: goBack,
   // Straight home from any screen: closes sheets and Settings, stops live directions (watcher, timer, wake lock) and forgets a finished panic answer.
+  // Offline area and offline mode
+  "use-offline": () => enterOffline(),
+  "exit-offline": () => exitOffline(),
+  "offline-pick": () => {
+    if (state.offline || !offline.online) return toast("Choosing and downloading an area needs internet.", "warning");
+    offline.download = null;
+    offline.confirmDelete = false;
+    const go = () => navigate("offline-area");
+    if (settingsEl) { closeSettings(); setTimeout(go, 380); } else go();
+  },
+  "offline-view": () => openOfflinePreview(),
+  "offline-delete": async () => {
+    if (!offline.confirmDelete) { offline.confirmDelete = true; return rerenderSettings(); }
+    offline.confirmDelete = false;
+    await RerouteOffline.deletePack();
+    Object.assign(offline, { pack: null, summary: null });
+    RerouteOffline.setActivePack(null);
+    if (state.offline) exitOffline();
+    rerenderSettings();
+    toast("Offline data deleted from this device.");
+  },
+  "offline-download": () => downloadArea(),
+  "offline-days": (el) => { offline.days = Number(el.dataset.value); rerenderArea(); },
   "go-home": () => {
     closeSheet(true);
     if (settingsEl) closeSettings();
@@ -3036,7 +3032,7 @@ const actions = {
       picker.map.panTo(toLatLng(coords));
       picker.map.setZoom(Math.max(picker.map.getZoom(), 16));
       if (picker.me) picker.me.setPosition(toLatLng(coords));
-      else picker.me = new google.maps.Marker({ position: toLatLng(coords), map: picker.map, icon: mapIcon("here"), clickable: false, zIndex: 5, title: "Your location" });
+      else picker.me = new GM.Marker({ position: toLatLng(coords), map: picker.map, icon: mapIcon("here"), clickable: false, zIndex: 5, title: "Your location" });
     });
   },
   "picker-use": usePickedPlace,
@@ -3240,7 +3236,7 @@ const actions = {
     state.form = { ...freshForm(), origin, destination: dest, leave_now: true, deadline: deadline || "", budget: 200, walking: 60,
       originPlaceId: pm.coords || pm.originCoords ? null : pm.originPlaceId || null, destinationPlaceId: pm.destCoords ? null : pm.destPlaceId || null };
     try {
-      state.plan = await postJSON("/api/plan", payload({ purpose: "panic" }));
+      state.plan = await requestPlan(payload({ purpose: "panic" }));
       store.set("lastDestination", dest);
       pm.phase = state.plan.recommended_id ? "answer" : "ask";
       if (!state.plan.recommended_id) pm.error = state.plan.errors.join(" ") || "No route was found. Try a nearby landmark.";
@@ -3695,10 +3691,287 @@ function openAlternatives(id) {
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
 
+// ── Offline area: download (Settings → Offline info), the connection banner and offline mode ───────────────
+// One rectangular area can be saved on this device: an OpenStreetMap extract (the base map and the walking, cycling and driving
+// network) and Translink's scheduled services for a few days, both prepared by the server (offline.js stores and uses them).
+// Offline mode only starts when the traveller taps "Use Offline Maps", so it is always clear that results are not live.
+
+const offline = { pack: null, summary: null, loaded: false, online: navigator.onLine !== false, download: null, days: 3, confirmDelete: false };
+const offlineLimits = () => ({ max_side_km: 8, max_area_km2: 40, min_side_km: 0.5, max_days: 7, default_days: 3, ...(state.status?.offline_limits || {}) });
+async function loadOfflinePack() {
+  if (!window.RerouteOffline) { offline.loaded = true; return null; }
+  offline.pack = await RerouteOffline.loadPack().catch(() => null);
+  offline.summary = offline.pack ? RerouteOffline.packSummary(offline.pack) : null;
+  offline.loaded = true;
+  if (offline.pack) RerouteOffline.setActivePack(offline.pack);
+  return offline.pack;
+}
+
+// The service worker answers API reads from its cache when the network fails and marks them, so a cached answer means no internet.
+function setOnline(online) {
+  if (offline.online === online) return;
+  offline.online = online;
+  renderNetBanner();
+}
+const noteResponse = (response) => setOnline(!(response && response.headers.get("X-Reroute-Offline") === "1"));
+function netBannerInner() {
+  if (state.offline) {
+    return `<span class="net-dot off"></span><span class="net-text"><b>Offline maps · not live</b><small>${offline.online ? "You're back online." : "Routes and times are estimates from your downloaded area."}</small></span>
+      <button class="net-btn${offline.online ? " primary" : ""}" data-action="exit-offline">${offline.online ? "Use live data" : "Exit offline"}</button>`;
+  }
+  return `<span class="net-dot"></span><span class="net-text"><b>You're offline</b><small>Live routes, maps and alerts need internet.</small></span>
+    <button class="net-btn primary" data-action="use-offline">Use Offline Maps</button>`;
+}
+function renderNetBanner() {
+  const el = document.getElementById("net-banner");
+  if (!el) return;
+  const show = state.offline || !offline.online;
+  el.hidden = !show;
+  el.classList.toggle("mode", state.offline);
+  if (show) el.innerHTML = netBannerInner();
+}
+
+// Switching map provider rebuilds every map: Google maps are disposed with Google's API before the offline map takes over, and back.
+function resetMaps() {
+  disposeAreaMap();
+  closeSheet(true);
+  closePopup(true);
+  if (settingsEl) closeSettings();
+  collapseExpanded();
+  maps.forEach((entry, el) => { try { disposeMap(entry); } catch { /* already gone */ } maps.delete(el); });
+  mounting.clear();
+}
+async function enterOffline() {
+  if (!offline.loaded) await loadOfflinePack();
+  if (!offline.pack) return showDialog("No offline area downloaded", "Download an area in Settings → Offline info while you have internet. Then you can view its map, timetables and routes here without a connection.");
+  resetMaps();
+  if (state.screen === "nav") navStop();
+  state.offline = true;
+  GM = window.RerouteOffline.maps;
+  RerouteOffline.setActivePack(offline.pack);
+  state.plan = state.plan?.offline ? state.plan : null;
+  renderNetBanner();
+  state.stack = ["home"];
+  if (state.screen !== "home") navigate("home", "back"); else rerender();
+  toast("Offline maps are on. Routes are estimates from your downloaded area, not live.", "warning");
+}
+function exitOffline() {
+  resetMaps();
+  if (state.screen === "nav") navStop();
+  state.offline = false;
+  GM = window.google?.maps || null;
+  if (state.plan?.offline) state.plan = null;
+  renderNetBanner();
+  state.stack = ["home"];
+  if (state.screen !== "home") navigate("home", "back"); else rerender();
+  loadAlerts();
+  loadWeather();
+}
+
+// Plans come from the server online and from offline.js in offline mode, in the same shape.
+async function requestPlan(body) {
+  if (!state.offline) return postJSON("/api/plan", body);
+  const pack = offline.pack;
+  if (!pack) throw new Error("No offline area is downloaded.");
+  const point = (text, label) => {
+    const match = LATLNG_TEXT.exec(text || "");
+    if (match) return { lat: Number(match[1]), lng: Number(match[2]), label };
+    const saved = (pack.saved || []).find((p) => p.address === text || p.name.toLowerCase() === String(text).toLowerCase());
+    if (saved) return { lat: saved.lat, lng: saved.lng, label: saved.name };
+    const hit = RerouteOffline.search(pack, text || "", pack.saved || [])[0];
+    if (hit && hit.main.toLowerCase() === String(text).split(",")[0].trim().toLowerCase()) return { lat: hit.lat, lng: hit.lng, label: hit.main };
+    throw Object.assign(new Error(`“${text}” isn't in your downloaded area. Choose a suggestion or pick the place on the map.`), { status: 400 });
+  };
+  const local = (value) => (value ? new Date(`${value}:00+10:00`) : null);
+  const f = state.form || {};
+  return RerouteOffline.plan(pack, {
+    from: point(body.origin, f.origin === CURRENT_PLACE ? "Your location" : f.origin), to: point(body.destination, f.destination),
+    departure: body.leave_now ? new Date() : local(body.departure), deadline: local(body.deadline),
+    modes: body.modes, transit_modes: body.transit_modes, walking: body.walking, budget: body.budget, factors: body.emission_factors,
+    fuel_l_per_100km: body.vehicle?.fuel_l_per_100km, fuel_type: body.vehicle?.fuel_type, fuel_price: body.vehicle?.fuel_price,
+    fuel_price_fallback: pack.fuel?.price && pack.fuel.fuel_type === body.vehicle?.fuel_type ? { price: pack.fuel.price, source: "the local average when you downloaded the area" } : { price: settings.fuel_price, source: "your Settings price" },
+    parking_cost: body.parking_cost, flat_fare: body.transit_flat_fare, hire: body.hire_prices, purpose: body.purpose, saved: pack.saved || [],
+  });
+}
+const LATLNG_TEXT = /^\s*(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)\s*$/;
+// Offline address suggestions: suburbs, significant places, stops and streets in the downloaded area, with their coordinates.
+const offlineSuggestions = (text) => (offline.pack ? RerouteOffline.search(offline.pack, text, offline.pack.saved || []) : [])
+  .map((s) => ({ kind: s.kind === "stop" ? "transit" : s.kind === "street" ? "street" : s.kind === "saved" ? "saved" : "place", glyph: "star", main: s.main, secondary: s.secondary || "", text: [s.main, s.secondary].filter(Boolean).join(", "), coords: [s.lat, s.lng] }));
+
+// Settings → Offline info.
+const mb = (bytes) => `${(bytes / 1048576).toFixed(bytes < 10485760 ? 1 : 0)} MB`;
+const dayRange = (days) => (days?.length ? (days.length === 1 ? dateLabel(`${days[0]}T12:00:00+10:00`) : `${dateLabel(`${days[0]}T12:00:00+10:00`)} to ${dateLabel(`${days.at(-1)}T12:00:00+10:00`)}`) : "no days");
+function offlineSettings() {
+  const s = offline.summary, pack = offline.pack;
+  const rowBtn = (action, icon, tone, label, hint, extra = "") => `<button class="row" data-action="${action}" ${extra}><span class="row-icon" style="--tone:${tone}">${icon}</span><span class="row-label">${label}${hint ? `<small>${hint}</small>` : ""}</span><span class="chev">${I.chevronRight()}</span></button>`;
+  const expired = pack?.transit?.days?.length && pack.transit.days.at(-1) < brisbaneNowLocal().slice(0, 10);
+  return `<p class="section-header">Offline info</p>
+    <div class="group"><div class="group-card">
+      ${s ? `<div class="row"><span class="row-icon" style="--tone:var(--teal)">${I.map(18)}</span><span class="row-label">${esc(s.label || "Downloaded area")}<small>${mb(s.bytes)} · ${plural(s.stops, "stop")} · timetables for ${esc(dayRange(pack.transit?.days))}${expired ? " (out of date)" : ""} · saved ${dateLabel(s.saved_at)}</small></span></div>
+        ${rowBtn("offline-view", I.route(18), "var(--accent)", "View the offline map", "See exactly what is saved")}
+        ${rowBtn("offline-pick", I.download(18), "var(--success)", "Download a new area", "Replaces the area above")}
+        <button class="row" data-action="offline-delete"><span class="row-icon" style="--tone:var(--error)">${I.trash(18)}</span><span class="row-label" style="color:var(--error-text)">${offline.confirmDelete ? "Tap again to delete the offline area" : "Delete offline data"}</span></button>`
+      : rowBtn("offline-pick", I.download(18), "var(--success)", "Download an area for offline use", "Choose an area on the map. Its map, Translink timetables and walking, cycling and driving routes are saved on this device.")}
+    </div><p class="group-footer">For when you have no internet: tap “Use Offline Maps” on the banner that appears. Offline routes and times are estimates from the downloaded timetables and map, not live. One area of up to ${offlineLimits().max_side_km} km across can be saved. Map data © OpenStreetMap contributors; timetables from Translink.</p></div>`;
+}
+
+// Choosing the area: a Google map (online only) under a fixed rounded box; everything outside the box is dimmed.
+const area = { map: null, overlay: null, bbox: null, sizeKm: null };
+function offlineAreaScreen() {
+  return `${navbar(true)}<div class="area-page">
+    <div class="area-map" data-area-map><div class="skeleton map-skeleton" role="status" aria-label="Loading map"></div></div>
+    <div class="area-mask" aria-hidden="true"><div class="area-box" data-area-box><span class="area-size" data-area-size></span></div></div>
+    <div class="area-hint">${I.map(16)}<span>Move and zoom the map so the box covers the area you need.</span></div>
+    <div class="area-sheet" data-area-sheet>${areaSheetInner()}</div></div>`;
+}
+function areaSheetInner() {
+  const d = offline.download, lim = offlineLimits();
+  return `<div data-area-status>${areaStatusInner()}</div>
+      <div class="area-days"><span>Timetables for</span>${segmented("offline_days", String(offline.days), [["1", "1 day"], ["3", "3 days"], [String(lim.max_days), `${lim.max_days} days`]], "offline-days")}</div>
+      ${d?.error ? notice(esc(d.error), "error") : ""}
+      <div data-area-progress>${d?.busy ? areaProgressInner() : ""}</div>
+      <button class="btn btn-primary" data-action="offline-download" ${d?.busy ? 'disabled aria-busy="true"' : area.failed || !area.bbox ? "disabled" : ""}>${d?.busy ? "Downloading…" : "Download Information"}</button>
+      <p class="fine">Saves the map, suburb and major place names, Translink timetables and the road and path network inside the box, plus your saved places in it. ${offline.online ? "" : "You're offline, so the map and download need internet."}</p>`;
+}
+function areaStatusInner() {
+  const lim = offlineLimits(), z = area.sizeKm;
+  if (area.failed) return `<p class="area-readout bad">Choosing an area needs the map, which couldn't load. Try again with a connection, or check the server's browser map key.</p>`;
+  if (!z) return `<p class="area-readout">Finding the area…</p>`;
+  const tooBig = z.w > lim.max_side_km || z.h > lim.max_side_km || z.w * z.h > lim.max_area_km2, tooSmall = z.w < lim.min_side_km || z.h < lim.min_side_km;
+  return `<p class="area-readout${tooBig || tooSmall ? " bad" : ""}"><b>${z.w.toFixed(1)} × ${z.h.toFixed(1)} km</b> · ${(z.w * z.h).toFixed(0)} km²${tooBig ? ` · too large, zoom in (up to ${lim.max_side_km} km across)` : tooSmall ? " · too small, zoom out" : ""}</p>`;
+}
+function areaProgressInner() {
+  const p = offline.download?.progress || { step: "map" };
+  const steps = [["map", "Map and routes (OpenStreetMap)"], ["transit", "Translink timetables"], ["saving", "Saving on this device"]];
+  const at = Math.max(0, steps.findIndex(([k]) => k === p.step));
+  // The server prepares large areas in the background and asks the app to try again; say so rather than look stuck.
+  const wait = p.waiting ? `<small class="area-wait">The server is still preparing this area. Trying again in about ${Math.round(p.waiting)} seconds.</small>` : "";
+  return `<div class="area-progress" role="status">${steps.map(([k, label], i) => `<span class="${i < at ? "done" : i === at ? "now" : ""}">${i < at ? I.check(14) : ""}${label}</span>${i === at ? wait : ""}`).join("")}
+    <div class="progress"><span style="transform:scaleX(${Math.max(0.05, (at + (p.total ? Math.min(1, p.done / p.total) : 0.4)) / steps.length)})"></span></div></div>`;
+}
+function measureArea() {
+  const sheet = currentPage?.querySelector("[data-area-sheet]");
+  if (sheet) currentPage.style.setProperty("--area-sheet", `${sheet.offsetHeight}px`);
+  const box = currentPage?.querySelector("[data-area-box]"), el = area.map?.getDiv();
+  const proj = area.overlay?.getProjection();
+  if (!box || !el || !proj) return;
+  const m = el.getBoundingClientRect(), b = box.getBoundingClientRect();
+  const nw = proj.fromContainerPixelToLatLng(new GM.Point(b.left - m.left, b.top - m.top));
+  const se = proj.fromContainerPixelToLatLng(new GM.Point(b.right - m.left, b.bottom - m.top));
+  if (!nw || !se) return;
+  area.bbox = [se.lat(), nw.lng(), nw.lat(), se.lng()].map((v) => Number(v.toFixed(5)));
+  area.sizeKm = { w: dist([area.bbox[0], area.bbox[1]], [area.bbox[0], area.bbox[3]]) / 1000, h: dist([area.bbox[0], area.bbox[1]], [area.bbox[2], area.bbox[1]]) / 1000 };
+  setHTML(currentPage.querySelector("[data-area-status]"), areaStatusInner());
+  const size = currentPage.querySelector("[data-area-size]");
+  if (size) size.textContent = `${area.sizeKm.w.toFixed(1)} × ${area.sizeKm.h.toFixed(1)} km`;
+}
+function buildAreaMap() {
+  const el = currentPage?.querySelector("[data-area-map]");
+  measureArea();
+  if (!el || state.offline) return;
+  loadGoogleMaps().then(() => {
+    if (!document.body.contains(el)) return;
+    el.replaceChildren();
+    const c = offline.pack?.bbox ? [(offline.pack.bbox[0] + offline.pack.bbox[2]) / 2, (offline.pack.bbox[1] + offline.pack.bbox[3]) / 2] : state.biasCoords || BRISBANE;
+    const map = area.map = makeGoogleMap(el);
+    map.setOptions({ center: toLatLng(c), zoom: 13, minZoom: 10, clickableIcons: false });
+    area.overlay = Object.assign(new GM.OverlayView(), { onAdd() {}, draw() {}, onRemove() {} });
+    area.overlay.setMap(map);
+    map.addListener("idle", measureArea);
+    map.addListener("bounds_changed", () => requestAnimationFrame(measureArea));
+  }).catch((error) => {
+    if (!document.body.contains(el)) return;
+    area.failed = error.message;
+    currentPage?.querySelector(".area-mask")?.setAttribute("hidden", "");
+    showMapFail(el, error.message);
+    rerenderArea();
+  });
+}
+function disposeAreaMap() {
+  if (!area.map) return;
+  area.overlay?.setMap(null);
+  GM?.event?.clearInstanceListeners(area.map);
+  Object.assign(area, { map: null, overlay: null, bbox: null, sizeKm: null, failed: null });
+}
+// Saved places come along with the area (only those inside it). Coordinates come from a dropped pin, or from the place's Google ID
+// via the server's place lookup; text-only addresses without either cannot be placed offline.
+async function savedPlacesFor(bbox) {
+  const inBox = (lat, lng) => lat >= bbox[0] && lat <= bbox[2] && lng >= bbox[1] && lng <= bbox[3];
+  const out = [];
+  for (const p of settings.saved_places.filter((place) => place.address)) {
+    let c = null;
+    const m = LATLNG_TEXT.exec(p.address);
+    if (m) c = [Number(m[1]), Number(m[2])];
+    else if (p.place_id) {
+      const r = await fetch(`/api/place?id=${encodeURIComponent(p.place_id)}`).catch(() => null);
+      const data = r?.ok ? await r.json().catch(() => null) : null;
+      if (data?.location) c = data.location;
+    }
+    if (c && inBox(c[0], c[1])) out.push({ name: p.name, address: p.address, lat: c[0], lng: c[1] });
+  }
+  return out;
+}
+async function downloadArea() {
+  const lim = offlineLimits(), z = area.sizeKm, bbox = area.bbox;
+  if (!bbox || !z) return;
+  if (z.w > lim.max_side_km || z.h > lim.max_side_km || z.w * z.h > lim.max_area_km2) return toast(`Zoom in: the area can be up to ${lim.max_side_km} km across.`, "warning");
+  if (z.w < lim.min_side_km || z.h < lim.min_side_km) return toast("Zoom out a little: the area is too small.", "warning");
+  try { const r = await fetch("/api/status"); if (r.ok) state.status = await r.json(); } catch { /* the download itself reports a connection problem */ }
+  if (state.status?.offline_transit && state.status.offline_transit !== "ready") {
+    offline.download = { busy: false, error: state.status.offline_transit === "loading" ? "Translink's timetables are still being prepared on the server. Try again in a few minutes." : "Translink's timetables aren't available on the server right now, so an offline area can't be downloaded." };
+    return rerenderArea();
+  }
+  offline.download = { busy: true, progress: { step: "map" }, error: null };
+  rerenderArea();
+  try {
+    const pack = await RerouteOffline.download(bbox, { days: offline.days, onProgress: (p) => { offline.download.progress = p; setHTML(currentPage?.querySelector("[data-area-progress]"), areaProgressInner()); } });
+    offline.download.progress = { step: "saving" };
+    setHTML(currentPage?.querySelector("[data-area-progress]"), areaProgressInner());
+    pack.saved = await savedPlacesFor(bbox);
+    // The local average fuel price is saved with the area so offline driving costs are not left incomplete.
+    try { const r = await fetch(`/api/fuel?lat=${((bbox[0] + bbox[2]) / 2).toFixed(4)}&lng=${((bbox[1] + bbox[3]) / 2).toFixed(4)}&type=${settings.fuel_type}`); const f = r.ok ? await r.json() : null; if (f?.price) pack.fuel = { price: f.price, fuel_type: settings.fuel_type, fetched_at: new Date().toISOString() }; } catch { /* optional */ }
+    const centre = [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
+    const near = (pack.map?.places || []).filter((p) => ["suburb", "neighbourhood", "quarter", "town", "city"].includes(p.k)).sort((a, b) => dist(centre, [a.lat, a.lng]) - dist(centre, [b.lat, b.lng]));
+    pack.label = pack.label || (near.length ? `Around ${near.slice(0, 2).map((p) => p.n).join(" and ")}` : "Downloaded area");
+    if (!(await RerouteOffline.savePack(pack))) throw new Error("This browser couldn't store the offline data (it may be in private mode or out of space).");
+    offline.pack = pack;
+    offline.summary = RerouteOffline.packSummary(pack);
+    RerouteOffline.setActivePack(pack);
+    offline.download = null;
+    toast(`Saved for offline use: ${pack.label} (${mb(offline.summary.bytes)}).`);
+    goBack();
+  } catch (error) {
+    offline.download = { busy: false, error: error.message || "The download failed. Try again." };
+    rerenderArea();
+  }
+}
+const rerenderArea = () => { const sheet = state.screen === "offline-area" && currentPage?.querySelector("[data-area-sheet]"); if (sheet) { sheet.innerHTML = areaSheetInner(); measureArea(); } };
+// A full-height preview of what is saved, drawn by the offline map whether or not there is internet.
+function openOfflinePreview() {
+  if (!offline.pack || !window.RerouteOffline) return;
+  openPopup(`<div class="grabber"><span></span></div>
+    <div class="sheet-head"><h3 id="popup-title">${esc(offline.summary?.label || "Offline map")}</h3><button class="icon-btn" data-action="close-popup" aria-label="Close">${I.x(18)}</button></div>
+    <div class="picker-body"><div class="map-wrap picker-wrap"><div class="map picker-map" data-offline-preview></div></div>
+      <p class="fine">${esc(dayRange(offline.pack.transit?.days))} timetables · ${plural(offline.summary?.stops || 0, "stop")} · ${mb(offline.summary?.bytes || 0)} · Map data © OpenStreetMap contributors</p></div>`, "picker offline-preview");
+  const el = popupEl.querySelector("[data-offline-preview]");
+  RerouteOffline.setActivePack(offline.pack);
+  const OM = RerouteOffline.maps, b = offline.pack.bbox;
+  const map = new OM.Map(el, { center: { lat: (b[0] + b[2]) / 2, lng: (b[1] + b[3]) / 2 }, zoom: 13, gestureHandling: "greedy" });
+  map.setOptions({ offlineExtras: { places: (offline.pack.saved || []).map((p) => ({ name: p.name, lat: p.lat, lng: p.lng })) } });
+  const bounds = new OM.LatLngBounds();
+  bounds.extend({ lat: b[0], lng: b[1] });
+  bounds.extend({ lat: b[2], lng: b[3] });
+  map.fitBounds(bounds, 16);
+}
+
 async function boot() {
   applyTheme();
   renderDemoPill();
   rerender();
+  renderNetBanner();
+  window.addEventListener("online", () => setOnline(true));
+  window.addEventListener("offline", () => setOnline(false));
+  loadOfflinePack().then(() => { if (settingsEl) rerenderSettings(); });
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
     navigator.serviceWorker.addEventListener("message", (event) => {
@@ -3709,6 +3982,7 @@ async function boot() {
   try {
     const response = await fetch("/api/status");
     state.status = await response.json();
+    noteResponse(response);
   } catch {
     state.status = { live_available: false };
   }
@@ -3748,12 +4022,13 @@ const autocomplete = (() => {
       settings.saved_places.filter((p) => p.address && (!q || p.address.toLowerCase().includes(q) || p.name.toLowerCase().startsWith(q))).slice(0, q ? 3 : 4)
         .forEach((p) => entries.push({ kind: "saved", glyph: placeGlyph(p), main: p.name, secondary: p.address, text: p.address, place_id: p.place_id }));
     }
-    recent().filter((r) => !q || r.text.toLowerCase().includes(q)).slice(0, q ? 2 : 4)
+    // Offline, recent Google places are left out: they have a place ID but no coordinates, so they cannot be routed from the download.
+    (state.offline ? [] : recent()).filter((r) => !q || r.text.toLowerCase().includes(q)).slice(0, q ? 2 : 4)
       .forEach((r) => { if (!entries.some((e) => e.text === r.text)) entries.push({ ...r, kind: "recent" }); });
     return entries;
   }
   // Every location field ends its list with "Choose on map".
-  const withMap = (list) => [...list, { kind: "map", main: "Choose on map", secondary: "Tap a place, or press and hold to drop a pin" }];
+  const withMap = (list) => [...list, { kind: "map", main: "Choose on map", secondary: state.offline ? "Press and hold to drop a pin" : "Tap a place, or press and hold to drop a pin" }];
 
   function bolded(item) {
     if (!item.matches?.length) return esc(item.main);
@@ -3775,7 +4050,7 @@ const autocomplete = (() => {
       list.addEventListener("click", (e) => { const opt = e.target.closest("[data-ac-index]"); if (opt) choose(Number(opt.dataset.acIndex)); });
       viewport.appendChild(list);
     }
-    const hasGoogle = items.some((i) => !["saved", "recent", "location", "map"].includes(i.kind));
+    const hasGoogle = !state.offline && items.some((i) => !["saved", "recent", "location", "map"].includes(i.kind));
     list.innerHTML = `${items.map((item, i) => `
       <div class="ac-item${i === active ? " active" : ""}" id="ac-opt-${i}" role="option" aria-selected="${i === active}" data-ac-index="${i}" style="animation-delay:${i * 28}ms">
         <span class="ac-icon ${item.kind === "map" ? "pick" : item.kind}">${item.kind === "saved" ? I[item.glyph || "star"](16) : (ICON[item.kind] || ICON.place)()}</span>
@@ -3834,6 +4109,10 @@ const autocomplete = (() => {
     const text = el.value.trim();
     items = withMap(local(text));
     active = -1;
+    if (state.offline) {
+      if (text.length >= 2) items = withMap([...local(text), ...offlineSuggestions(text)].slice(0, 7));
+      return render();
+    }
     if (text.length < 3 || !state.status?.live_available) return render();
     render(true);
     timer = setTimeout(() => fetchSuggestions(text), 220);
@@ -3873,7 +4152,8 @@ const autocomplete = (() => {
       return;
     }
     el.value = item.text;
-    applyPlace(path, item.text, item.place_id);
+    if (item.coords) applyPlace(path, storesText(path) ? coordText(item.coords) : item.text, null, storesText(path) ? null : item.coords);
+    else applyPlace(path, item.text, item.place_id);
     if (item.place_id) store.set("recentPlaces", [{ text: item.text, main: item.main, secondary: item.secondary, place_id: item.place_id }, ...recent().filter((r) => r.text !== item.text)].slice(0, 6));
     close();
     const inputs = [...(el.closest(".scroll, .settings-scroll")?.querySelectorAll("[data-ac]") || [])];
@@ -3925,7 +4205,8 @@ const picker = { path: null, map: null, me: null, overlay: null, choice: null, l
 const PICKER_FOR = { "form.origin": "your start", "form.destination": "your destination", "panic.origin": "where you are", "panic.dest": "your destination", "places.home": "Home", "places.work": "Work/Uni", "draft.address": "this place" };
 function pickerCardInner() {
   const c = picker.choice;
-  if (!c) return `<div class="picker-hint"><span class="row-icon" style="--tone:var(--accent)">${I.pin(18)}</span><p><b>Tap a place</b> on the map to choose it, or <b>press and hold</b> anywhere to drop a pin.</p></div>`;
+  // Offline maps have no Google places to tap, so only the pin is offered there.
+  if (!c) return `<div class="picker-hint"><span class="row-icon" style="--tone:var(--accent)">${I.pin(18)}</span><p>${state.offline ? "<b>Press and hold</b> anywhere on the offline map to drop a pin." : "<b>Tap a place</b> on the map to choose it, or <b>press and hold</b> anywhere to drop a pin."}</p></div>`;
   if (c.kind === "loading") return skelLines("Looking up this place", 60, 80);
   if (c.kind === "place") return `<div class="picker-choice"><span class="row-icon" style="--tone:var(--error)">${I.pin(18)}</span><div><b>${esc(c.name)}</b><small>${esc(c.address)}</small><span class="picker-attr">${googleMapsAttribution()}</span></div></div>`;
   return `<div class="picker-choice"><span class="row-icon" style="--tone:var(--error)">${I.pin(18)}</span><div><b>Dropped pin</b><small>${c.lat.toFixed(5)}, ${c.lng.toFixed(5)} · drag the pin to adjust it</small>${c.note ? `<small class="warn-text">${esc(c.note)}</small>` : ""}</div></div>`;
@@ -3974,7 +4255,7 @@ function openMapPicker(path) {
     el.replaceChildren();
     el.classList.add("google-map");
     const start = pickerStart(path);
-    const map = picker.map = new google.maps.Map(el, {
+    const map = picker.map = new GM.Map(el, {
       center: toLatLng(start.c), zoom: start.zoom, gestureHandling: "greedy", clickableIcons: true,
       mapTypeControl: false, streetViewControl: false, fullscreenControl: false, zoomControl: false, rotateControl: false, cameraControl: false, styles: pickerStyles(),
     });
@@ -3982,7 +4263,7 @@ function openMapPicker(path) {
     picker.overlay.onDragStart = () => { picker.req++; }; // a place lookup still on its way is now out of date
     picker.overlay.onDrop = (latLng) => { picker.req++; picker.choice = { kind: "pin", lat: latLng.lat(), lng: latLng.lng() }; paintPicker(); };
     picker.overlay.setMap(map);
-    if (state.biasCoords) picker.me = new google.maps.Marker({ position: toLatLng(state.biasCoords), map, icon: mapIcon("here"), clickable: false, zIndex: 5, title: "Your location" });
+    if (state.biasCoords) picker.me = new GM.Marker({ position: toLatLng(state.biasCoords), map, icon: mapIcon("here"), clickable: false, zIndex: 5, title: "Your location" });
     map.addListener("click", (event) => {
       const justPressed = picker.pressing || performance.now() - picker.lastPress < 800;
       if (event.placeId) { event.stop(); if (!justPressed) choosePoi(event.placeId, event.latLng); }
@@ -4002,7 +4283,7 @@ function bindLongPress(el) {
     const box = el.getBoundingClientRect(), x = e.clientX, y = e.clientY;
     press = { id: e.pointerId, x, y, timer: setTimeout(() => {
       press = null;
-      const latLng = picker.overlay?.getProjection()?.fromContainerPixelToLatLng(new google.maps.Point(x - box.left, y - box.top));
+      const latLng = picker.overlay?.getProjection()?.fromContainerPixelToLatLng(new GM.Point(x - box.left, y - box.top));
       if (latLng) { picker.lastPress = performance.now(); picker.pressing = true; dropPin(latLng); }
     }, 550) };
   }, true);
@@ -4018,12 +4299,12 @@ function bindLongPress(el) {
 // is put down it bounces back into a pin. The animations are CSS, so the reduced-motion setting shortens them like every other animation.
 const PLACE_LOADING_COLOUR = "#7B9EB0"; // Google's neutral place colour, shown while a tapped place is looked up
 function pickerOverlay(map) {
-  const view = new google.maps.OverlayView();
+  const view = new GM.OverlayView();
   const el = document.createElement("div");
   el.className = "pick-marker";
   el.hidden = true;
   el.innerHTML = `<span class="pick-shadow"></span><span class="pick-lift" role="img" aria-label="Chosen place"><span class="pick-shape"><i class="pick-dot"></i></span></span>`;
-  google.maps.OverlayView.preventMapHitsAndGesturesFrom(el);
+  GM.OverlayView.preventMapHitsAndGesturesFrom(el);
   const lift = el.querySelector(".pick-lift"), shape = el.querySelector(".pick-shape");
   let pos = null, drag = null;
   const draw = () => { const p = pos && view.getProjection()?.fromLatLngToDivPixel(pos); if (p) { el.style.left = `${p.x}px`; el.style.top = `${p.y}px`; } };
@@ -4057,7 +4338,7 @@ function pickerOverlay(map) {
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
     if (!drag.moved && Math.hypot(dx, dy) < 4) return;
     if (!drag.moved) { drag.moved = true; view.onDragStart?.(); replay(); setLook({ kind: "pin" }); el.classList.add("dragging"); }
-    pos = view.getProjection()?.fromDivPixelToLatLng(new google.maps.Point(drag.start.x + dx, drag.start.y + dy)) || pos;
+    pos = view.getProjection()?.fromDivPixelToLatLng(new GM.Point(drag.start.x + dx, drag.start.y + dy)) || pos;
     draw();
   });
   const end = (e) => {
@@ -4116,9 +4397,9 @@ function usePickedPlace() {
   else rerender();
 }
 function disposePicker() {
-  if (picker.me) { google.maps.event.clearInstanceListeners(picker.me); picker.me.setMap(null); }
+  if (picker.me) { GM.event.clearInstanceListeners(picker.me); picker.me.setMap(null); }
   picker.overlay?.setMap(null);
-  if (picker.map) google.maps.event.clearInstanceListeners(picker.map);
+  if (picker.map) GM.event.clearInstanceListeners(picker.map);
   Object.assign(picker, { map: null, me: null, overlay: null, choice: null, path: null, req: picker.req + 1 });
 }
 

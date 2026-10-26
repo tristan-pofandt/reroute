@@ -31,12 +31,14 @@
 </head>
 <body>
   <div class="app" id="app" data-screen="home">
+    <div class="net-banner" id="net-banner" role="status" aria-live="polite" hidden></div>
     <main class="viewport" id="viewport"></main>
     <div class="demo-pill" id="demo-pill" hidden>
       <button class="demo-edit" data-action="open-demo" aria-label="Demo mode: edit settings"><span class="demo-dot"></span>Demo mode</button>
       <button class="demo-exit" data-action="demo-exit" aria-label="Exit demo mode"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
     </div>
   </div>
+  <script src="offline.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

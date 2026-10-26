@@ -5,6 +5,7 @@ background monitor threads and caches live in the process).
 """
 
 from datetime import datetime, timedelta
+import gzip
 import io
 import json
 import logging
@@ -21,9 +22,12 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 import google_api
 from google_api import RoutesError, ServiceError
 from gtfs_rt import FeedError, Monitor
-from gtfs_static import Static
+from gtfs_static import NotReady, Static
 from limits import DailyCap, RateLimiter, is_loopback
 from live_routes import BRISBANE, PLACE_ID, InputError, Services, live, plan
+import offline_area
+from offline_area import AreaError, Jobs, Pending, parse_bbox, parse_days
+from osm import OSM, OverpassBusy, OverpassError
 from push import Push, PushError
 from rides import Board, RideError
 from traffic import Traffic
@@ -40,6 +44,7 @@ FILES = {
     "/about": ("index.html", "text/html; charset=utf-8"),
     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
     "/app.css": ("app.css", "text/css; charset=utf-8"),
+    "/offline.js": ("offline.js", "text/javascript; charset=utf-8"),
     "/demo.html": ("demo.html", "text/html; charset=utf-8"),
     "/demo.js": ("demo.js", "text/javascript; charset=utf-8"),
     "/styles.css": ("styles.css", "text/css; charset=utf-8"),
@@ -94,6 +99,25 @@ def failure(message, status):
     return reply({"error": message}, status)
 
 
+class Limited(Exception):
+    """A visitor has used up their hourly offline downloads; `wait` is the number of seconds until the next one is allowed."""
+
+    def __init__(self, wait):
+        super().__init__(wait)
+        self.wait = wait
+
+
+def json_bytes(text):
+    """A response for JSON that is already encoded (the large offline extracts), gzipped when the browser accepts it."""
+    response = Response(text, mimetype="application/json")
+    if len(text) > 1024 and "gzip" in request.headers.get("Accept-Encoding", "").lower():
+        response.set_data(gzip.compress(text, 6))  # numbers in JSON shrink about five times, which matters on a phone connection
+        response.headers["Content-Encoding"] = "gzip"
+    response.headers["Vary"] = "Accept-Encoding"
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 def _coordinates(args, default=None):
     """lat and lng query values inside Australia, else ValueError."""
     if default is None and ("lat" not in args or "lng" not in args):
@@ -105,7 +129,7 @@ def _coordinates(args, default=None):
 
 
 def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, weather=None, traffic=None, push=None, services=None,
-               clock=time.time, public_url=None):
+               clock=time.time, public_url=None, osm=None, offline_wait=offline_area.WAIT_SECONDS):
     """Build the Flask app. Every external dependency can be replaced, which is how the tests avoid the network."""
     if key is UNSET:
         key, key_source = load_key()
@@ -118,12 +142,16 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
     weather = weather if weather is not None else Weather()
     traffic = traffic if traffic is not None else Traffic(os.getenv("QLDTRAFFIC_API_KEY") or None)
     push = push if push is not None else Push(data, monitor)
+    osm = osm if osm is not None else OSM(data / "offline")
     services = services or Services(monitor=monitor, board=board, static=static, weather=weather, traffic=traffic)
     public_url = public_url if public_url is not None else (os.getenv("PUBLIC_URL") or "").strip().rstrip("/") or None
     limiter = RateLimiter(clock)
     plan_limit, autocomplete_limit, fuel_limit = (_int("PLANB_PLAN_LIMIT_PER_HOUR", 40), _int("PLANB_AUTOCOMPLETE_LIMIT_PER_HOUR", 400),
                                                   _int("PLANB_FUEL_LIMIT_PER_HOUR", 120))
     place_limit = _int("PLANB_PLACE_LIMIT_PER_HOUR", 60)
+    offline_limit = _int("PLANB_OFFLINE_LIMIT_PER_HOUR", 6)  # each of the map and the timetable; these are not Google requests
+    waiting = threading.BoundedSemaphore(offline_area.MAX_WAITING)  # shared, so at most two threads ever wait on offline extracts
+    jobs = {"map": Jobs("map", offline_wait, clock, waiting), "transit": Jobs("transit", offline_wait, clock, waiting)}
     caps = {"plan": DailyCap(_int("PLANB_DAILY_GOOGLE_CAP", 50), clock), "autocomplete": DailyCap(_int("PLANB_DAILY_AUTOCOMPLETE_CAP", 500), clock)}
     maps_browser_key = os.getenv("MAPS_BROWSER_API_KEY", "").strip() or None
     warning = shared_key_warning(key, maps_browser_key)
@@ -136,7 +164,7 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
     if trusted:
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=trusted, x_proto=trusted, x_host=trusted)
     app.extensions["planb"] = {"key": key, "monitor": monitor, "board": board, "static": static, "weather": weather, "traffic": traffic,
-                               "push": push, "services": services, "limiter": limiter, "caps": caps}
+                               "push": push, "services": services, "limiter": limiter, "caps": caps, "osm": osm, "jobs": jobs}
     app.config["PLANB_KEY_SOURCE"] = key_source
 
     # ── Helpers ────────────────────────────────────────────────────────────
@@ -164,6 +192,34 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
             what = "address suggestions. Type the full address instead" if cap == "autocomplete" else "live searches. Try again tomorrow"
             return failure(f"Reroute has reached its daily limit of {what}.", 429)
         return None
+
+    def offline_admit(bucket):
+        """A check run only when a new extract is about to start: raises Limited when this device has used its hourly allowance.
+
+        Cached answers, joins of an extract already running and "still preparing" retries are never counted. Counts with or without a key.
+        """
+        def check():
+            address, local = client()
+            if local:
+                return
+            allowed, wait = limiter.allow(bucket, address, offline_limit)
+            if not allowed:
+                raise Limited(wait)
+        return check
+
+    def limited(error):
+        response = failure(f"Too many offline downloads from this device. Try again in about {max(1, error.wait // 60)} minute(s).", 429)
+        response.headers["Retry-After"] = str(error.wait)
+        return response
+
+    def broken(what):
+        app.logger.exception("Offline %s extract failed", what)
+        return failure("The offline data could not be prepared. Try again later.", 500)
+
+    def preparing(message):
+        response = failure(message, 503)
+        response.headers["Retry-After"] = "60"
+        return response
 
     def read_json(limit=8192, allow_empty=False):
         try:
@@ -261,6 +317,7 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
             "deadline": (now + timedelta(minutes=65)).strftime("%Y-%m-%dT%H:%M"),
             "fuel_types": google_api.FUEL_TYPES,
             "push": push.ready(), "gtfs_static": static.status(), "public_url": public_url, "version": VERSION,
+            "offline_limits": offline_area.limits(), "offline_transit": static.offline_status(),
         })
 
     @app.get("/api/config")
@@ -371,6 +428,58 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
             return failure("Enter a valid location in Australia and a radius in kilometres.", 400)
         events, available = traffic.near_point(lat, lng, radius, datetime.now(BRISBANE))
         return reply({"events": events, "available": available, "fetched_at": datetime.now(BRISBANE).isoformat()})
+
+    # ── Offline area download (OpenStreetMap map and Translink timetable) ─
+
+    # Both extracts run in a background job; a request waits for at most `offline_wait` seconds (40) and otherwise gets a 503 asking to
+    # try again in a minute, by when the finished extract is kept for it. So no request comes near gunicorn's 60 second timeout.
+    @app.get("/api/offline/map")
+    def offline_map():
+        try:
+            bbox = parse_bbox(request.args)
+        except AreaError as error:
+            return failure(str(error), 400)
+        try:
+            # A cached area is answered at once, even while another area is being fetched from Overpass.
+            return json_bytes(osm.cached(bbox) or jobs["map"].run(tuple(bbox), lambda: osm.area_json(bbox), offline_admit("offline-map")))
+        except Pending as error:
+            return preparing(f"{error} Map data for a busy area can take a couple of minutes.")
+        except Limited as error:
+            return limited(error)
+        except OverpassBusy as error:
+            return failure(str(error), 429)
+        except OverpassError as error:
+            return failure(str(error), 502)
+        except Exception:  # a bug or bad data must still answer in JSON, not with Flask's HTML error page
+            return broken("map")
+
+    @app.get("/api/offline/transit")
+    def offline_transit():
+        try:
+            bbox = parse_bbox(request.args)
+            days = parse_days(request.args.get("days"))
+        except AreaError as error:
+            return failure(str(error), 400)
+        if static.offline_status() != "ready":
+            return preparing(not_ready_message())
+        today = datetime.now(BRISBANE).date()
+        try:
+            return json_bytes(static.cached_timetable(bbox, days, today)
+                              or jobs["transit"].run((tuple(bbox), days, today.isoformat()), lambda: static.area_timetable_json(bbox, days, today),
+                                                     offline_admit("offline-transit")))
+        except Pending as error:
+            return preparing(str(error))
+        except Limited as error:
+            return limited(error)
+        except NotReady:
+            return preparing(not_ready_message())
+        except Exception:  # a bug or bad GTFS data must still answer in JSON, not with Flask's HTML error page
+            return broken("timetable")
+
+    def not_ready_message():
+        if static.offline_status() == "unavailable":
+            return "The Translink timetable could not be downloaded to the server yet. Try again in a few minutes."
+        return "The Translink timetable is still being downloaded to the server. Try again in a few minutes."
 
     # ── JSON POST API ──────────────────────────────────────────────────────
 
