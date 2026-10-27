@@ -1,55 +1,49 @@
 // Menus, settings and sheets (legacy `.menu-backdrop`, `.settings-backdrop`, `.sheet-backdrop`), busy-button loaders and the skeleton
-// cross-fade. app.js still toggles the `open` class and slides the panel in CSS; this layer adds the liquid part on top:
-//   * the panel is revealed through a rounded clip-path that opens from its leading edge (one paint-only clip per frame, 340 ms), so the
-//     panel unfurls like a drop instead of sliding as a rigid slab; closing re-folds it in 200 ms;
-//   * its rows rise in with a short stagger (opacity + translate only, capped at 8 rows);
-//   * a soft haptic marks the morph (menus / settings) or a snap (sheets).
-// The veil is deliberately not used here: it is the route-change transition (800 ms, full screen) and a drawer must not cover the screen.
+// cross-fade. app.js still toggles the `open` class and the panel itself slides in CSS (220 ms); this layer adds the choreography on top,
+// with the same spring, easing and stagger as the page transitions (choreography.js):
+//   * opening: the lines inside the panel slide in one after another from the panel's own side (menu from the left, Settings from the
+//     right, sheets from below) and settle with a little spring;
+//   * closing: the lines slide back out first, in reverse order, and only then does the panel go (the panel is held in place for that
+//     moment, so the lines are seen leaving);
+//   * a soft haptic marks a menu / Settings opening, a snap a sheet.
+// A panel that is being dragged shut is left alone: it is already moving under the finger.
 import { animate, stagger } from "framer-motion";
+import { slide, slow } from "../choreography.js";
 import { snap, soft } from "../haptics.js";
 import { track, touch, untrack } from "./fm.js";
 
 const E = [0.22, 1, 0.36, 1];
-const C = 15; // clip bleed (%): the clip ends slightly outside the panel so its drop shadow is never cut off
-// [backdrop, panel, rows, row offset px [x, y], clipped side (inset index t,r,b,l), start % of that side hidden, corner radii at the start (px), haptic]
-const PANELS = [
-  [".menu-backdrop", ".menu-panel", ".menu-scroll > *", [-14, 0], 1, 82, [0, 56, 56, 0], soft],
-  [".settings-backdrop", ".settings-panel", ".settings-scroll > *", [14, 0], 3, 82, [56, 0, 0, 56], soft],
-  [".sheet-backdrop", ".sheet", ".sheet-scroll > *", [0, 10], 0, 34, [40, 40, 0, 0], snap],
-];
-
 const lerp = (a, b, t) => a + (b - a) * t;
-function clip(panel, side, hide, radii, p) {
-  const ins = [-C, -C, -C, -C];
-  ins[side] = lerp(hide, -C, p);
-  panel.style.clipPath = `inset(${ins.map((v) => `${v.toFixed(2)}%`).join(" ")} round ${radii.map((r) => `${lerp(r, 0, p).toFixed(1)}px`).join(" ")})`;
-}
-
-function morph(panel, side, hide, radii, from, to, duration) {
-  touch(panel, "clip-path");
-  clip(panel, side, hide, radii, from);
-  const c = track(animate(from, to, {
-    duration, ease: E,
-    onUpdate: (p) => clip(panel, side, hide, radii, p),
-    onComplete: () => { untrack(c); if (to === 1) panel.style.removeProperty("clip-path"); },
-  }));
-}
+// [backdrop, panel, lines (slid one by one), offset the lines travel from, line cap, haptic]
+const PANELS = [
+  [".menu-backdrop", ".menu-panel", ".menu-head > *, .menu-scroll .section-header, .menu-scroll .row, .menu-scroll .fine", { x: -28, y: 0 }, 14, soft],
+  [".settings-backdrop", ".settings-panel", ".settings-panel .navbar .side > *, .settings-scroll > *", { x: 28, y: 0 }, 10, soft],
+  [".sheet-backdrop", ".sheet", ".sheet-head, .sheet-scroll > *", { x: 0, y: 24 }, 8, snap],
+];
+const live = new WeakMap(); // panel -> the running line animation and the pending panel release
 
 function panelChange(backdrop, opened) {
   const cfg = PANELS.find(([sel]) => backdrop.matches(sel));
   const panel = cfg && backdrop.querySelector(cfg[1]);
   if (!panel) return;
-  const [, , rowSel, offset, side, hide, radii, haptic] = cfg;
-  if (!opened) { if (backdrop.isConnected) morph(panel, side, hide, radii, 1, 0, 0.2); return; }
-  morph(panel, side, hide, radii, 0, 1, 0.34);
-  haptic();
-  const rows = [...backdrop.querySelectorAll(rowSel)].slice(0, 8);
-  if (!rows.length) return;
-  rows.forEach((r) => { r.style.opacity = "0"; touch(r, "opacity", "translate"); });
-  const c = track(animate(rows, { opacity: [0, 1], translate: [`${offset[0]}px ${offset[1]}px`, "0 0"] }, {
-    duration: 0.2, ease: E, delay: stagger(0.025, { startDelay: 0.06 }),
-    onComplete: () => { untrack(c); rows.forEach((r) => { r.style.removeProperty("opacity"); r.style.removeProperty("translate"); }); },
-  }));
+  const [, , lineSel, offset, cap, haptic] = cfg;
+  const was = live.get(panel);
+  if (was) { was.run.stop(); clearTimeout(was.timer); was.release?.(); }
+  const lines = [...backdrop.querySelectorAll(lineSel)];
+  if (opened) {
+    haptic();
+    live.set(panel, { run: slide(lines, offset, { delay: 0.05, cap }) });
+    return;
+  }
+  if (!backdrop.isConnected || panel.classList.contains("dragging") || panel.style.transform) return;
+  // Hold the panel where it is (the class change has not been styled yet), slide the lines out bottom-first, then let the panel go.
+  touch(panel, "transition", "transform");
+  panel.style.transition = "none";
+  panel.style.transform = "none";
+  const release = () => { panel.style.removeProperty("transition"); panel.style.removeProperty("transform"); };
+  const run = slide(lines.reverse(), offset, { out: true, step: 0.008, cap });
+  const timer = setTimeout(() => { release(); live.set(panel, { run }); }, 170 * slow());
+  live.set(panel, { run, timer, release });
 }
 
 // Busy buttons get a loader drawn from the logo: the direct route bends into the detour and back, the app's idea in one line.

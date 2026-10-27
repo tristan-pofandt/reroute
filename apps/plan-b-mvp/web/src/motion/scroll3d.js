@@ -1,25 +1,25 @@
-// Scroll-bound 3D motion for every scroll area (`.scroll`, `.sheet-scroll`), legacy or native.
-//   * blocks below the fold fly in along Z and swing laterally (alternating sides) as they enter, scrubbed by scroll progress, so they
-//     reverse when you scroll back; the last block always seats because the scrub range is clamped to the scrollable distance;
+// Scroll-bound motion for every scroll area (`.scroll`, `.sheet-scroll`), legacy or native.
+//   * blocks below the fold slide in from alternating sides and settle with the same springy curve as the page / menu choreography
+//     (choreography.js `settle`), scrubbed by scroll progress, so they reverse when you scroll back; the last block always seats because
+//     the scrub range is clamped to the scrollable distance;
 //   * a card seating gives a `thud` haptic;
-//   * visible blocks tilt (rotateX) with the Lenis / native scroll velocity from fxBus and ease flat when scrolling stops;
-//   * chart bars grow from their baseline, the hero / lead figure drifts up and dims (parallax), KPI figures count up once;
-//   * blocks already on screen when a page is born fly in on a short stagger, released after the launch splash.
+//   * visible blocks tilt (rotateX) with the Lenis / native scroll velocity and ease flat when scrolling stops;
+//   * chart bars grow from their baseline, the hero / lead figure drifts up and dims (parallax), KPI figures count up once.
+// (Blocks already on screen when a page is born are not touched here: the page choreography staggers them in.)
 // Cost model: layout is read only when something is registered or the viewport resizes (batched, one reflow); a scroll event reads one
 // scrollTop; every frame after that only writes inline `transform` / `opacity` / `translate`. A frame is only scheduled while scrolling or
 // while the tilt is easing back, so nothing runs at rest.
 import { animate } from "framer-motion";
-import { scrollVelocity, veil } from "../fxBus.js";
+import { scrollVelocity } from "./velocity.js";
+import { settle } from "../choreography.js";
 import { thud } from "../haptics.js";
-import { launched } from "./launch.js";
 import { NOT_BLOCK, REVEAL } from "./selectors.js";
 import { prune, touch, track, untrack } from "./fm.js";
 
 const ALL = `${REVEAL}, .scroll .kpi.lead, .scroll .hero-art, .scroll .kpi b`;
 const clamp = (v, a = 0, b = 1) => (v < a ? a : v > b ? b : v);
-const E = [0.16, 1, 0.3, 1];
 
-let scrollers = new Map(), known = new WeakSet(), born = new WeakMap(), io = null, side = 1, lastThud = 0, queued = false;
+let scrollers = new Map(), known = new WeakSet(), io = null, side = 1, lastThud = 0, queued = false;
 
 const state = (sc) => {
   let S = scrollers.get(sc);
@@ -48,9 +48,9 @@ export function sweep(root) {
 
 function measure(fresh) {
   // Read phase (a single reflow): rects, then classification. New elements carry no transform yet, so their rects are true layout.
-  const now = performance.now(), rects = new Map();
+  const rects = new Map();
   const rect = (sc) => { if (!rects.has(sc)) rects.set(sc, sc.getBoundingClientRect()); return rects.get(sc); };
-  const touched = new Set(), entrance = [], writes = []; // writes wait until every rect is read, so the loop never thrashes layout
+  const touched = new Set(), writes = []; // writes wait until every rect is read, so the loop never thrashes layout
   for (const el of fresh) {
     if (el.matches(".kpi b")) { io.observe(el); continue; }
     const sc = el.closest(".scroll, .sheet-scroll");
@@ -68,31 +68,15 @@ function measure(fresh) {
     writes.push(() => { el.dataset.fm = "1"; }); // lets motion.css switch off CSS entrances / transitions that would fight the per-frame writes
     touch(el, "data-fm");
     side = -side;
-    const it = { kind: "block", el, top, h, scrub: below, e: 1, sig: "", clean: true, seated: !below, card: el.matches(".card, .ride-card, .tile-card, .sync-card, .wx, .chart-card, .empty-card"), sgn: side };
+    const it = { kind: "block", el, top, h, scrub: below, sig: "", clean: true, seated: !below, card: el.matches(".card, .ride-card, .tile-card, .sync-card, .wx, .chart-card, .empty-card"), sgn: side };
     if (below) {
       it.s1 = Math.min(top - S.H * 0.7, S.max);
       it.s0 = Math.min(top - S.H * 0.98, it.s1 - 40);
-      writes.push(() => { el.style.transformOrigin = it.sgn > 0 ? "100% 50%" : "0% 50%"; });
-      touch(el, "transform-origin", "transform", "opacity");
-    } else {
-      // On screen already: it flies in on its own, unless the page has been up a while (a legacy rerender) or framer owns the element.
-      const page = el.closest(".page");
-      if (page && !born.has(page)) born.set(page, now);
-      const young = page && now - born.get(page) < 900 && el.style.opacity === "" && el.style.transform === "";
-      if (young && entrance.length < 8) { it.e = 0; entrance.push(it); touch(el, "transform", "opacity"); }
+      touch(el, "transform", "opacity");
     }
     S.list.push(it);
   }
   writes.forEach((w) => w());
-  entrance.forEach((it, i) => {
-    launched.then(() => {
-      const c = track(animate(0, 1, {
-        duration: 0.26, ease: E, delay: (veil.enabled ? 0.42 : 0.12) + i * 0.035,
-        onUpdate: (v) => { it.e = v; request(); },
-        onComplete: () => { untrack(c); it.e = 1; request(); },
-      }));
-    });
-  });
   touched.forEach((S) => S.list.sort((a, b) => a.top - b.top));
   queued = false;
   flush(); // synchronously, so blocks that start hidden are never painted in their resting state for a frame
@@ -135,24 +119,24 @@ function flush() {
       if (!el.isConnected) continue;
       if (it.kind === "block") {
         const k = it.scrub ? clamp((s - it.s0) / (it.s1 - it.s0)) : 1;
-        const q = k * it.e, top = it.top - s, vis = top < S.H + 40 && top + it.h > -40;
+        const q = settle(k), top = it.top - s, vis = top < S.H + 40 && top + it.h > -40;
         const rx = vis ? S.tilt : 0;
         if (it.scrub) {
           if (!it.seated && k >= 1) { it.seated = true; if (it.card && performance.now() - lastThud > 140) { lastThud = performance.now(); thud(); } }
           else if (k < 0.9) it.seated = false;
         }
-        const sig = `${q.toFixed(3)}|${rx.toFixed(2)}`;
-        if (sig === it.sig && q >= 0.999) continue; // below 1 it is rewritten every flush: framer or CSS may have overwritten the inline style
+        const sig = `${q.toFixed(3)}|${rx.toFixed(2)}`, seatedNow = Math.abs(q - 1) < 0.002;
+        if (sig === it.sig && seatedNow) continue; // off the rest position it is rewritten every flush: framer or CSS may have overwritten the inline style
         it.sig = sig;
-        if (q >= 0.999 && Math.abs(rx) < 0.05) {
+        if (seatedNow && Math.abs(rx) < 0.05) {
           if (!it.clean) { el.style.removeProperty("transform"); el.style.removeProperty("opacity"); it.clean = true; }
           continue;
         }
         it.clean = false;
         touch(el, "transform", "opacity");
         const f = 1 - q;
-        el.style.transform = `perspective(900px) translate3d(0,${(28 * f).toFixed(2)}px,${(-220 * f).toFixed(1)}px) rotateX(${rx.toFixed(2)}deg) rotateY(${(26 * it.sgn * f).toFixed(2)}deg) scale(${(0.98 + 0.02 * q).toFixed(4)})`;
-        el.style.opacity = q >= 0.999 ? "" : clamp(q * 1.5).toFixed(3);
+        el.style.transform = `perspective(900px) translate3d(${(64 * it.sgn * f).toFixed(2)}px,${(24 * f).toFixed(2)}px,0) rotateX(${rx.toFixed(2)}deg)`;
+        el.style.opacity = seatedNow ? "" : clamp(q * 1.5).toFixed(3);
       } else if (it.kind === "bars") {
         const p = clamp((s - it.s0) / (it.s1 - it.s0)), n = it.bars.length, sig = p.toFixed(3);
         if (sig === it.sig) continue;
@@ -194,7 +178,7 @@ function countUp(el) {
 
 // ── Lifecycle ───────────────────────────────────────────────────────────────
 export function installScroll3d(viewport) {
-  scrollers = new Map(); known = new WeakSet(); born = new WeakMap(); side = 1; lastThud = 0; queued = false;
+  scrollers = new Map(); known = new WeakSet(); side = 1; lastThud = 0; queued = false;
   io = new IntersectionObserver((list) => list.forEach((en) => { if (en.isIntersecting) { io.unobserve(en.target); countUp(en.target); } }), { threshold: 0.3 });
   const onScroll = (e) => { const S = scrollers.get(e.target); if (S) { S.s = e.target.scrollTop; request(); } };
   document.addEventListener("scroll", onScroll, { capture: true, passive: true });
