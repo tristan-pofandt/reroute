@@ -549,16 +549,19 @@ function openMenu() {
   menuEl.dataset.action = "menu-backdrop";
   menuEl.innerHTML = `<div class="menu-panel" role="dialog" aria-modal="true" aria-label="Reroute menu">${menuContent()}</div>`;
   viewport.appendChild(menuEl);
+  syncInert();
   dragToClose(menuEl, ".menu-panel", ".menu-panel", "x", () => closeMenu());
   currentPage?.querySelector('[data-action="open-menu"]')?.setAttribute("aria-expanded", "true");
   requestAnimationFrame(() => requestAnimationFrame(() => menuEl?.classList.add("open")));
   menuEl.querySelector('[data-action="close-menu"]').focus({ preventScroll: true });
 }
 // Closes the menu; `then` runs once it has mostly slid away, so Settings or a sheet does not open on top of it.
-function closeMenu(then, restoreFocus = !then) {
+// Focus goes back to the logo first, so whatever `then` opens returns focus there when it closes.
+function closeMenu(then, restoreFocus = true) {
   if (!menuEl) return then?.();
   const el = menuEl;
   menuEl = null;
+  syncInert();
   el.classList.remove("open");
   setTimeout(() => el.remove(), 360);
   const brand = currentPage?.querySelector('[data-action="open-menu"]');
@@ -578,6 +581,7 @@ function showDialog(title, text, returnTo = document.activeElement) {
   dialogEl.innerHTML = `<div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-text"><span class="dialog-icon">${I.info(22)}</span><h3 id="dialog-title">${esc(title)}</h3><p id="dialog-text">${esc(text)}</p><button class="btn btn-primary" data-action="close-dialog">OK</button></div>`;
   dialogEl._before = before;
   viewport.appendChild(dialogEl);
+  syncInert();
   requestAnimationFrame(() => requestAnimationFrame(() => dialogEl?.classList.add("open")));
   dialogEl.querySelector("button").focus({ preventScroll: true });
 }
@@ -585,9 +589,10 @@ function closeDialog() {
   if (!dialogEl) return;
   const el = dialogEl;
   dialogEl = null;
+  syncInert();
   el.classList.remove("open");
   setTimeout(() => el.remove(), 220);
-  el._before?.focus?.({ preventScroll: true });
+  restoreFocus(el._before);
 }
 
 function homeScreen() {
@@ -925,9 +930,11 @@ function optionCard(o, index, highlight, lowest) {
     show.cost ? `<span class="${costOver ? "over" : ""}"><b>${o.cost_known ? `${o.cost_estimated ? "~" : ""}${money(o.cost)}` : o.mode === "rideshare" ? "In Uber" : isCycle(o) ? "Not checked" : o.cost !== null && o.cost !== undefined ? `${money(o.cost)}+` : "?"}</b> ${o.mode === "transit" ? "fare" : o.cost_estimated ? "est. hire" : "cost"}</span>` : "",
     show.walking && o.walking_minutes !== null ? `<span class="${walkOver ? "over" : ""}"><b>${o.walking_minutes} min</b> walk</span>` : "",
   ].join("");
+  // One tab stop per card: the body, whose own text (name, arrival, status, reasons) is its accessible name. The action below
+  // stays clickable and in the accessibility tree, and the sheet the body opens repeats it.
   return `
     <article class="card ${highlight}" style="animation-delay:${index * 55}ms">
-      <button class="card-body" data-action="open-sheet" data-id="${esc(o.id)}" aria-label="Details for ${esc(o.title)}">
+      <button class="card-body" data-action="open-sheet" data-id="${esc(o.id)}">
         <div class="card-head">
           <div class="card-title"><span class="mode-tile ${esc(o.kind)}">${icon}</span>
             <div style="min-width:0"><div class="card-name">${esc(o.title)}</div><div class="card-sub">${esc(sub)}</div></div></div>
@@ -943,8 +950,8 @@ function optionCard(o, index, highlight, lowest) {
         <p class="tradeoff">${esc(tradeoff(o))}</p>
       </button>
       ${o.mode === "rideshare"
-        ? `<a class="card-action" href="${esc(o.uber_url)}" target="_blank" rel="noopener noreferrer">Open in Uber ${I.external(16)}</a>`
-        : `<button class="card-action ${o.fits ? "" : "quiet"}" data-action="${o.fits ? "choose" : "open-sheet"}" data-id="${esc(o.id)}">${o.fits ? "Choose this option" : isCycle(o) ? "Check details before choosing" : "See why it doesn't fit"}</button>`}
+        ? `<a class="card-action" href="${esc(o.uber_url)}" target="_blank" rel="noopener noreferrer" tabindex="-1">Open in Uber ${I.external(16)}</a>`
+        : `<button class="card-action ${o.fits ? "" : "quiet"}" data-action="${o.fits ? "choose" : "open-sheet"}" data-id="${esc(o.id)}" tabindex="-1">${o.fits ? "Choose this option" : isCycle(o) ? "Check details before choosing" : "See why it doesn't fit"}</button>`}
     </article>`;
 }
 
@@ -1233,7 +1240,7 @@ function avoidedFacts(o) {
 
 function panicScreen() {
   const pm = state.panic;
-  const top = `<div class="panic-top"><span class="panic-label">${I.bolt(14)}BEST WAY NOW</span><div class="panic-actions">${homeButton()}<button class="panic-exit" data-action="exit-panic">Exit</button></div></div>`;
+  const top = `<div class="panic-top"><span class="panic-label" id="panic-label">${I.bolt(14)}BEST WAY NOW</span><div class="panic-actions">${homeButton()}<button class="panic-exit" data-action="exit-panic">Exit</button></div></div>`;
   // Only the plan this answer came from: a later search (from See other options, or a re-plan) falls back to the form.
   if (pm.phase === "answer" && state.plan && state.plan === pm.plan) {
     const o = findOption(state.plan.recommended_id);
@@ -1243,8 +1250,8 @@ function panicScreen() {
       const steps = o.steps.slice(0, 8).map((s) => { const ni = stepOf(s); return `<li><span>${esc(s.title)}${s.board_time || s.minutes ? `<small>${[s.board_time && `Board at ${s.board_time}`, s.minutes && `${s.minutes} min`].filter(Boolean).join(" · ")}</small>` : ""}${ni >= 0 ? liveSlot(o, ni) : ""}</span></li>`; }).join("");
       const facts = avoidedFacts(o) + realtimeFact(o) + weatherFact(o) + trafficFact(o);
       return `${top}<div class="scroll">
-        <p class="lead">${leaveLabel(o, true)}. ${esc(o.title)}.</p>
-        <div class="panic-answer">
+        <p class="lead" id="panic-lead">${leaveLabel(o, true)}. ${esc(o.title)}.</p>
+        <div class="panic-answer" id="panic-answer" role="group" tabindex="-1" aria-labelledby="panic-label panic-lead panic-answer">
           <div class="when">${timeOf(o.arrival)} <small>arrival</small></div>
           ${deadlineLine(o)}
           <p class="why ${late ? "bad" : ""}">${esc(state.plan.recommended_reason)}</p>
@@ -2313,14 +2320,17 @@ function settingsContent() {
 }
 
 let settingsEl = null;
+let settingsFocus = null;
 function openSettings() {
   if (settingsEl) return;
+  settingsFocus = document.activeElement;
   settingsEl = document.createElement("div");
   settingsEl.className = "settings-backdrop";
   settingsEl.dataset.action = "settings-backdrop";
   settingsEl.innerHTML = `<div class="settings-panel" role="dialog" aria-modal="true" aria-label="Settings">${settingsContent()}</div>`;
   enhanceClear(settingsEl);
   viewport.appendChild(settingsEl);
+  syncInert();
   requestAnimationFrame(() => requestAnimationFrame(() => settingsEl?.classList.add("open")));
   settingsEl.querySelector(".nav-action").focus({ preventScroll: true });
   if (settings.fuel_price_mode === "auto" && !state.fuelPreview) previewFuel();
@@ -2329,17 +2339,21 @@ function rerenderSettings() {
   if (!settingsEl) return;
   const scroller = settingsEl.querySelector(".settings-scroll");
   const top = scroller.scrollTop;
+  const focused = settingsEl.contains(document.activeElement) ? document.activeElement : null;
   settingsEl.querySelector(".settings-panel").innerHTML = settingsContent();
   enhanceClear(settingsEl);
   settingsEl.querySelector(".settings-scroll").scrollTop = top;
+  if (focused) restoreFocus(focused);
 }
 function closeSettings() {
   if (!settingsEl) return;
   const el = settingsEl;
   settingsEl = null;
+  syncInert();
   el.classList.remove("open");
   setTimeout(() => el.remove(), 360);
   rerender();
+  restoreFocus(settingsFocus);
 }
 async function previewFuel() {
   if (state.fuelLoading) return;
@@ -2378,6 +2392,39 @@ let transitioning = false;
 const maps = new Map();
 const mounting = new Set();
 
+// Focus management. An open layer (menu, Settings, a sheet, a full-screen map, a pop-up or a dialog) is modal: the screen and
+// any layer under it are inert and Tab wraps inside it. Order matches the stacking order, top first.
+const expandedMap = () => viewport.querySelector(":scope > .map-wrap.expanded");
+const topLayer = () => dialogEl || popupEl || expandedMap() || sheetEl || settingsEl || menuEl;
+function syncInert() {
+  const top = topLayer();
+  [currentPage, menuEl, settingsEl, sheetEl, expandedMap(), popupEl, document.getElementById("demo-pill")].forEach((el) => { if (el) el.inert = !!top && el !== top; });
+}
+document.addEventListener("keydown", (event) => {
+  const top = event.key === "Tab" && topLayer();
+  if (!top) return;
+  const items = [...top.querySelectorAll("a[href], button, input, select, textarea, [tabindex]")].filter((el) => el.tabIndex >= 0 && !el.disabled && !el.closest("[inert]") && el.getClientRects().length);
+  if (!items.length) return;
+  const first = items[0], last = items[items.length - 1], at = document.activeElement;
+  if (!top.contains(at) || at === (event.shiftKey ? first : last)) { event.preventDefault(); (event.shiftKey ? last : first).focus(); }
+});
+// What a screen or layer leads with: its heading, or on screens without one the Journey disrupted? answer, the directions banner or the area hint.
+function focusLead(scope = topLayer() || currentPage) {
+  const lead = scope?.querySelector("h1, h2") || scope?.querySelector(".panic-answer, h3, [data-nav-banner], .area-hint");
+  if (!lead) return;
+  if (!lead.hasAttribute("tabindex")) lead.tabIndex = -1;
+  lead.dataset.lead = "";
+  lead.focus({ preventScroll: true });
+}
+// Puts focus back on `el`, or, when a re-render replaced it, on its twin (the element with the same data attributes); failing both, on the lead.
+function restoreFocus(el) {
+  const scope = topLayer() || currentPage;
+  const sel = el ? [...el.attributes].filter((a) => a.name.startsWith("data-") && a.name !== "data-lead").map((a) => `[${a.name}="${CSS.escape(a.value)}"]`).join("") : "";
+  const twin = el?.isConnected ? el : sel && scope?.querySelector(sel);
+  twin?.focus?.({ preventScroll: true });
+  if (!twin || document.activeElement !== twin) focusLead(scope);
+}
+
 function makePage(screen) {
   const page = document.createElement("section");
   page.className = pageClass(screen);
@@ -2414,7 +2461,10 @@ function navigate(screen, direction = "forward", syncUrl = true) {
   incoming.classList.add(inCls);
   if (direction === "back" || direction === "down") viewport.insertBefore(incoming, outgoing); else viewport.appendChild(incoming);
   outgoing?.classList.add(outCls);
+  if (outgoing) outgoing.inert = true;
   currentPage = incoming;
+  syncInert();
+  focusLead(incoming);
   mountMaps(incoming);
   if (screen === "offline-area") buildAreaMap();
   bindCharts(incoming);
@@ -2456,13 +2506,13 @@ function rerender() {
   else {
     const scroller = currentPage.querySelector(".scroll");
     const top = scroller ? scroller.scrollTop : 0;
-    const focused = document.activeElement?.dataset?.field;
+    const focused = currentPage.contains(document.activeElement) ? document.activeElement : null;
     currentPage.className = pageClass(state.screen);
     currentPage.innerHTML = SCREENS[state.screen]();
     enhanceClear(currentPage);
     const next = currentPage.querySelector(".scroll");
     if (next) next.scrollTop = top;
-    if (focused) currentPage.querySelector(`[data-field="${focused}"]`)?.focus({ preventScroll: true });
+    if (focused) restoreFocus(focused);
   }
   mountMaps(currentPage);
   bindCharts(currentPage);
@@ -2758,14 +2808,16 @@ const sheetDrag = (backdrop, onClose) => dragToClose(backdrop, ".sheet", ".grabb
 let sheetEl = null;
 let lastFocus = null;
 function openSheet(html) {
+  // A sheet that replaces another one keeps the first opener, so closing it still returns there.
+  if (!sheetEl) lastFocus = document.activeElement;
   closeSheet(true);
-  lastFocus = document.activeElement;
   sheetEl = document.createElement("div");
   sheetEl.className = "sheet-backdrop";
   sheetEl.dataset.action = "backdrop";
   sheetEl.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">${html}</div>`;
   enhanceClear(sheetEl);
   viewport.appendChild(sheetEl);
+  syncInert();
   sheetDrag(sheetEl, () => closeSheet());
   requestAnimationFrame(() => requestAnimationFrame(() => sheetEl?.classList.add("open")));
   requestAnimationFrame(() => revealMore(sheetEl));
@@ -2777,13 +2829,14 @@ function openSheet(html) {
 let popupEl = null;
 let popupFocus = null;
 function openPopup(html, kind = "") {
+  if (!popupEl) popupFocus = document.activeElement;
   closePopup(true);
-  popupFocus = document.activeElement;
   popupEl = document.createElement("div");
   popupEl.className = `sheet-backdrop popup${kind ? ` ${kind}` : ""}`;
   popupEl.dataset.action = "popup-backdrop";
   popupEl.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="popup-title">${html}</div>`;
   viewport.appendChild(popupEl);
+  syncInert();
   sheetDrag(popupEl, () => closePopup());
   requestAnimationFrame(() => requestAnimationFrame(() => popupEl?.classList.add("open")));
   popupEl.querySelector(".icon-btn")?.focus({ preventScroll: true });
@@ -2792,11 +2845,12 @@ function closePopup(immediate = false) {
   if (!popupEl) return;
   const el = popupEl;
   popupEl = null;
+  syncInert();
   if (el.classList.contains("picker")) disposePicker();
   if (immediate) return el.remove();
   el.classList.remove("open");
   setTimeout(() => el.remove(), 320);
-  popupFocus?.focus?.({ preventScroll: true });
+  restoreFocus(popupFocus);
 }
 
 function closeSheet(immediate = false) {
@@ -2806,10 +2860,11 @@ function closeSheet(immediate = false) {
   collapseExpanded();
   const el = sheetEl;
   sheetEl = null;
+  syncInert();
   if (immediate) { el.remove(); cleanMaps(); return; }
   el.classList.remove("open");
   setTimeout(() => { el.remove(); cleanMaps(); }, 320);
-  lastFocus?.focus?.({ preventScroll: true });
+  restoreFocus(lastFocus);
 }
 
 function toast(text, kind = "success") {
@@ -3220,6 +3275,8 @@ const actions = {
     wrap.classList.toggle("expanded", expanded);
     el.innerHTML = expanded ? I.shrink() : I.expand();
     el.setAttribute("aria-label", expanded ? "Shrink map" : "Expand map");
+    syncInert();
+    el.focus({ preventScroll: true });
     const e = mapEntryFor(el);
     setTimeout(() => { if (!e || !document.body.contains(e.map.getDiv())) return; resizeMap(e); if (e.bounds) fitMap(e, { top: 30, right: 72, bottom: 30, left: 30 }); }, 60);
   },
@@ -3306,6 +3363,8 @@ const actions = {
       pm.errorKind = error.status === 429 ? "warning" : "error";
     }
     rerender();
+    // Focusing the answer reads it out: its name is the label, the leave line and everything in the answer box.
+    if (state.screen === "panic" && pm.phase === "answer") focusLead();
   },
   // Results go on top of the answer, so Back returns to it without another search.
   "panic-others": () => { state.sort = "arrival"; navigate("results", "forward"); },

@@ -52,6 +52,8 @@ button, input, select, textarea { font: inherit; letter-spacing: inherit; color:
 button { cursor: pointer; }
 a { color: var(--accent-text); }
 :focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+/* Headings and the Journey disrupted? answer take focus only so screen changes are read out; they are not controls. */
+[data-lead]:focus { outline: none; }
 .scroll, .sheet-scroll, .settings-scroll, .ac-list { scrollbar-width: none; }
 .scroll::-webkit-scrollbar, .sheet-scroll::-webkit-scrollbar, .settings-scroll::-webkit-scrollbar { display: none; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
