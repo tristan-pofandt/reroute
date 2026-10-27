@@ -883,7 +883,7 @@ function tradeoff(o) {
     parts.push(o.transfers ? plural(o.transfers, "change") : "no changes");
     if (o.walking_minutes !== null) parts.push(`${o.walking_minutes} min walking${o.elevation && o.elevation.gain_m >= 30 ? " with a climb" : ""}`);
   }
-  if (o.vs_drive?.cost_saved > 0.5) parts.push(`saves ${money(o.vs_drive.cost_saved)} on driving`);
+  if (o.vs_drive?.cost_saved > 0.5) parts.push(`saves ${atLeast(o.vs_drive)}${money(o.vs_drive.cost_saved)} on driving`);
   if (o.mode === "drive" && o.parking?.any_paid) parts.push("plus paid parking at the other end");
   let text = parts.join(", ") + ".";
   if (!o.fits && o.reasons.length) text += ` ${o.reasons[0].text}.`;
@@ -923,7 +923,7 @@ function optionCard(o, index, highlight, lowest) {
   const facts = [
     show.realtime ? realtimeFact(o) : "", weatherFact(o), trafficFact(o), show.elevation ? climbFact(o) : "",
     show.parking ? parkingFact(o) : "",
-    o.vs_drive?.cost_saved > 0.5 && show.cost ? `<span class="fact good">${I.dollar(14)}Saves ${money(o.vs_drive.cost_saved)} vs driving</span>` : "",
+    o.vs_drive?.cost_saved > 0.5 && show.cost ? `<span class="fact good">${I.dollar(14)}Saves ${atLeast(o.vs_drive)}${money(o.vs_drive.cost_saved)} vs driving</span>` : "",
   ].filter(Boolean).join("");
   const sub = [o.subtitle, o.mode === "transit" ? leaveLabel(o) : `${o.duration_minutes} min`, show.transfers && o.transfers ? plural(o.transfers, "transfer") : ""].filter(Boolean).join(" · ");
   const stats = [
@@ -1116,7 +1116,7 @@ function sheetContent(o) {
         ${o.distance_km ? row(I.route(16), "var(--teal)", "Distance", valueSpan(`${o.distance_km} km`, true)) : ""}
         ${co2Known(o) ? row(I.leaf(16), "var(--success)", o.co2_note ? "Tailpipe CO₂" : "Estimated CO₂", valueSpan(kg(o.co2_kg), true)) : ""}
         ${o.traffic?.added_delay_min ? row(I.cone(16), "var(--warning)", "Traffic incidents", valueSpan(`+${o.traffic.added_delay_min} min${o.traffic.source === "Simulated" ? " · Simulated" : ""}`, true)) : ""}
-        ${o.vs_drive ? row(I.car(16), "var(--text-muted)", "Compared with driving", valueSpan(`${o.vs_drive.minutes >= 0 ? "+" : ""}${o.vs_drive.minutes} min${o.vs_drive.co2_saved_kg == null ? "" : ` · ${o.vs_drive.co2_saved_kg >= 0 ? "−" : "+"}${kg(Math.abs(o.vs_drive.co2_saved_kg))}`}${o.vs_drive.cost_saved != null ? ` · ${o.vs_drive.cost_saved >= 0 ? "saves" : "costs"} ${money(Math.abs(o.vs_drive.cost_saved))}` : ""}`)) : ""}
+        ${o.vs_drive ? row(I.car(16), "var(--text-muted)", "Compared with driving", valueSpan(`${o.vs_drive.minutes >= 0 ? "+" : ""}${o.vs_drive.minutes} min${o.vs_drive.co2_saved_kg == null ? "" : ` · ${o.vs_drive.co2_saved_kg >= 0 ? "−" : "+"}${kg(Math.abs(o.vs_drive.co2_saved_kg))}`}${o.vs_drive.cost_saved != null ? ` · ${o.vs_drive.cost_saved >= 0 ? `saves ${atLeast(o.vs_drive)}` : "costs "}${money(Math.abs(o.vs_drive.cost_saved))}` : ""}`)) : ""}
       </div><p class="group-footer">${esc(o.cost_label || "")}${o.co2_note ? ` · ${esc(o.co2_note)}` : ""}${o.elevation?.source ? ` · Elevation: ${esc(o.elevation.source)}` : ""}</p></div>
       ${breakdown ? `<p class="section-header">Cost breakdown</p><div class="group"><div class="group-card">${breakdown}</div></div>` : ""}
       ${trafficSection(o)}
@@ -1608,11 +1608,14 @@ function impactTotals(trips) {
     co2: trips.reduce((s, t) => s + Math.max(0, t.co2_saved || 0), 0),
     saved: trips.reduce((s, t) => s + Math.max(0, t.cost_saved || 0), 0),
     unknownSaved: trips.filter((t) => t.cost_saved === null || t.cost_saved === undefined).length,
+    partialSaved: trips.some((t) => t.cost_saved_partial),
     greenTrips: trips.filter((t) => t.mode !== "drive").length,
     trips: trips.length,
   };
 }
 
+// A saving against driving whose parking price is unknown counts fuel only, so it is a floor.
+const atLeast = (v) => (v?.cost_saved_partial ? "at least " : "");
 // A total made only of unknown savings is "Unknown", not $0.
 const savedText = (t) => (t.trips && t.unknownSaved === t.trips ? "Unknown" : money(t.saved));
 // 10 kg is the team's assumed default, not a target the traveller chose, so it is named as such until they change it.
@@ -1750,7 +1753,7 @@ function dashboardScreen() {
       <div class="kpis">
         <div class="kpi lead"><span>Estimated CO₂ avoided</span><b>${kg(t.co2)}</b><small>vs driving the same trips alone · all time · ${kg(month.co2)} this month</small></div>
         <div class="kpi-row">
-          <div class="kpi"><span>Saved</span><b>${savedText(t)}</b><small>${t.unknownSaved && t.unknownSaved < t.trips ? `vs driving · ${t.unknownSaved} unknown` : "vs driving"}</small></div>
+          <div class="kpi"><span>Saved</span><b>${savedText(t)}</b><small>${t.unknownSaved && t.unknownSaved < t.trips ? `vs driving · ${t.unknownSaved} unknown` : t.partialSaved ? "at least · parking not counted" : "vs driving"}</small></div>
           <div class="kpi"><span>Trips</span><b>${t.trips}</b><small>planned</small></div>
           <div class="kpi"><span>Not by car</span><b>${t.greenTrips}</b><small>of ${t.trips}</small></div>
         </div>
@@ -3218,7 +3221,7 @@ const actions = {
     trips.push({
       ref: tripRef(o), date: new Date().toISOString(), mode: o.mode, kind: o.kind, title: o.title,
       co2_kg: o.co2_kg, co2_saved: o.vs_drive ? Math.max(0, o.vs_drive.co2_saved_kg) : 0,
-      cost: o.cost_known ? o.cost : null, cost_saved: o.vs_drive?.cost_saved ?? null, distance_km: o.distance_km,
+      cost: o.cost_known ? o.cost : null, cost_saved: o.vs_drive?.cost_saved ?? null, cost_saved_partial: !!o.vs_drive?.cost_saved_partial, distance_km: o.distance_km,
     });
     store.set("trips", trips.slice(-500));
     const month = impactTotals(thisMonthTrips());

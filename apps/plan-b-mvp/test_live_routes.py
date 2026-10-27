@@ -437,6 +437,13 @@ class EmissionsAndComparisonTests(unittest.TestCase):
         self.assertEqual(bus["vs_drive"], {"minutes": 14, "co2_saved_kg": 0.8, "cost_saved": -2.9})
         self.assertEqual(result["baseline"]["co2_kg"], 1.85)
 
+    def test_unknown_parking_gives_a_fuel_only_saving_floor(self):
+        overrides = {"modes": {"transit": True, "drive": True}, "vehicle": {"fuel_price": 2.0, "fuel_l_per_100km": 10}, "transit_flat_fare": 0.5, "budget": 50}
+        bus = option(run(overrides, parking=lambda key, lat, lng: car_park()), "transit-0")
+        # $2 of fuel against a 50c fare; parking is unknown, so $1.50 is the least the bus saves.
+        self.assertEqual(bus["vs_drive"]["cost_saved"], 1.5)
+        self.assertTrue(bus["vs_drive"]["cost_saved_partial"])
+
     def test_rideshare_links_to_uber_with_unknown_cost(self):
         result = run({"modes": {"transit": False, "drive": False, "rideshare": True}})
         uber = option(result, "rideshare-0")

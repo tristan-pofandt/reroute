@@ -915,6 +915,9 @@ def _plan(payload, key, services, now, demo):
                 "co2_saved_kg": round(baseline["co2_kg"] - option["co2_kg"], 2) if option.get("co2_kg") is not None else None,
                 "cost_saved": round(baseline["cost"] - option["cost"], 2) if baseline.get("cost_known") and option.get("cost_known") else None,
             }
+            # Driving with unknown parking still has a known fuel cost, so a positive saving against fuel alone is a floor, not "unknown".
+            if not baseline.get("cost_known") and baseline.get("cost") is not None and option.get("cost_known") and baseline["cost"] > option["cost"]:
+                option["vs_drive"].update(cost_saved=round(baseline["cost"] - option["cost"], 2), cost_saved_partial=True)
 
     options.sort(key=lambda option: (not option["fits"], option["arrival_dt"]))
     matches = []
