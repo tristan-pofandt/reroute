@@ -1,11 +1,33 @@
 /* Reroute service worker: offline app shell, network-first API reads, and Web Push notifications. */
 "use strict";
 
-const VERSION = "planb-reroute-19"; // keep the planb- prefix: activate() deletes older planb- caches
-const SHELL = ["/", "/app.css", "/app.js", "/offline.js", "/motion.js", "/fx.js", "/vendor/three.module.min.js", "/vendor/Flip.min.js", "/vendor/lenis.min.js", "/vendor/gsap.min.js", "/vendor/ScrollTrigger.min.js", "/favicon.svg", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png"];
+const VERSION = "planb-reroute-20"; // keep the planb- prefix: activate() deletes older planb- caches
+// The React shell's hashed files (/assets/*) are found by reading the cached "/" page and the entry script, see precacheBuilt().
+// Legacy scripts are listed because the shell loads them as classic scripts; the old gsap/three layer is cached on first use only.
+const SHELL = ["/", "/app.css", "/app.js", "/offline.js", "/favicon.svg", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png"];
+const ASSET = /\/?assets\/[A-Za-z0-9._-]+\.(?:js|css)|(?<=["']\.\/)[A-Za-z0-9._-]+\.(?:js|css)(?=["'])/g; // "/assets/x.js" in the page, "./x.js" between chunks
+
+async function precacheBuilt(cache) {
+  const html = await cache.match("/");
+  const seen = new Set();
+  const scan = async (text) => {
+    for (const match of text.matchAll(ASSET)) {
+      const url = match[0].includes("assets/") ? "/" + match[0].replace(/^\//, "") : "/assets/" + match[0];
+      if (seen.has(url)) continue;
+      seen.add(url);
+      await cache.add(url).catch(() => {});
+      // Entry chunks list their lazy chunks as "assets/x.js" strings (Vite's preload map), so scan scripts one level further.
+      if (url.endsWith(".js")) { const copy = await cache.match(url); if (copy) await scan(await copy.clone().text()); }
+    }
+  };
+  if (html) await scan(await html.clone().text());
+}
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(VERSION).then((cache) => Promise.all(SHELL.map((url) => cache.add(url).catch(() => {})))).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(VERSION).then(async (cache) => {
+    await Promise.all(SHELL.map((url) => cache.add(url).catch(() => {})));
+    await precacheBuilt(cache).catch(() => {});
+  }).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", (event) => {

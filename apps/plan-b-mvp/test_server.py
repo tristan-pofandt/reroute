@@ -270,6 +270,27 @@ class StaticAndPwaTests(unittest.TestCase):
             self.assertTrue(response.headers["Content-Type"].startswith(kind), path)
             response.close()
 
+    def test_built_react_shell_is_served_when_present_and_the_legacy_page_otherwise(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "index.html").write_text("legacy page", encoding="utf-8")
+            original, server.HERE = server.HERE, root
+            try:
+                self.assertEqual(self.client.get("/terms").data, b"legacy page")
+                self.assertEqual(self.client.get("/assets/app-abc.js").status_code, 404)
+                (root / "web" / "dist" / "assets").mkdir(parents=True)
+                (root / "web" / "dist" / "index.html").write_text("react shell", encoding="utf-8")
+                (root / "web" / "dist" / "assets" / "app-abc.js").write_text("export {}", encoding="utf-8")
+                self.assertEqual(self.client.get("/").data, b"react shell")
+                self.assertEqual(self.client.get("/about").data, b"react shell")
+                asset = self.client.get("/assets/app-abc.js")
+                self.assertIn("immutable", asset.headers["Cache-Control"])
+                self.assertEqual(self.client.get("/assets/..%2Findex.html").status_code, 404)
+                for response in (asset,):
+                    response.close()
+            finally:
+                server.HERE = original
+
     def test_pwa_files_are_served_with_their_headers_when_present(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

@@ -268,8 +268,21 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
             return failure("Enter a valid request.", 400)
 
     def serve(name, mimetype):
-        response = send_from_directory(HERE, name, mimetype=mimetype.split(";")[0])
+        # The React shell (web/, built with `npm run build`) replaces index.html when web/dist exists; the legacy page is the fallback.
+        dist = HERE / "web" / "dist"
+        folder = dist if name == "index.html" and (dist / "index.html").is_file() else HERE
+        response = send_from_directory(folder, name, mimetype=mimetype.split(";")[0])
         response.headers["Cache-Control"] = "no-cache"
+        return response
+
+    @app.get("/assets/<path:name>")
+    def built_asset(name):
+        """Hashed Vite output (web/dist/assets): the file name changes with its content, so it can be cached for good."""
+        folder = HERE / "web" / "dist" / "assets"
+        if not folder.is_dir() or not (folder / name).is_file():
+            return failure("Not found.", 404)
+        response = send_from_directory(folder, name)
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         return response
 
     # ── Static files and the PWA ───────────────────────────────────────────
