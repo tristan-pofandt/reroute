@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#090A0F">
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="Reroute plans your everyday trips with public transport first, shows the CO2 you avoid compared with driving, and finds a practical way there when your journey is disrupted.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Reroute">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <title>Reroute</title>
+  <script>
+    // Apply the saved theme before first paint (default Dark) so there is no flash. app.js keeps the same rules in applyTheme().
+    try {
+      const saved = JSON.parse(localStorage.getItem("planb.settings") || "{}");
+      const theme = saved.theme === "light" || (saved.theme === "system" && !matchMedia("(prefers-color-scheme: dark)").matches) ? "light" : "dark";
+      document.documentElement.dataset.theme = theme;
+      document.querySelector('meta[name="theme-color"]').content = theme === "light" ? "#EEF0F5" : "#090A0F";
+      if (saved.motion === "reduced") document.documentElement.dataset.motion = "reduced";
+    } catch { document.documentElement.dataset.theme = "dark"; }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+</html>
