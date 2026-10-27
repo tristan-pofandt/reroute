@@ -42,7 +42,8 @@
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; }
-html, body { height: 100%; }
+/* The installed app never scrolls or rubber-bands as a page; only its own scroll areas move. overscroll-behavior must sit on html, which owns the viewport. */
+html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
 body {
   font-family: var(--font); font-size: 15px; line-height: 1.5; letter-spacing: -0.01em; color: var(--text-main); background: var(--bg-void);
   -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; overscroll-behavior: none;
@@ -1009,6 +1010,11 @@ button.row:disabled { opacity: 0.45; cursor: default; }
 .sheet-backdrop.open::before { opacity: calc(1 - var(--drag, 0)); }
 .sheet-backdrop.dragging::before { transition: none; }
 .nav-grab, .nav-eta-main { touch-action: none; }
+.nav-sheet.dragging { transition: none; }
+/* Touches anywhere on a sheet, the menu or the backdrop pan nothing but their own scroll area, so a drag in the wrong spot never moves the page. */
+.sheet-backdrop, .sheet, .nav-sheet, .menu-backdrop, .settings-backdrop { touch-action: none; }
+.sheet-scroll, .nav-steps, .menu-scroll, .settings-scroll, .ac-list, .scroll { touch-action: pan-y; overscroll-behavior: contain; }
+.sheet input, .sheet textarea, .sheet select, .sheet [data-picker-map], .settings-backdrop input { touch-action: manipulation; }
 .sheet-backdrop.popup { z-index: 85; }
 .sheet-backdrop.picker .sheet { height: 92%; }
 .picker-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 0 16px; }

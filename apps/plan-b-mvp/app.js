@@ -3436,16 +3436,46 @@ document.addEventListener("click", (event) => {
   if (action) action(el, event);
 });
 
-// The live-directions step list: swipe its grab line or ETA up to open it and down to close it (a tap still toggles it).
-let navSwipe = null;
-document.addEventListener("pointerdown", (event) => { if (state.nav && event.target.closest?.(".nav-grab, .nav-eta-main")) navSwipe = { id: event.pointerId, y: event.clientY }; });
-document.addEventListener("pointerup", (event) => {
-  if (!navSwipe || event.pointerId !== navSwipe.id) return;
-  const dy = event.clientY - navSwipe.y;
-  navSwipe = null;
-  if (Math.abs(dy) < 30 || !state.nav || state.screen !== "nav") return;
-  suppressClickUntil = performance.now() + 350;
-  if ((dy < 0) !== state.nav.sheetOpen) actions["nav-sheet"]();
+// The live-directions step list follows the finger from its grab line or ETA, rubber-bands past either end, then settles
+// open or closed from where a flick would carry it (a tap still toggles it).
+document.addEventListener("pointerdown", (start) => {
+  const sheet = start.target.closest?.("[data-nav-sheet]");
+  if (!state.nav || !sheet || !start.target.closest(".nav-grab, .nav-eta-main") || (start.pointerType === "mouse" && start.button !== 0)) return;
+  const map = sheet.parentElement.querySelector(".nav-map");
+  const max = sheet.offsetHeight - (map ? sheet.parentElement.getBoundingClientRect().bottom - map.getBoundingClientRect().bottom : 124);
+  const base = state.nav.sheetOpen ? 0 : max;
+  let active = false, y = base, lastY = start.clientY, lastT = start.timeStamp, speed = 0;
+  const move = (e) => {
+    if (e.pointerId !== start.pointerId) return;
+    const d = e.clientY - start.clientY;
+    if (!active) {
+      if (Math.abs(d) < 6) return;
+      active = true;
+      sheet.classList.add("dragging");
+    }
+    const raw = base + d;
+    y = raw < 0 ? raw / 5 : raw > max ? max + (raw - max) / 5 : raw;
+    speed = (e.clientY - lastY) / Math.max(1, e.timeStamp - lastT);
+    lastY = e.clientY;
+    lastT = e.timeStamp;
+    sheet.style.transform = `translateY(${y}px)`;
+    if (e.cancelable) e.preventDefault();
+  };
+  const end = (e) => {
+    if (e.pointerId !== start.pointerId) return;
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", end);
+    window.removeEventListener("pointercancel", end);
+    if (!active) return;
+    suppressClickUntil = performance.now() + 350;
+    sheet.classList.remove("dragging");
+    sheet.style.transform = "";
+    const open = e.type === "pointercancel" || !state.nav ? state.nav?.sheetOpen : y + speed * 180 < max / 2;
+    if (state.nav && open !== state.nav.sheetOpen) actions["nav-sheet"]();
+  };
+  window.addEventListener("pointermove", move, { passive: false });
+  window.addEventListener("pointerup", end);
+  window.addEventListener("pointercancel", end);
 });
 
 document.addEventListener("input", (event) => {
