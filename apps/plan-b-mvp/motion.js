@@ -14,6 +14,8 @@
   const systemReduced = matchMedia("(prefers-reduced-motion: reduce)");
   const reduced = () => document.documentElement.dataset.motion === "reduced" || (systemReduced.matches && document.documentElement.dataset.motion !== "full");
   const finePointer = matchMedia("(hover: hover) and (pointer: fine)");
+  // Haptics follow the motion's weight: a press is a light tick, a panel opening is a soft double pulse. Android/Chrome only (iOS has no Vibration API); the pin drop in app.js keeps its own.
+  const buzz = (pattern) => { if (!reduced()) try { navigator.vibrate?.(pattern); } catch { /* optional */ } };
 
   // ── Micro-interactions ─────────────────────────────────────────────────────
   // Press sinks a control to 0.97 at once; release springs it back past 1 with back.out, so a tap feels physical.
@@ -25,6 +27,7 @@
     const el = e.target.closest?.(PRESSABLE);
     if (!el || el.disabled || reduced() || (e.pointerType === "mouse" && e.button !== 0)) return;
     const target = pressTarget(el);
+    buzz(6);
     gsap.to(target, { scale: 0.97, duration: 0.14, ease: "power2.out" });
     const release = () => {
       window.removeEventListener("pointerup", release);
@@ -62,6 +65,7 @@
   function staggerIn(panel) {
     const match = STAGGERED.find(([sel]) => panel.matches(sel));
     if (!match || reduced()) return;
+    buzz([10, 30, 6]);
     const rows = [...panel.querySelectorAll(match[1])].slice(0, 8);
     if (rows.length) gsap.fromTo(rows, { opacity: 0, ...match[2] }, { opacity: 1, x: 0, y: 0, duration: 0.2, stagger: 0.025, delay: 0.04, clearProps: "opacity,transform" });
   }
