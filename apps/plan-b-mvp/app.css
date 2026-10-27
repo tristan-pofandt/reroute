@@ -850,10 +850,15 @@ button.tile-card:active { transform: scale(0.98); background: var(--bg-card); }
 .co2-line.good .co2-text b { color: var(--success-text); }
 .co2-line.warn .co2-text b { color: var(--warning-text); }
 .co2-text small { display: block; font-size: 12px; color: var(--text-muted); margin-top: 2px; line-height: 1.4; }
-.badge.solid { background: var(--success); color: var(--on-success); }
-.co2-summary { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; margin: 0 0 16px; border-radius: 16px; background: var(--success-soft); border: 1px solid color-mix(in srgb, var(--success) 26%, transparent); color: var(--success-text); font-size: 14px; line-height: 1.5; animation: fbIn 0.3s var(--ease-out) backwards; }
-.co2-summary svg { flex-shrink: 0; margin-top: 2px; }
-.co2-summary b { font-weight: 600; }
+/* Outline only: the one CO₂ marker on the page must not outweigh the status badge beside the arrival time. */
+.badge.outline { background: none; padding: 3px 9px; border: 1px solid color-mix(in srgb, var(--success) 45%, transparent); }
+/* Quiet text lines, not boxes: the CO₂ summary above the cards and the CO₂ line on options that miss the deadline or are disrupted. */
+.co2-summary, .co2-mini { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; line-height: 1.5; color: var(--text-muted); }
+.co2-summary { margin: -8px 4px 16px; }
+.co2-mini { margin: -4px 4px 14px; }
+.co2-summary svg, .co2-mini svg { flex-shrink: 0; margin-top: 2px; color: var(--success-text); }
+.co2-mini svg { color: var(--text-muted); }
+.co2-summary b { font-weight: 600; color: var(--text-main); }
 .sheet-scroll .co2-line { margin-bottom: 16px; }
 
 .impact-card { display: flex; gap: 14px; align-items: flex-start; padding: 16px 18px; border-radius: 18px; margin-bottom: 16px; background: var(--success-soft); border: 1px solid color-mix(in srgb, var(--success) 26%, transparent); box-shadow: var(--shadow-card); animation: rise 420ms var(--ease-out) backwards; }

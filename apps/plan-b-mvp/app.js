@@ -823,14 +823,16 @@ function parkingFact(o) {
 // Every figure comes from the option's own estimate (co2_kg), the same journey driven alone (the plan's baseline) and the factors in Settings.
 
 const co2Known = (o) => o.co2_kg !== undefined && o.co2_kg !== null;
-// The option(s) with the lowest CO₂. Needs two or more estimates that are not all equal, so a badge always means something.
+// Arrival first: on time (when there is a deadline) with no disruption. Only these get the Lowest CO₂ badge, the summary and the full CO₂ strip.
+const makesIt = (o) => !o.reasons.some((r) => r.limit === "deadline" || r.limit === "disruption");
+// The option(s) with the lowest CO₂ among those that make it. Needs two or more estimates that are not all equal, so a badge always means something.
 function lowestCo2(options) {
-  const pool = options.filter(co2Known);
+  const pool = options.filter((o) => co2Known(o) && makesIt(o));
   if (!pool.length) return null;
   const min = Math.min(...pool.map((o) => o.co2_kg));
   const ids = new Set(pool.filter((o) => o.co2_kg <= min + 0.005).map((o) => o.id));
   const best = pool.filter((o) => ids.has(o.id)).sort((a, b) => new Date(a.arrival) - new Date(b.arrival))[0];
-  return { ids, best, badge: pool.length > 1 && ids.size < pool.length };
+  return { ids, best, badge: pool.length > 1 && ids.size < pool.length, filtered: pool.length < options.filter(co2Known).length };
 }
 
 function co2Line(o) {
@@ -845,21 +847,24 @@ function co2Line(o) {
   return { tone: "", main: "About the same CO₂ as driving", sub };
 }
 
-function co2Block(o, lowest) {
+// Options that miss the deadline or are disrupted get one muted line on their card (compact) and a neutral strip in the sheet, so CO₂ never outshines lateness.
+function co2Block(o, lowest, compact = false) {
   const line = co2Line(o);
   if (!line) return "";
-  return `<div class="co2-line ${line.tone}"><span class="co2-ic">${I.leaf(18)}</span><div class="co2-text"><b>${esc(line.main)}</b>${line.sub ? `<small>${esc(line.sub)}</small>` : ""}</div>${lowest?.badge && lowest.ids.has(o.id) ? `<span class="badge success solid">Lowest CO₂</span>` : ""}</div>`;
+  if (!makesIt(o)) return compact ? `<p class="co2-mini">${I.leaf(14)}<span>${esc(line.main)}</span></p>` : `<div class="co2-line"><span class="co2-ic">${I.leaf(18)}</span><div class="co2-text"><b>${esc(line.main)}</b>${line.sub ? `<small>${esc(line.sub)}</small>` : ""}</div></div>`;
+  return `<div class="co2-line ${line.tone}"><span class="co2-ic">${I.leaf(18)}</span><div class="co2-text"><b>${esc(line.main)}</b>${line.sub ? `<small>${esc(line.sub)}</small>` : ""}</div>${lowest?.badge && lowest.ids.has(o.id) ? `<span class="badge success outline">Lowest CO₂</span>` : ""}</div>`;
 }
 
-// One sentence above the cards: how much the greenest option saves compared with driving.
+// One quiet line above the cards: how the greenest option that makes it compares with driving. Nothing when no option makes it.
 function co2Summary(options) {
   const base = state.plan?.baseline, lowest = lowestCo2(options);
   if (!base || !lowest) return "";
   const best = lowest.best, saved = base.co2_kg - best.co2_kg;
+  const scope = lowest.filtered ? ` of the options ${state.plan.deadline ? "on time " : ""}with no disruption` : "";
   const text = best.mode === "drive" || saved <= 0.05
-    ? `Driving alone is already the lowest-CO₂ option for this trip (about ${kg(base.co2_kg)}).`
-    : `The greenest option, <b>${esc(best.title)}</b>, saves about ${kg(saved)} ${best.co2_note ? "tailpipe " : ""}CO₂ compared with driving the same trip alone (${Math.round((saved / base.co2_kg) * 100)}% less).${best.co2_note ? ` ${esc(best.co2_note)}.` : ""}`;
-  return `<div class="co2-summary">${I.leaf(18)}<p>${text}</p></div>`;
+    ? `Driving alone has the lowest CO₂${scope || " for this trip"} (about ${kg(base.co2_kg)}).`
+    : `Greenest${scope || " option"}: <b>${esc(best.title)}</b>, about ${kg(saved)} less ${best.co2_note ? "tailpipe " : ""}CO₂ than driving the same trip alone (${Math.round((saved / base.co2_kg) * 100)}% less).${best.co2_note ? ` ${esc(best.co2_note)}.` : ""}`;
+  return `<p class="co2-summary">${I.leaf(14)}<span>${text}</span></p>`;
 }
 
 function tradeoff(o) {
@@ -933,7 +938,7 @@ function optionCard(o, index, highlight, lowest) {
           ${show.buffer ? `<div class="buffer ${b.cls}">${b.text}</div>` : ""}</div>
           <div class="stats">${stats}</div>
         </div>
-        ${show.co2 ? co2Block(o, lowest) : ""}
+        ${show.co2 ? co2Block(o, lowest, true) : ""}
         ${facts ? `<div class="facts">${facts}</div>` : ""}
         <p class="tradeoff">${esc(tradeoff(o))}</p>
       </button>
@@ -956,7 +961,6 @@ const SORT_WHY_DEADLINE = {
   best: "Options inside every limit come first, then others that arrive on time with no disruption, then the earliest arrival.",
   pt: "Options that arrive on time with no disruption come first, public transport first among them, then the earliest arrival.",
 };
-const makesIt = (o) => !o.reasons.some((r) => r.limit === "deadline" || r.limit === "disruption");
 
 function sortedOptions() {
   const list = [...state.plan.options];
