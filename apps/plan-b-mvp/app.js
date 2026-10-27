@@ -1004,8 +1004,11 @@ function resultsScreen() {
   } else if (!options.length) {
     body = `<div class="empty-card"><div class="empty-icon">${I.alert(24)}</div><h3>No routes found</h3><p>${p.errors.length ? esc(p.errors.join(" ")) : "Try another time, place or travel mode."}</p></div>`;
   } else {
-    const noneFit = !fit && p.deadline;
-    body = (noneFit ? `<div class="empty-card"><div class="empty-icon">${I.alert(24)}</div><h3>No option meets all your limits</h3><p>Every option misses at least one limit. Each card says which one. Change a limit deliberately, or choose and verify.</p></div>` : "")
+    // One line, so the first arrival time stays on screen: it names what still arrives on time (those cards are sorted first).
+    const onTime = options.filter(makesIt);
+    const noneFit = !fit && p.deadline
+      ? `<p class="none-fit">${I.alert(14)}<span>No option meets every limit. ${onTime.length ? `On time: ${esc(onTime.slice(0, 2).map((o) => o.title).join(", "))}${onTime.length > 2 ? ` +${onTime.length - 2}` : ""}.` : "None arrives on time."}</span></p>` : "";
+    body = noneFit
       + `<p class="why-rank">${esc((p.deadline && SORT_WHY_DEADLINE[state.sort]) || SORT_WHY[state.sort])}</p>`
       + (settings.show.co2 ? co2Summary(p.options) : "")
       + `<div class="cards">${options.map((o, i) => optionCard(o, i, i === 0 && o.fits ? "best" : "", lowest)).join("")}</div>`;
