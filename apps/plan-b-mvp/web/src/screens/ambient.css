@@ -1,0 +1,42 @@
+/* Ambient loops: transform / opacity only. app.css already collapses every animation to 1 ms / one iteration under prefers-reduced-motion
+   and html[data-motion="reduced"] (also when toggled mid-session), so these loops stop and rest in their normal pose there. */
+@keyframes amb-sway { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(6deg); } }
+@keyframes amb-glow { 0%, 100% { opacity: 0; } 50% { opacity: 0.75; } }
+@keyframes amb-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+@keyframes amb-spin { to { transform: rotate(360deg); } }
+@keyframes amb-float { 0%, 100% { transform: translateY(1.5px); } 50% { transform: translateY(-2px); } }
+@keyframes amb-drift { 0%, 100% { transform: translateX(-2.5px); } 50% { transform: translateX(2.5px); } }
+@keyframes amb-fall { 0% { transform: translateY(-2px); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(4px); opacity: 0; } }
+@keyframes amb-flash { 0%, 70%, 100% { opacity: 1; } 78% { opacity: 0.15; } 86% { opacity: 1; } 92% { opacity: 0.3; } }
+@keyframes amb-dash { to { stroke-dashoffset: -12; } }
+
+/* Leaves in light wind */
+.co2-ic svg, .card-row .row-meta svg, .co2-mini > svg, .co2-summary > svg, .impact-btn > svg, .impact-ic svg, .leaf-sway svg { transform-origin: 20% 90%; animation: amb-sway 5.5s ease-in-out infinite; }
+.impact-btn > svg { animation-duration: 6.5s; }
+.leaf-sway { display: inline-flex; }
+
+/* The greenest / fitting best option breathes very slightly */
+.card.best .badge, .badge.outline { position: relative; animation: amb-breathe 3.6s ease-in-out infinite; }
+.card.best .badge::after, .badge.outline::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none; box-shadow: 0 0 10px 1px var(--success); opacity: 0; animation: amb-glow 3.6s ease-in-out infinite; }
+
+/* Plan a trip: dashes flow along the route line */
+.trip-icon svg path:last-child { stroke-dasharray: 3 3; animation: amb-dash 1.2s linear infinite; }
+
+/* Weather icon by condition (data-wx); gentle float when unknown */
+.wx-icon { position: relative; }
+.wx-icon svg { animation: amb-float 5s ease-in-out infinite; }
+.wx-icon[data-wx="sun"] svg, .wx-icon[data-wx="snow"] svg { animation: amb-spin 40s linear infinite; }
+.wx-icon[data-wx="sun"]::after, .wx-icon[data-wx="heat"]::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: radial-gradient(circle, color-mix(in srgb, var(--tone) 38%, transparent), transparent 70%); opacity: 0; animation: amb-glow 4.5s ease-in-out infinite; }
+.wx-icon[data-wx="cloud"] svg, .wx-icon[data-wx="cloud-sun"] svg, .wx-icon[data-wx="fog"] svg, .wx-icon[data-wx="wind"] svg { animation: amb-drift 7s ease-in-out infinite; }
+.wx-icon[data-wx="rain"] svg, .wx-icon[data-wx="drizzle"] svg, .wx-icon[data-wx="storm"] svg { animation: none; }
+.wx-icon[data-wx="rain"] svg path:nth-child(2), .wx-icon[data-wx="drizzle"] svg path:nth-child(2) { animation: amb-fall 1.4s ease-in infinite; }
+.wx-icon[data-wx="storm"] svg path:nth-child(2) { animation: amb-flash 4s linear infinite; }
+
+/* Home: refresh control beside "Translink right now" */
+.tile-wrap { position: relative; }
+.sync-mini { position: absolute; top: 10px; right: 46px; display: flex; align-items: center; gap: 4px; }
+.sync-mini .hint { font-size: 12px; font-variant-numeric: tabular-nums; }
+.sync-mini .icon-btn { width: 36px; height: 36px; border-radius: 12px; }
+.icon-btn.is-spinning svg { animation: amb-spin 0.8s linear infinite; }
+.sync-wrap .feedback-banner { margin: 0 0 16px; }
+@media (max-width: 360px) { .sync-mini .hint { display: none; } }

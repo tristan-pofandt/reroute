@@ -342,7 +342,7 @@ function weatherInner() {
   return `<div class="wx-head"><p class="eyebrow">${I.cloud(14)}Weather · ${esc(state.weatherPlace)}</p><span class="wx-more">${w.simulated ? `<span class="badge info">Simulated</span>` : ""}<span class="wx-open">Details${I.chevronRight(14)}</span></span></div>
     <div class="wx-main"><div class="wx-temp">${Math.round(c.temp_c)}<sup>°</sup></div>
       <div class="wx-now"><strong>${esc(c.label)}</strong><span>Feels like ${Math.round(c.apparent_c)}° · Wind ${Math.round(c.wind_kmh)} km/h${c.gust_kmh > c.wind_kmh + 10 ? `, gusts ${Math.round(c.gust_kmh)}` : ""}${c.precip_mm > 0 ? ` · ${c.precip_mm} mm rain` : ""}</span></div>
-      <span class="wx-icon" style="--tone:${WX_TONE[c.icon] || "var(--accent)"}">${wxIcon(c.icon, 28)}</span></div>
+      <span class="wx-icon" data-wx="${esc(c.icon)}" style="--tone:${WX_TONE[c.icon] || "var(--accent)"}">${wxIcon(c.icon, 28)}</span></div>
     ${warn}${hours ? `<div class="wx-hours" aria-label="Next hours">${hours}</div>` : ""}
     <p class="fine wx-foot">${esc(w.source)}${w.simulated ? "" : ` · updated ${timeOf(w.fetched_at)}`}${state.offline || !offline.online ? " · saved copy, not live" : ""}</p>`;
 }
@@ -473,13 +473,12 @@ function homeHero(alertCount) {
 function syncCardInner() {
   const s = state.sync;
   const fb = s.feedback;
-  const body = s.loading
-    ? `<div class="sync-body" role="status" aria-label="Refreshing live data"><div><div class="skeleton skel-line w-60"></div><div class="skeleton skel-line sm w-40"></div></div><div class="skeleton skel-btn"></div></div>`
-    : `<div class="sync-body"><div><strong>Live data</strong><span class="hint">${s.at ? `Updated ${timeOf(s.at)}` : "Translink alerts and conditions near you"}</span></div>
-        <button class="btn btn-secondary" data-action="sync">${I.refresh(16)}Refresh live data</button></div>`;
-  return body + (fb ? notice(esc(fb.text), fb.kind) : "");
+  const stamp = s.at || state.alerts?.fetched_at;
+  const text = s.loading ? "Refreshing…" : stamp ? `Updated ${timeOf(stamp)}` : "Not updated yet";
+  return `<div class="sync-mini"><span class="hint" role="status">${text}</span><button class="icon-btn${s.loading ? " is-spinning" : ""}" data-action="sync" aria-label="Refresh live data"${s.loading ? " aria-busy=\"true\"" : ""}>${I.refresh(18)}</button></div>`
+    + (fb ? notice(esc(fb.text), fb.kind) : "");
 }
-const syncCard = () => `<div class="sync-card" data-sync>${syncCardInner()}</div>`;
+const syncCard = () => `<div class="sync-wrap" data-sync>${syncCardInner()}</div>`;
 const renderSync = () => { const el = currentPage?.querySelector("[data-sync]"); if (el) el.innerHTML = syncCardInner(); };
 
 // Header Impact button: this month's CO₂ avoided, straight to the dashboard.
@@ -619,7 +618,7 @@ function homeScreen() {
       </button>
       <p class="section-header">Right now</p>
       ${weatherCard()}
-      <button class="tile-card" data-action="open-alerts">
+      <div class="tile-wrap"><button class="tile-card" data-action="open-alerts">
         <div class="tile-head"><h3>${state.alerts ? `<span class="live-dot"></span>` : ""}Translink right now</h3>${I.chevronRight()}</div>
         ${state.alertsError ? `<p class="hint">${esc(state.alertsError)}</p>`
           : !state.alerts ? skelLines("Checking live service alerts", 80, 60)
@@ -627,10 +626,10 @@ function homeScreen() {
             <p class="fine" style="margin-top:12px">${plural(alerts.length, "active disruption alert")} from Translink GTFS-Realtime</p>`
           : `<p class="hint">No disruption alerts reported.</p>`}
       </button>
-      ${syncCard()}
+      ${syncCard()}</div>
       <p class="section-header">Impact and sharing</p>
       <button class="tile-card" data-action="go" data-screen="dashboard">
-        <div class="tile-head"><h3>${I.leaf(16)}Your impact this month</h3>${I.chevronRight()}</div>
+        <div class="tile-head"><h3><span class="leaf-sway">${I.leaf(16)}</span>Your impact this month</h3>${I.chevronRight()}</div>
         <div class="stat-row">
           <div class="stat"><b>${kg(impact.co2)}</b><span>est. CO₂ avoided</span></div>
           <div class="stat"><b>${savedText(impact)}</b><span>saved vs driving</span></div>
@@ -1015,7 +1014,7 @@ function resultsScreen() {
     const onTime = options.filter(makesIt);
     const noneFit = !fit && p.deadline
       ? `<p class="none-fit">${I.alert(14)}<span>No option meets every limit. ${onTime.length ? `On time: ${esc(onTime.slice(0, 2).map((o) => o.title).join(", "))}${onTime.length > 2 ? ` +${onTime.length - 2}` : ""}.` : "None arrives on time."}</span></p>` : "";
-    body = noneFit
+    body = `<div class="view-toggle" data-view-toggle></div>` + noneFit
       + `<p class="why-rank">${esc((p.deadline && SORT_WHY_DEADLINE[state.sort]) || SORT_WHY[state.sort])}</p>`
       + (settings.show.co2 ? co2Summary(p.options) : "")
       + `<div class="cards">${options.map((o, i) => optionCard(o, i, i === 0 && o.fits ? "best" : "", lowest)).join("")}</div>`;
@@ -1801,7 +1800,7 @@ function weatherTopInner() {
   return `<section class="wxp-now">
       <div class="wx-temp">${Math.round(c.temp_c)}<sup>°</sup></div>
       <div class="wx-now"><strong>${esc(c.label)}</strong><span>Feels like ${Math.round(c.apparent_c)}°${today ? ` · High ${Math.round(today.max_c)}° · Low ${Math.round(today.min_c)}°` : ""}</span></div>
-      <span class="wx-icon" style="--tone:${WX_TONE[c.icon] || "var(--accent)"}">${wxIcon(c.icon, 30)}</span>
+      <span class="wx-icon" data-wx="${esc(c.icon)}" style="--tone:${WX_TONE[c.icon] || "var(--accent)"}">${wxIcon(c.icon, 30)}</span>
     </section>
     ${warn}
     <div class="wxp-stats">
