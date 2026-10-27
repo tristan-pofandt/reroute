@@ -1148,7 +1148,7 @@ function impactPanel(o, logged) {
       <small>New total this month: <strong>${kg(month.co2)}</strong> of ${goalText()}</small>${progressBar(month.co2 / goal)}</div></div>`;
   }
   if (saved > 0.05) {
-    return `<div class="impact-card"><span class="impact-ic">${I.leaf(22)}</span><div><b>Saves ${kg(saved)} ${o.co2_note ? "tailpipe " : ""}CO₂ compared with driving</b>
+    return `<div class="impact-card"><span class="impact-ic">${I.leaf(22)}</span><div><b>About ${kg(saved)} less ${o.co2_note ? "tailpipe " : ""}CO₂ than driving (estimate)</b>
       <small>${o.co2_note ? `${esc(o.co2_note)}. ` : ""}Add it to your month with “I'm taking this trip”. This month so far: ${kg(month.co2)} of ${goalText()}.</small></div></div>`;
   }
   return `<div class="impact-card neutral"><span class="impact-ic">${I.leaf(22)}</span><div><b>${o.mode === "drive" ? "This is the driving baseline" : "No CO₂ saving compared with driving"}</b>
@@ -1170,7 +1170,7 @@ function nextScreen() {
   const watchAlert = state.watch.alert;
   const sure = o.fits && o.cost_known;
   const chosen = !o.fits ? "Chosen, but outside your limits" : isCycle(o) && !o.cost_known ? "Chosen, cost and access not checked"
-    : !o.cost_known ? "Route chosen · price unknown" : o.cost_estimated ? "Route chosen · check a vehicle is nearby" : "Route confirmed";
+    : !o.cost_known ? "Route chosen · price unknown" : o.cost_estimated ? "Route chosen · check a vehicle is nearby" : "Route chosen";
   return `
     ${navbar(true)}
     <div class="scroll">
@@ -1191,7 +1191,7 @@ function nextScreen() {
       <div class="actions">
         ${o.nav?.length ? `<button class="btn btn-primary" data-action="start-nav" data-id="${esc(o.id)}">${I.navArrow(18)}Start directions</button>` : ""}
         ${o.hire_providers?.length ? hireButtons(o) : ""}
-        <button class="btn ${logged ? "btn-secondary" : "btn-success"}" data-action="log-trip" ${logged ? "disabled" : ""}>${logged ? `${I.check(16)}Added to your impact` : `${I.leaf(18)}I'm taking this trip`}</button>
+        <button class="btn btn-secondary" data-action="log-trip" ${logged ? "disabled" : ""}>${logged ? `${I.check(16)}Added to your impact` : `${I.leaf(18)}I'm taking this trip`}</button>
         ${o.offline ? "" : `<div class="btn-row">
           <a class="btn btn-secondary" href="${esc(o.maps_url)}" target="_blank" rel="noopener noreferrer" aria-label="Open in Google Maps">Google Maps ${I.external(16)}</a>
           <a class="btn btn-secondary" href="https://jp.translink.com.au/plan-your-journey/journey-planner" target="_blank" rel="noopener noreferrer">Translink ${I.external(16)}</a>
@@ -1731,7 +1731,7 @@ function breakdownCard(trips) {
   const rows = modeBreakdown(trips), total = rows.reduce((s, r) => s + r.co2, 0);
   return `<p class="section-header">CO₂ avoided by mode</p><div class="group"><div class="group-card">${rows.map((r) => row((KIND_ICON[r.kind] || I.route)(16), SEGMENT_COLOUR[r.kind] || "var(--accent)",
     `${esc(KIND_LABEL[r.kind] || r.kind)}<small>${plural(r.trips, "trip")} · ${total > 0 ? `${Math.round((r.co2 / total) * 100)}% of your CO₂ avoided` : "no CO₂ avoided"}</small><span class="share" aria-hidden="true"><i style="transform:scaleX(${total > 0 ? Math.max(0.02, r.co2 / total) : 0.02})"></i></span>`,
-    valueSpan(kgShort(r.co2), true))).join("")}</div><p class="group-footer">Each logged trip is compared with driving the same journey alone in your car.${rows.some((r) => CYCLE_MODES.includes(r.kind)) ? " Scooter and bike trips count tailpipe emissions only; charging and manufacturing are not counted." : ""}</p></div>`;
+    valueSpan(kg(r.co2), true))).join("")}</div><p class="group-footer">Each logged trip is compared with driving the same journey alone in your car.${rows.some((r) => CYCLE_MODES.includes(r.kind)) ? " Scooter and bike trips count tailpipe emissions only; charging and manufacturing are not counted." : ""}</p></div>`;
 }
 
 function dashboardScreen() {
@@ -3364,7 +3364,8 @@ const actions = {
     }
     rerender();
     // Focusing the answer reads it out: its name is the label, the leave line and everything in the answer box.
-    if (state.screen === "panic" && pm.phase === "answer") focusLead();
+    // The answer starts at the top: rerender() kept the form's scroll, which hid the leave-by line on short screens.
+    if (state.screen === "panic" && pm.phase === "answer") { currentPage.querySelector(".scroll")?.scrollTo(0, 0); focusLead(); }
   },
   // Results go on top of the answer, so Back returns to it without another search.
   "panic-others": () => { state.sort = "arrival"; navigate("results", "forward"); },
