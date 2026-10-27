@@ -608,9 +608,9 @@ function homeScreen() {
         <span class="trip-text"><strong>Plan a trip</strong><small>Everyday routes, public transport first</small></span>
         <span class="chev">${I.arrowRight(18)}</span>
       </button>
-      <button class="panic-btn" data-action="go" data-screen="panic" aria-label="Journey disrupted? Get the fastest working way there now. One answer, no decisions.">
+      <button class="panic-btn" data-action="go" data-screen="panic" aria-label="Journey disrupted? Get the best working way there now. On time first, no decisions.">
         <span class="panic-icon">${I.bolt(24)}</span>
-        <span><strong>Journey disrupted?</strong><small>Get the fastest working way there now — one answer, no decisions.</small></span>
+        <span><strong>Journey disrupted?</strong><small>Get the best working way there now — on time first, no decisions.</small></span>
       </button>
       <p class="section-header">Right now</p>
       ${weatherCard()}
@@ -877,6 +877,7 @@ function tradeoff(o) {
   if (o.mode === "drive" && o.parking?.any_paid) parts.push("plus paid parking at the other end");
   let text = parts.join(", ") + ".";
   if (!o.fits && o.reasons.length) text += ` ${o.reasons[0].text}.`;
+  else if (!o.cost_known && o.cost_unknown_text) text += ` ${o.cost_unknown_text}.`;
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
@@ -894,8 +895,8 @@ function hireButtons(o) {
 }
 
 function badge(o) {
-  if (o.fits) return o.buffer_minutes !== undefined && o.buffer_minutes < 5
-    ? `<span class="badge tight">${I.alert(12)}Tight</span>` : `<span class="badge success">${I.checkCircle(12)}Fits</span>`;
+  if (o.fits) return o.buffer_minutes !== undefined && o.buffer_minutes < 5 ? `<span class="badge tight">${I.alert(12)}Tight</span>`
+    : o.cost_known ? `<span class="badge success">${I.checkCircle(12)}Fits</span>` : `<span class="badge info">${I.dollar(12)}Price unknown</span>`;
   const hard = o.reasons.some((r) => ["deadline", "disruption"].includes(r.limit));
   return `<span class="badge ${hard ? "error" : "warning"}">${hard ? I.xCircle(12) : I.alert(12)}${hard ? (o.reasons[0].limit === "disruption" ? "Disrupted" : "Late") : "Check"}</span>`;
 }
@@ -904,7 +905,7 @@ function optionCard(o, index, highlight, lowest) {
   const show = settings.show;
   const icon = (KIND_ICON[o.kind] || I.route)(20);
   const b = bufferInfo(o);
-  const costOver = o.reasons.some((r) => r.limit === "cost" && o.cost_known);
+  const costOver = o.reasons.some((r) => r.limit === "cost");
   const walkOver = o.reasons.some((r) => r.limit === "walking");
   const facts = [
     show.realtime ? realtimeFact(o) : "", weatherFact(o), trafficFact(o), show.elevation ? climbFact(o) : "",
@@ -948,14 +949,23 @@ const SORT_WHY = {
   walking: "Least walking first.",
   co2: "Lowest estimated CO₂ first.",
 };
+const SORT_WHY_DEADLINE = {
+  best: "Options inside every limit come first, then others that arrive on time with no disruption, then the earliest arrival.",
+  pt: "Options that arrive on time with no disruption come first, public transport first among them, then the earliest arrival.",
+};
+const makesIt = (o) => !o.reasons.some((r) => r.limit === "deadline" || r.limit === "disruption");
 
 function sortedOptions() {
   const list = [...state.plan.options];
   const arrival = (a, b) => new Date(a.arrival) - new Date(b.arrival);
   const known = (o, key) => (o[key] === null || o[key] === undefined ? Infinity : o[key]);
+  // With a deadline, options that make it come first, and "Public transport first" only reorders those (both are then in one group).
+  const deadline = Boolean(state.plan.deadline);
+  const onTime = (a, b) => (deadline ? Number(makesIt(b)) - Number(makesIt(a)) : 0);
+  const transit = (a, b) => (deadline && !makesIt(a) ? 0 : Number(b.mode === "transit") - Number(a.mode === "transit"));
   const by = {
-    best: (a, b) => Number(b.fits) - Number(a.fits) || arrival(a, b),
-    pt: (a, b) => Number(b.mode === "transit") - Number(a.mode === "transit") || Number(b.fits) - Number(a.fits) || arrival(a, b),
+    best: (a, b) => onTime(a, b) || Number(b.fits) - Number(a.fits) || arrival(a, b),
+    pt: (a, b) => onTime(a, b) || transit(a, b) || Number(b.fits) - Number(a.fits) || arrival(a, b),
     arrival,
     cost: (a, b) => (a.cost_known ? a.cost : Infinity) - (b.cost_known ? b.cost : Infinity) || arrival(a, b),
     walking: (a, b) => known(a, "walking_minutes") - known(b, "walking_minutes") || arrival(a, b),
@@ -972,6 +982,7 @@ function resultsScreen() {
   const avoiding = (f.avoid || "").trim();
   const options = sortedOptions();
   const fit = options.filter((o) => o.fits).length;
+  const unpriced = options.filter((o) => o.fits && !o.cost_known).length;
   const chips = `<div class="chips">
       ${p.deadline ? `<span class="chip">${I.clock(14)}By ${timeOf(p.deadline)}</span>` : ""}
       <span class="chip">${I.dollar(14)}$${f.budget} max</span>
@@ -988,7 +999,7 @@ function resultsScreen() {
   } else {
     const noneFit = !fit && p.deadline;
     body = (noneFit ? `<div class="empty-card"><div class="empty-icon">${I.alert(24)}</div><h3>No option meets all your limits</h3><p>Every option misses at least one limit. Each card says which one. Change a limit deliberately, or choose and verify.</p></div>` : "")
-      + `<p class="why-rank">${esc(SORT_WHY[state.sort])}</p>`
+      + `<p class="why-rank">${esc((p.deadline && SORT_WHY_DEADLINE[state.sort]) || SORT_WHY[state.sort])}</p>`
       + (settings.show.co2 ? co2Summary(p.options) : "")
       + `<div class="cards">${options.map((o, i) => optionCard(o, i, i === 0 && o.fits ? "best" : "", lowest)).join("")}</div>`;
   }
@@ -1000,7 +1011,7 @@ function resultsScreen() {
     <div class="scroll tight">
       ${chips}
       <div class="heading-row"><div><p class="eyebrow">Routes</p><h2>Your options</h2>
-        ${state.loading ? `<div class="skeleton skel-line sm w-60" role="status" aria-label="Updating options" style="margin-top:8px"></div>` : `<p>${fit} of ${options.length} fit your limits</p>`}</div>
+        ${state.loading ? `<div class="skeleton skel-line sm w-60" role="status" aria-label="Updating options" style="margin-top:8px"></div>` : `<p>${fit} of ${options.length} fit your limits${unpriced ? ` · price unknown for ${unpriced}` : ""}</p>`}</div>
         <button class="icon-btn" data-action="map-overview" aria-label="Show all routes on a map">${I.route(20)}</button></div>
       ${sortChips}
       <div style="height:16px"></div>
@@ -1048,7 +1059,7 @@ function sheetContent(o) {
   const b = bufferInfo(o);
   const rt = o.realtime;
   const explain = o.fits
-    ? `<div class="explain success"><h4>${o.buffer_minutes !== undefined && o.buffer_minutes < 5 ? "Fits, but with little spare time" : "Meets every limit"}</h4><p>${esc(tradeoff(o))}</p></div>`
+    ? `<div class="explain success"><h4>${o.buffer_minutes !== undefined && o.buffer_minutes < 5 ? "Fits, but with little spare time" : o.cost_known ? "Meets every limit" : "Fits your other limits · price unknown"}</h4><p>${esc(tradeoff(o))}</p></div>`
     : `<div class="explain ${o.reasons.some((r) => ["deadline", "disruption"].includes(r.limit)) ? "error" : "warning"}"><h4>Check before choosing${anySimulated(o) ? simTag(true) : ""}</h4>${o.reasons.map((r) => `<p>${esc(r.text)}</p>`).join("")}</div>`;
   const alerts = rt?.alerts?.length ? `<p class="section-header">Translink alerts</p><div class="group"><div class="group-card">${rt.alerts.map((a) => alertRow(a, false)).join("")}</div></div>` : "";
   const breakdown = (o.cost_breakdown || []).map((item) => row(I.dollar(16), "var(--success)", esc(item.label), valueSpan(money(item.amount), true))).join("");
@@ -1076,7 +1087,7 @@ function sheetContent(o) {
       <p class="section-header">Your limits</p>
       <div class="group"><div class="group-card">
         ${state.plan.deadline ? limitCheck("Deadline", !lim.deadline, b.text) : ""}
-        ${limitCheck(`Cost ($${f.budget})`, o.cost_known ? !lim.cost : null, o.cost_known ? `${o.cost_estimated ? "About " : ""}${money(o.cost)}` : "Unknown")}
+        ${limitCheck(`Cost ($${f.budget})`, lim.cost ? false : o.cost_known ? true : null, o.cost_known ? `${o.cost_estimated ? "About " : ""}${money(o.cost)}` : o.cost !== null && o.cost !== undefined ? `${money(o.cost)}+` : "Unknown")}
         ${limitCheck(`Walking (${f.walking} min)`, o.walking_minutes === null ? null : !lim.walking, o.walking_minutes === null ? "Unknown" : `${o.walking_minutes} min`)}
         ${o.mode === "transit" ? limitCheck("Live service status", rt ? (rt.checked ? !lim.disruption : null) : null, rt?.checked ? (lim.disruption ? "Alert" : rt.delay > 2 ? `~${rt.delay} min late` : "No alerts") : "Not checked") : ""}
       </div></div>
@@ -1140,12 +1151,15 @@ function nextScreen() {
   }).join("");
   const logged = store.get("trips", []).some((t) => t.ref === tripRef(o));
   const watchAlert = state.watch.alert;
+  const sure = o.fits && o.cost_known;
+  const chosen = !o.fits ? "Chosen, but outside your limits" : isCycle(o) && !o.cost_known ? "Chosen, cost and access not checked"
+    : !o.cost_known ? "Route chosen · price unknown" : o.cost_estimated ? "Route chosen · check a vehicle is nearby" : "Route confirmed";
   return `
     ${navbar(true)}
     <div class="scroll">
       ${watchAlert ? `<div class="watch-banner" role="alert">${I.alert(20)}<div><p><b>New disruption on ${esc(watchAlert.lines.join(", "))}:</b> ${esc(watchAlert.header)}</p><button class="btn btn-primary" data-action="replan">See my alternatives</button></div></div>` : ""}
-      <div class="confirm ${o.fits ? "" : "warn"}">
-        <p class="eyebrow">${o.fits ? I.checkCircle(16) : I.alert(16)}${o.fits ? (o.cost_estimated ? "Route chosen · check a vehicle is nearby" : "Route confirmed") : isCycle(o) && !o.cost_known ? "Chosen, cost and access not checked" : "Chosen, but outside your limits"}</p>
+      <div class="confirm ${sure ? "" : "warn"}">
+        <p class="eyebrow">${sure ? I.checkCircle(16) : I.alert(16)}${chosen}</p>
         <h2>${esc(o.title)}</h2>
         <div class="confirm-grid">
           <div><span>Arrival</span><b>${timeOf(o.arrival)}</b></div>
@@ -1184,7 +1198,7 @@ function nextScreen() {
 
 function panicScreen() {
   const pm = state.panic;
-  const top = `<div class="panic-top"><span class="panic-label">${I.bolt(14)}FASTEST WAY NOW</span><div class="panic-actions">${homeButton()}<button class="panic-exit" data-action="exit-panic">Exit</button></div></div>`;
+  const top = `<div class="panic-top"><span class="panic-label">${I.bolt(14)}BEST WAY NOW</span><div class="panic-actions">${homeButton()}<button class="panic-exit" data-action="exit-panic">Exit</button></div></div>`;
   if (pm.phase === "answer" && state.plan) {
     const o = findOption(state.plan.recommended_id);
     if (o) {
@@ -1219,7 +1233,7 @@ function panicScreen() {
     <div class="panic-chips">${chips.map(([k, l]) => `<button class="panic-chip" data-action="panic-place" data-place="${esc(k)}">${esc(l)}</button>`).join("")}<button class="panic-chip" data-action="pick-map" data-path="panic.dest">${I.map(16)}Choose on map</button></div>
     <label class="panic-by">Need to be there by <input class="panic-input" type="time" data-panic="by" value="${esc(pm.by)}" aria-label="Deadline (optional)"></label>
     ${pm.error ? notice(esc(pm.error), pm.errorKind || "error") : ""}
-    <button class="panic-go${pm.phase === "loading" ? " is-loading" : ""}" data-action="panic-go" ${pm.phase === "loading" ? 'disabled aria-busy="true"' : ""}>${pm.phase === "loading" ? skelBar("Finding the fastest safe option", 140) : "Get me there"}</button>
+    <button class="panic-go${pm.phase === "loading" ? " is-loading" : ""}" data-action="panic-go" ${pm.phase === "loading" ? 'disabled aria-busy="true"' : ""}>${pm.phase === "loading" ? skelBar("Finding the best working option", 140) : "Get me there"}</button>
   </div>`;
 }
 
