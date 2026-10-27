@@ -9,12 +9,8 @@ const island = (el) => el.matches(".group-card") && el.querySelector("[data-orig
 export default function Journey() {
   const html = useLegacyHtml("journey");
   useSearchHaptics();
-  let n = 0;
-  const custom = ({ tag, props, kids, el }) => {
-    if (tag === "div" && el.classList.contains("group")) {
-      const i = n++;
-      return createElement(Rise, { key: `g${i}`, props, kids, delay: 0.1 + i * 0.06 });
-    }
+  const custom = ({ tag, props, kids, el, index }) => {
+    if (tag === "div" && el.classList.contains("group")) return createElement(Rise, { key: `g${index}`, props, kids, index });
   };
   return <>{toReact(html, { island, custom })}</>;
 }

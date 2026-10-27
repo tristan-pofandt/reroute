@@ -1,18 +1,15 @@
 // Shared by the home, dashboard and rides screens. The legacy builders hold the pure logic (impact maths, formatting, icons, settings),
 // and app.js does not export those helpers, so the markup is read from RerouteLegacy.SCREENS[name]() on every `reroute:rerender`
 // and turned into real React elements (not innerHTML), keeping every class, aria attribute and data-action the legacy handlers expect.
-// The React part is the structure around it: keyed reconciliation (inputs and focus survive a rerender), staggered entrances, haptics.
+// The React part is the structure around it: keyed reconciliation (inputs and focus survive a rerender), the page choreography (the direct
+// children of the navbar and `.scroll` are staggered Items, persistent elements are layoutId Shared ones, see shared.jsx), haptics.
 import { createElement, useEffect, useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { useReducedMotion } from "../../reduced.js";
+import { legacyNode } from "../../shared.jsx";
 import { snap, tick } from "../../haptics.js";
 
 const ATTR = { class: "className", for: "htmlFor", tabindex: "tabIndex", maxlength: "maxLength", readonly: "readOnly", autocomplete: "autoComplete", colspan: "colSpan", rowspan: "rowSpan", inputmode: "inputMode", value: "defaultValue", checked: "defaultChecked" };
 const BOOL = new Set(["disabled", "hidden", "required", "readonly", "checked", "multiple", "autofocus"]);
 const camel = (s) => s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
-// The shell ghosts these between home and dashboard and measures/fades them itself, so they and their ancestors must not be animated here.
-const SHARED = ".impact-btn, .kpi.lead";
-
 function style(css) {
   const o = {};
   for (const d of css.split(";")) {
@@ -34,27 +31,18 @@ function props(el, key) {
   return p;
 }
 
-function toReact(node, key, stagger, items) {
+function toReact(node, key, target = false, index = 0) {
   if (node.nodeType === 3) return node.nodeValue;
   if (node.nodeType !== 1) return null;
   const tag = node.localName;
   const p = props(node, key);
-  const kids = [...node.childNodes].map((c, i) => toReact(c, i, false, items));
-  if (stagger && !node.matches(SHARED) && !node.querySelector(SHARED)) {
-    return createElement(motion[tag] || tag, { ...p, variants: items, custom: key }, ...kids);
-  }
-  if (node.classList.contains("scroll")) {
-    return createElement(motion.div, { ...p, variants: ROOT, initial: "hidden", animate: "show" }, ...[...node.childNodes].map((c, i) => toReact(c, i, true, items)));
-  }
-  return createElement(tag, p, ...kids);
+  const kids = (n, t) => [...n.childNodes].map((c, i) => toReact(c, i, t, i));
+  // The page body and the navbar hand "stagger me" down to their direct children; shared elements (layoutId) and the containers that
+  // hold them are handled in legacyNode, see shared.jsx.
+  const made = legacyNode(node, p, index, target, kids);
+  if (made) return made;
+  return createElement(tag, p, ...kids(node, node.matches(".scroll, header.navbar, footer.sticky")));
 }
-
-const ROOT = { hidden: {}, show: {} };
-const ITEM = {
-  hidden: { opacity: 0, y: 16 },
-  show: (i) => ({ opacity: 1, y: 0, transition: { duration: 0.4, delay: 0.3 + Math.min(i, 12) * 0.035, ease: [0.23, 1, 0.32, 1] } }),
-};
-const REDUCED_ITEM = { hidden: { opacity: 1, y: 0 }, show: { opacity: 1, y: 0, transition: { duration: 0 } } };
 
 const html = (name) => window.RerouteLegacy.SCREENS[name]();
 
@@ -72,11 +60,10 @@ export function useScreenHtml(name) {
 // `haptics`: { "<data-action>": "tick" | "snap" } fired on press, on top of the shell's own button tick.
 export function LegacyBody({ name, haptics = {} }) {
   const h = useScreenHtml(name);
-  const reduced = useReducedMotion();
   const tree = useMemo(() => {
     const doc = new DOMParser().parseFromString(h, "text/html");
-    return [...doc.body.childNodes].map((n, i) => toReact(n, i, false, reduced ? REDUCED_ITEM : ITEM));
-  }, [h, reduced]);
+    return [...doc.body.childNodes].map((n, i) => toReact(n, i));
+  }, [h]);
   useEffect(() => {
     const on = (e) => {
       const el = e.target.closest?.("[data-action]");

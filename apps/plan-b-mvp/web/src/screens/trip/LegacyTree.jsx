@@ -4,6 +4,9 @@
 // `reroute:rerender`, so focus, scroll and node identity survive), the parts legacy code mutates in place stay "islands", and the
 // interesting elements (cards, steps, form controls) are swapped for React components by each screen's `custom` function.
 import { createElement, useEffect, useLayoutEffect, useReducer, useRef } from "react";
+import { motion } from "framer-motion";
+import { staggerProps } from "../../choreography.js";
+import { Item, Shared, holdsShared, sharedId } from "../../shared.jsx";
 import { error, snap, tick } from "../../haptics.js";
 
 const legacy = () => window.RerouteLegacy;
@@ -36,10 +39,12 @@ function propsOf(el) {
 
 // A subtree legacy code rewrites or measures in place (autocomplete inputs wrapped with a clear button, live status lines, the map and
 // its controls, the origin row that paintOrigin() repaints). React sets its HTML only when the string changes, then re-wraps the inputs.
-export function Island({ tag, props, html }) {
+// `index` (a direct child of the page body) makes it a staggered element of the page choreography.
+export function Island({ tag, props, html, index }) {
   const ref = useRef(null);
   useLayoutEffect(() => { if (ref.current) legacy().enhanceClear(ref.current); }, [html]);
-  return createElement(tag, { ...props, ref, dangerouslySetInnerHTML: { __html: html } });
+  const T = index != null && motion[tag];
+  return createElement(T || tag, { ...props, ...(T ? staggerProps(index) : null), ref, dangerouslySetInnerHTML: { __html: html } });
 }
 
 // A checkbox or date input outside an island: uncontrolled, re-synced to the legacy state after each render unless being edited.
@@ -57,21 +62,28 @@ export function Field({ props, onChange }) {
 
 const isIsland = (el, extra) => el.matches?.("[data-live], [data-live-age], [data-bg-slot], .map-wrap, .place-input") || extra?.(el);
 
-function convert(node, opts, index) {
+// `target`: the node is a direct child of the page's navbar or `.scroll`, so it takes part in the page stagger (see shared.jsx for the
+// layoutId elements, which do not, and for the containers that hold them).
+function convert(node, opts, index, target = false) {
   if (node.nodeType === 3) return node.nodeValue;
   if (node.nodeType !== 1) return null;
   const tag = node.localName;
   const props = propsOf(node);
-  if (isIsland(node, opts.island)) return createElement(Island, { key: index, tag, props, html: node.innerHTML });
-  const kids = [...node.childNodes].map((c, i) => convert(c, opts, i)).filter((c) => c !== null);
-  const custom = opts.custom?.({ el: node, tag, props, kids, index });
+  const id = sharedId(node);
+  if (id) return createElement(Shared, { key: index, ...props, tag, id }, ...[...node.childNodes].map((c, i) => convert(c, opts, i)).filter((c) => c !== null));
+  if (isIsland(node, opts.island)) return createElement(Island, { key: index, tag, props, html: node.innerHTML, index: target ? index : null });
+  // A container is not animated itself when it holds a shared element, or when its own children are the staggered elements (opts.container).
+  const container = target && (holdsShared(node) || opts.container?.(node)), below = container || node.matches(".scroll, header.navbar, footer.sticky");
+  const kids = [...node.childNodes].map((c, i) => convert(c, opts, i, below)).filter((c) => c !== null);
+  const custom = !container && opts.custom?.({ el: node, tag, props, kids, index, target });
   if (custom) return custom; // customs set their own key
   if (tag === "input") {
     const v = node.getAttribute("value");
     const toggle = node.type === "checkbox" ? tick : undefined;
     return createElement(Field, { key: index, props: { ...props, value: v ?? undefined }, onChange: toggle });
   }
-  return createElement(tag, { key: index, ...props }, VOID.has(tag) ? undefined : kids);
+  const children = VOID.has(tag) ? undefined : kids;
+  return target && !container ? createElement(Item, { key: index, ...props, tag, index }, children) : createElement(tag, { key: index, ...props }, children);
 }
 
 export function toReact(html, opts = {}) {

@@ -19,7 +19,7 @@ export default function PrivacyBody() {
       <li><b>Translink:</b> the server downloads public schedule and live alert, delay and vehicle feeds. It does not send your trip details to Translink.</li>
       <li><b>OpenStreetMap (Overpass API):</b> when you download an offline area, the Reroute server sends the area's corners to the Overpass API to fetch its map data. No trip details or location are sent.</li>
       <li><b>QLDTraffic:</b> the server requests public road-event data without sending your trip details.</li>
-      <li><b>Open-Meteo:</b> the server sends the location used for weather (your device location if allowed, the trip start or Brisbane) rounded to three decimal places, or sampled walking-route coordinates for fallback elevation.</li>
+      <li><b>Open-Meteo:</b> the server sends the location used for weather (your device location if allowed, the trip start or Brisbane) rounded to 3 decimal places, or sampled walking-route coordinates for fallback elevation.</li>
       <li><b>Browser push provider:</b> when you opt in, an encrypted disruption notification is sent to the browser's subscription endpoint, which may be operated by Google, Mozilla, Apple or another provider.</li>
       <li><b>Google Fonts:</b> your browser requests the Inter typeface from Google, which receives your IP address and browser details. The app itself loads no third-party analytics.</li>
     </ul>
