@@ -179,3 +179,88 @@ There were no console errors. The rendered-page Impeccable detector on home repo
 - `accent-soft`, `accent-glow`, `border-focus` and `--chart` still mix from #6366F1. The difference can't be seen. DESIGN.md records it.
 - With no working browser map key, the full-screen map's focus behaviour was checked only through its action, not with a real map's keyboard controls. Nothing was checked with a real screen reader or on a phone.
 - Live searches: none were made.
+
+### Step B5 done (16:48)
+
+**What changed** (commits `f787402`, `618e3c4`, `f7dc318`, `125c9a4` and `d940235` on `feature/design-fixes`):
+- **Polish fixes** (`apps/plan-b-mvp/app.js`, `app.css`):
+  - Next steps: the eyebrow says "Route chosen" instead of "Route confirmed", because the route is a Google estimate. The impact panel says "About 290 g less CO₂ than driving (estimate)" instead of "Saves 290 g CO₂ compared with driving", which matches the B3 results wording and the B2 logged state. "I'm taking this trip" is a secondary button instead of a filled green one (the One Signal Rule), so Start directions is the only filled action in the stack. The unused `.btn-success` style was removed.
+  - Journey disrupted?: when the answer arrives it is scrolled to the top. Before, `rerender()` kept the form's scroll position, so at 320×640 the "Leave by 8:24 am. 66." line was hidden under the header. At 320 px, "arrival" now sits on the time's baseline (`.when` is a wrapping flex row) instead of dropping about 50 px below it.
+  - Results: the outline Lowest CO₂ badge wraps under the CO₂ strip's text instead of squeezing it into a three-line column ("380 g CO₂ less / than driving").
+  - Impact Dashboard: the by-mode breakdown uses the same g/kg formatter as the hero ("290 g", not "0.3 kg" beside "290 g").
+  - Reduced motion: the rules also set `animation-delay: 0ms`. Before, inline stagger delays stayed in place with `backwards` fill, so under reduced motion the seventh result card stayed invisible for about 330 ms. Checked: with `reducedMotion: reduce`, all 7 cards were at opacity 1 within 450 ms; with full motion they still stagger.
+  - `sw.js` VERSION is now `planb-reroute-13`.
+- **DESIGN.md:** no token changed in B5, and B4's tokens were already recorded. The component text now matches stage B: loading buttons with words; the Journey disrupted? answer (baseline "arrival", buffer line, avoided-disruption pills); the CO₂ strip only on options that make it, with a muted line or a neutral sheet strip otherwise; the outline Lowest CO₂ badge; the "Price unknown" and "Best way now" info badges; the one-line "No option meets every limit" strip; the quiet CO₂ summary; next steps with a single filled action; no stagger under reduced motion.
+- **Critique snapshot:** `critique-storage latest` marked `.impeccable/critique/2026-10-26T21-49-09Z__apps-plan-b-mvp.md` as `closed: true`, because the target had changed since the critique. All five of its P1s were handled in B1 to B4. Only that front-matter line changed.
+- **AI-use log:** a new entry in `docs/team/ai-use-log.md` for this unattended run (steps B1 to B5).
+
+**Tests:** before, 344 passed and 17 subtests passed. After, 344 passed and 17 subtests passed (`python -m pytest apps/plan-b-mvp -q`, using the B1 venv). Nothing was failing before. No test was added: the changes are front-end only and were checked in the browser.
+
+**Browser check:** an isolated headless Chrome (Playwright from the npx cache) at 390×844 in Dark and Light, and at 320×640 in Dark. The server ran with a dummy `MAPS_API_KEY` on port 8766. `/api/plan` was answered with B2's synthetic panic plan, the results came from B3's "somefit" and "nonefit" plans, and `/api/autocomplete` and `/api/place` were stubbed. **0 billed Google searches.** It covered Plan a trip, results (some fit and none fit), a miss's detail sheet, next steps before and after logging, the dashboard with one trip and empty, the Journey disrupted? loading state and the answer. Before and after screenshots, the script and the detector output are outside the repo in `%LOCALAPPDATA%\Temp\reroute-b5\`. There were no console errors and no horizontal overflow. The Impeccable detector found 108 findings in `app.js` and `app.css`, against 115 in the critique. They are the known DESIGN.md scale gaps, Inter and `--spring`. The only hit on a changed line was the existing 14 px "arrival" size. The server was stopped afterwards, and port 8766 is free.
+
+**Decisions I made:**
+1. "Route confirmed" became "Route chosen". The critique flagged it as reading like a verification of a Google estimate, and PRODUCT.md says estimates stay labelled. B1 had already used "Route chosen · …" for the other states.
+2. The green "I'm taking this trip" button became secondary, not indigo. Start directions is already the primary action, and two filled indigo buttons would compete.
+3. I fixed the stagger under reduced motion even though it predates stage B. The step rule is to respect reduced motion, and the results cards are one of this step's screens.
+4. I kept the critique snapshot's `closed: true` marker that the tool wrote, rather than reverting it, because every priority issue it listed has been addressed.
+
+**Skipped, or for Tristan:**
+- **review-animations:** Emil Kowalski's `review-animations` skill can't be started by an agent (it is marked for user invocation only), so it was not run. Run `/review-animations` on `apps/plan-b-mvp/app.css` yourself if you want that review. The motion that changed in stage B: the new `.none-fit` entrance (`fbIn`, 0.3 s ease-out), the CO₂ summary losing its entrance, the outgoing page made inert during the push, and the reduced-motion delay fix.
+- **`.impeccable/design.json`** is stale against DESIGN.md (Impeccable reports `design-sidecar-stale`). Its component snippets don't describe the stage B parts. Run `/impeccable document` to refresh it. I didn't, because Impeccable says not to repair drift as a side effect.
+- **Not clear defects, or product and content calls:** "Running to schedule" beside "No live data" for the same bus in the synthetic answer (the critique's heuristic 1); the map fallback that names `MAPS_BROWSER_API_KEY`; the empty dashboard's icon tile above its heading; the money chart's $0/$3/$5 axis when every saving is unknown; the toast covering the dashboard's last notice for a few seconds.
+- Live searches: none were made.
+
+## Stage B complete
+
+**Summary of every change across B1 to B5** (branch `feature/design-fixes`; nothing pushed, merged or opened as a PR):
+- **B1, deadline-first ranking** (`live_routes.py`, `offline.js`, `app.js`, `manifest.webmanifest`, tests):
+  - An unknown price is its own state ("Price unknown" badge, "· price unknown for N", "$X+" for a part-known cost) and no longer fails an option.
+  - With a deadline, Best fit and Public transport first put the options that arrive on time with no disruption first.
+  - `recommend()` prefers the most spare time when the easiest on-time option leaves fewer than 10 minutes.
+  - "FASTEST WAY NOW" became "BEST WAY NOW", and the home line became "Get the best working way there now — on time first, no decisions."
+- **B2, clarify** (`app.js`, `app.css`):
+  - The Journey disrupted? answer shows the buffer against the deadline (including "tomorrow"), "Avoids the 412 · Translink alert · Simulated" pills and visible loading text. "See other options" keeps the answer in the back stack and marks it "Best way now".
+  - The Impact Dashboard uses estimate wording throughout, shows "Unknown" instead of $0, uses "about the CO₂ of driving N km", names the team's default 10 kg goal, counts only finished weeks in the streak, drops the "Not driving %" KPI, uses "planned" trips and leads with the empty state.
+- **B3, quieter and layout** (`app.js`, `app.css`):
+  - The Lowest CO₂ badge, the summary and the full CO₂ strip go only to options that make the deadline with no disruption. The badge is outline-only. Misses get one muted line on their card.
+  - The summary is a quiet line, and "No option meets every limit. On time: …" is one line. The first arrival time is now above the fold.
+- **B4, harden** (`app.js`, `app.css`, DESIGN.md, `design.json`, README):
+  - Modal layers are inert, Tab wraps inside them, and focus returns to the opener. A new screen focuses its heading, and focus is kept through re-renders.
+  - Each option card is one tab stop and is named by its own text. The disrupted answer gets focus when it arrives.
+  - Contrast: Dark `--accent` #575AF0, the Plan a trip sentence at full opacity, `text-muted` for readable faint text, and Light `--warning-text` #92400E and `--success-text` #065F46.
+- **B5, polish** (`app.js`, `app.css`, DESIGN.md, AI-use log): "Route chosen", the estimate wording on next steps, a secondary "I'm taking this trip", the disrupted answer at the top and at 320 px, the CO₂ badge wrap, consistent g/kg, no stagger under reduced motion, DESIGN.md component text, and the AI-use log entry.
+- `sw.js` went from `planb-reroute-8` to `planb-reroute-13`, once per step that changed cached files.
+
+**Skipped across stage B, and why:**
+- **Product calls for Tristan:**
+  - `recommend()` ignores the walking and cost limits, so with the new rule it can pick an option over the walking limit when that option has more spare time (B1).
+  - An unknown walking time still fails (B1).
+  - "My car" is on by default, and Uber is never recommended (B2).
+  - There is no log-after-travel flow. Trips are called "planned" instead (B2).
+  - The critique's question 4 on the dashboard's streak and ring is still open (B2).
+- **Out of scope by Tristan's decision:** the P2 demo pill overlap and its scenario name.
+- **Audit P2 and P3 items not in stage B:**
+  - skipped heading levels (home h1→h3);
+  - `transition: all` and the picker pin's layout animation;
+  - field edge contrast;
+  - the hero pin overlap;
+  - hard-coded colours and Light shadows;
+  - DESIGN.md's incomplete type and radius scales;
+  - the segmented control's missing group name;
+  - `--spring` on `.area-box`.
+- **Critique issue 2 extras not done:** collapsing the driving steps under the disrupted answer. Start directions already sits under the steps.
+- **Search state:** the loading state is not announced to screen readers. The button shows text and has `aria-busy`.
+- **Tooling:** `review-animations` could not be run by the agent. `.impeccable/design.json` needs `/impeccable document`.
+- **Live Google searches:** none in any step, so live routes, real maps and Places were never rendered.
+
+**Final test results:** `python -m pytest apps/plan-b-mvp -q` gave 344 passed and 17 subtests passed. It was 339 passed before B1, and nothing failed at any point. The five new tests are in `test_live_routes.py` and `test_plan_v3.py`.
+
+**Check on your phone** (install or open over HTTPS so the service worker picks up `planb-reroute-13`; a hard refresh may be needed):
+- [ ] **Dark:** the home "Journey disrupted?" line, the Plan a trip button text on indigo, the results with a deadline (the first arrival time above the fold, the "No option meets every limit" line, the outline "Lowest CO₂" badge wrapping under its text, and muted CO₂ lines on late cards), next steps ("Route chosen", one filled action) and the dashboard (estimate wording, "Unknown" saved, the team-default goal).
+- [ ] **Light:** the same screens. In sun, check that amber "N min late", "Tight" and "Check" and green "Fits" and "0 kg" read clearly on their tinted chips, and that the field edges on Plan a trip are visible enough (audit P2, not fixed).
+- [ ] **Real Google maps and routes** (a few billed searches): a Plan a trip search with a deadline 10 to 15 min away. Check that the ranking puts on-time options first, that an Uber or Drive with an unknown price shows "Price unknown" rather than "Check", that the map's Google logo and attribution aren't covered, and that the full-screen map traps focus and Escape closes it.
+- [ ] **Journey disrupted?** with demo mode's bus disruption: the loading text, the answer's buffer line and "Avoids … · Simulated" pill, the answer starting at the top on a small phone, See other options with the "Best way now" card, and Back returning to the answer without a new search.
+- [ ] **Screen reader** (VoiceOver on iPhone, TalkBack on Android): each result card reads as one item with its arrival, status and reasons. The disrupted answer is read when it arrives. Opening and closing the menu, Settings and a sheet returns you to where you were. A new screen starts at its heading. Check whether the long card names are acceptable or too long.
+- [ ] **Reduced motion:** turn on the system Reduce Motion setting (and separately try the in-app setting). Screen pushes, sheets and the menu should be near-instant, all result cards should appear at once, and the shimmer, live-dot ping and Journey disrupted? pulse should stop.
+- [ ] **Keyboard** (a Bluetooth keyboard or desktop): Tab never reaches the page behind an open menu, sheet or dialog. On results there is one stop per card, and Enter opens its sheet.
+- [ ] **Review the AI's own decisions** in B1 to B5 above, especially the 10-minute close-deadline threshold, removing "Not driving %", and "Route chosen".
