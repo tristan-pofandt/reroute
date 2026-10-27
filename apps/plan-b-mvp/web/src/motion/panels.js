@@ -53,14 +53,15 @@ function profileChange(menu, opened) {
   menu.style.transform = opened ? "translate(18px,-18px) scale(0.7)" : "none";
   menu.style.clipPath = opened ? CLIP_IN : CLIP_OUT;
   if (opened) soft();
+  const done = () => { untrack(c); clean(); };
   const c = track(animate(menu,
     opened ? { opacity: [0, 1], x: [18, 0], y: [-18, 0], scale: [0.7, 1], clipPath: [CLIP_IN, CLIP_OUT] }
       : { opacity: [1, 0], x: [0, 10], y: [0, -10], scale: [1, 0.85] },
-    opened ? { default: { ...spring(), duration: 0.42 * slow() }, opacity: { duration: 0.18 * slow(), ease: EASE } } : { duration: 0.14 * slow(), ease: EASE_IN },
+    opened ? { default: { ...spring(), duration: 0.42 * slow() }, opacity: { duration: 0.18 * slow(), ease: EASE }, onComplete: done } : { duration: 0.14 * slow(), ease: EASE_IN, onComplete: done },
   ));
-  c.then(() => { untrack(c); clean(); });
+  const timer = setTimeout(done, (opened ? 700 : 260) * slow()); // framer may not report completion for the mixed spring: never leave inline styles behind
   const run = slide(opened ? items : items.reverse(), { x: 14, y: -10 }, { out: !opened, delay: opened ? 0.05 : 0, step: opened ? 0.035 : 0.012, cap: 6 });
-  profile = { c, run, clean };
+  profile = { c, run, clean: () => { clearTimeout(timer); clean(); } };
 }
 
 // Busy buttons get a loader drawn from the logo: the direct route bends into the detour and back, the app's idea in one line.
