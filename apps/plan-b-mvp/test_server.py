@@ -263,7 +263,8 @@ class StaticAndPwaTests(unittest.TestCase):
 
     def test_the_real_pwa_files_are_served(self):
         for path, kind in (("/manifest.webmanifest", "application/manifest+json"), ("/sw.js", "text/javascript"), ("/icons/icon-192.png", "image/png"), ("/icons/icon-512.png", "image/png"),
-                           ("/icons/icon-maskable-512.png", "image/png"), ("/icons/apple-touch-icon.png", "image/png")):
+                           ("/icons/icon-maskable-512.png", "image/png"), ("/icons/apple-touch-icon.png", "image/png"),
+                           ("/motion.js", "text/javascript"), ("/vendor/gsap.min.js", "text/javascript"), ("/vendor/ScrollTrigger.min.js", "text/javascript")):
             response = self.client.get(path)
             self.assertEqual(response.status_code, 200, path)
             self.assertTrue(response.headers["Content-Type"].startswith(kind), path)
