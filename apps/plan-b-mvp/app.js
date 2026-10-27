@@ -771,7 +771,7 @@ function journeyScreen() {
     </div>
     <footer class="sticky">
       <button class="btn btn-primary${state.loading ? " is-loading" : ""}" data-action="search" ${state.loading || (!state.offline && !state.status?.live_available) ? "disabled" : ""} ${state.loading ? 'aria-busy="true"' : ""}>
-        ${state.loading ? skelBar("Checking routes and live services", 120) : "Show routes"}
+        ${state.loading ? searchingText() : "Show routes"}
       </button>
     </footer>`;
 }
@@ -901,6 +901,9 @@ function badge(o) {
   return `<span class="badge ${hard ? "error" : "warning"}">${hard ? I.xCircle(12) : I.alert(12)}${hard ? (o.reasons[0].limit === "disruption" ? "Disrupted" : "Late") : "Check"}</span>`;
 }
 
+// The option Journey disrupted? answered with, marked when its results are opened from "See other options".
+const isPanicPick = (o) => state.plan === state.panic.plan && o.id === state.plan.recommended_id;
+
 function optionCard(o, index, highlight, lowest) {
   const show = settings.show;
   const icon = (KIND_ICON[o.kind] || I.route)(20);
@@ -923,7 +926,7 @@ function optionCard(o, index, highlight, lowest) {
         <div class="card-head">
           <div class="card-title"><span class="mode-tile ${esc(o.kind)}">${icon}</span>
             <div style="min-width:0"><div class="card-name">${esc(o.title)}</div><div class="card-sub">${esc(sub)}</div></div></div>
-          ${badge(o)}
+          ${isPanicPick(o) ? `<span class="card-badges">${badge(o)}<span class="badge info">${I.bolt(12)}Best way now</span></span>` : badge(o)}
         </div>
         <div class="arrival-box">
           <div><div class="arrival-time">${o.mode === "rideshare" ? "~" : ""}${timeOf(o.arrival)}</div>
@@ -1196,21 +1199,49 @@ function nextScreen() {
 
 // ── Panic mode ───────────────────────────────────────────────────────────────
 
+// Loading text for both search buttons: what is being checked, in words, not only a shimmer.
+const searchingText = () => (state.offline ? "Checking the offline timetable…" : "Checking routes and live services…");
+
+// The answer's spare time against the deadline. A "by" time already past today was moved to tomorrow, so the line says so.
+function deadlineLine(o) {
+  const d = state.plan.deadline, b = o.buffer_minutes;
+  if (!d || b === undefined) return "";
+  const at = `${timeOf(d)} deadline${d.slice(0, 10) > brisbaneNowLocal().slice(0, 10) ? " tomorrow" : ""}`;
+  const text = b > 0 ? `${b} min before your ${at}` : b === 0 ? `Arrives right at your ${at}` : `${-b} min after your ${at}`;
+  return `<p class="buffer ${bufferInfo(o).cls}">${text}</p>`;
+}
+
+// The disrupted options the answer steers around, named with what is wrong with them.
+const DISRUPTION_SHORT = { "A Translink alert affects this service": "Translink alert", "A service on this route is cancelled": "Cancelled service", "Uses the service you reported as disrupted": "The line you reported", "A road closure is on this route": "Road closure" };
+const isDisrupted = (x) => x.reasons.some((r) => r.limit === "disruption");
+function avoidedFacts(o) {
+  if (isDisrupted(o)) return "";
+  const facts = [...new Set(state.plan.options.filter((x) => x.id !== o.id && isDisrupted(x)).map((x) => {
+    const reason = x.reasons.find((r) => r.limit === "disruption").text;
+    const sim = anySimulated(x) || x.traffic?.source === "Simulated" ? " · Simulated" : "";
+    return `Avoids ${x.mode === "transit" ? "the " : ""}${x.title} · ${DISRUPTION_SHORT[reason] || reason}${sim}`;
+  }))];
+  return facts.slice(0, 2).map((f) => `<span class="fact">${I.route(14)}${esc(f)}</span>`).join("") + (facts.length > 2 ? `<span class="fact">${facts.length - 2} more disrupted</span>` : "");
+}
+
 function panicScreen() {
   const pm = state.panic;
   const top = `<div class="panic-top"><span class="panic-label">${I.bolt(14)}BEST WAY NOW</span><div class="panic-actions">${homeButton()}<button class="panic-exit" data-action="exit-panic">Exit</button></div></div>`;
-  if (pm.phase === "answer" && state.plan) {
+  // Only the plan this answer came from: a later search (from See other options, or a re-plan) falls back to the form.
+  if (pm.phase === "answer" && state.plan && state.plan === pm.plan) {
     const o = findOption(state.plan.recommended_id);
     if (o) {
       const late = state.plan.deadline && o.buffer_minutes < 0;
       const stepOf = stepNav(o);
       const steps = o.steps.slice(0, 8).map((s) => { const ni = stepOf(s); return `<li><span>${esc(s.title)}${s.board_time || s.minutes ? `<small>${[s.board_time && `Board at ${s.board_time}`, s.minutes && `${s.minutes} min`].filter(Boolean).join(" · ")}</small>` : ""}${ni >= 0 ? liveSlot(o, ni) : ""}</span></li>`; }).join("");
+      const facts = avoidedFacts(o) + realtimeFact(o) + weatherFact(o) + trafficFact(o);
       return `${top}<div class="scroll">
         <p class="lead">${leaveLabel(o, true)}. ${esc(o.title)}.</p>
         <div class="panic-answer">
           <div class="when">${timeOf(o.arrival)} <small>arrival</small></div>
+          ${deadlineLine(o)}
           <p class="why ${late ? "bad" : ""}">${esc(state.plan.recommended_reason)}</p>
-          ${[realtimeFact(o), weatherFact(o), trafficFact(o)].some(Boolean) ? `<div class="facts" style="margin:12px 0 0">${realtimeFact(o)}${weatherFact(o)}${trafficFact(o)}</div>` : ""}
+          ${facts ? `<div class="facts" style="margin:12px 0 0">${facts}</div>` : ""}
         </div>
         ${hasLive(o) ? liveAge() : ""}
         ${costLine()}
@@ -1233,7 +1264,7 @@ function panicScreen() {
     <div class="panic-chips">${chips.map(([k, l]) => `<button class="panic-chip" data-action="panic-place" data-place="${esc(k)}">${esc(l)}</button>`).join("")}<button class="panic-chip" data-action="pick-map" data-path="panic.dest">${I.map(16)}Choose on map</button></div>
     <label class="panic-by">Need to be there by <input class="panic-input" type="time" data-panic="by" value="${esc(pm.by)}" aria-label="Deadline (optional)"></label>
     ${pm.error ? notice(esc(pm.error), pm.errorKind || "error") : ""}
-    <button class="panic-go${pm.phase === "loading" ? " is-loading" : ""}" data-action="panic-go" ${pm.phase === "loading" ? 'disabled aria-busy="true"' : ""}>${pm.phase === "loading" ? skelBar("Finding the best working option", 140) : "Get me there"}</button>
+    <button class="panic-go${pm.phase === "loading" ? " is-loading" : ""}" data-action="panic-go" ${pm.phase === "loading" ? 'disabled aria-busy="true"' : ""}>${pm.phase === "loading" ? searchingText() : "Get me there"}</button>
   </div>`;
 }
 
@@ -2350,7 +2381,8 @@ function navigate(screen, direction = "forward", syncUrl = true) {
   if (syncUrl && legalPath) history.pushState({ screen }, "", legalPath);
   else if (syncUrl && location.pathname !== "/") history.pushState({ screen }, "", "/");
   if (state.screen === "nav") navStop();
-  if (screen === "panic") startPanicLocate();
+  // Coming back to a finished answer keeps it; opening Journey disrupted? afresh locates again.
+  if (screen === "panic" && !(direction === "back" && state.panic.phase === "answer")) startPanicLocate();
   if (screen === "weather") loadWeatherDetail();
   if (state.screen === "offline-area") disposeAreaMap();
   collapseExpanded();
@@ -3251,6 +3283,7 @@ const actions = {
       originPlaceId: pm.coords || pm.originCoords ? null : pm.originPlaceId || null, destinationPlaceId: pm.destCoords ? null : pm.destPlaceId || null };
     try {
       state.plan = await requestPlan(payload({ purpose: "panic" }));
+      pm.plan = state.plan;
       store.set("lastDestination", dest);
       pm.phase = state.plan.recommended_id ? "answer" : "ask";
       if (!state.plan.recommended_id) pm.error = state.plan.errors.join(" ") || "No route was found. Try a nearby landmark.";
@@ -3261,7 +3294,8 @@ const actions = {
     }
     rerender();
   },
-  "panic-others": () => { state.sort = "arrival"; state.stack = ["home"]; navigate("results", "forward"); },
+  // Results go on top of the answer, so Back returns to it without another search.
+  "panic-others": () => { state.sort = "arrival"; navigate("results", "forward"); },
   // Ride board
   "open-ride-form": () => { state.rideKind = state.rideKind || "car"; openSheet(rideFormSheet()); },
   "ride-kind": (el) => { state.rideKind = el.dataset.value; const values = rideFormValues(); openSheet(rideFormSheet()); restoreRideForm(values); },
