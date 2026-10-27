@@ -3504,7 +3504,10 @@ document.addEventListener("pointerdown", (start) => {
     sheet.style.transform = "";
     if (e.type === "pointercancel" || !state.nav) return;
     const target = y + speed * 180, mid = Math.round(max / 2);
-    const stop = [0, mid, max].reduce((a, b) => (Math.abs(b - target) < Math.abs(a - target) ? b : a));
+    // A flick moves one height at a time, as in Apple Maps, so a fast swipe from peek stops halfway rather than jumping to full.
+    const stops = [0, mid, max], from = stops.indexOf(base === max ? max : base ? mid : 0);
+    const near = stops.reduce((i, v, j) => (Math.abs(v - target) < Math.abs(stops[i] - target) ? j : i), 0);
+    const stop = stops[Math.max(from - 1, Math.min(from + 1, near))];
     if ((stop < max) !== state.nav.sheetOpen) actions["nav-sheet"]();
     state.nav.half = stop === mid ? mid : 0;
     sheet.style.setProperty("--half", `${mid}px`);
