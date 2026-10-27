@@ -1019,6 +1019,9 @@ button.row:disabled { opacity: 0.45; cursor: default; }
 .sheet-backdrop.dragging::before { transition: none; }
 .nav-grab, .nav-eta-main { touch-action: none; }
 .nav-sheet.dragging { transition: none; }
+/* Middle height: the sheet stops halfway, and the step list ends at the screen edge so its last steps can still be scrolled to. */
+.nav-sheet.open.half { transform: translateY(var(--half)); }
+.nav-sheet.half .nav-steps { margin-bottom: var(--half); }
 /* Touches anywhere on a sheet, the menu or the backdrop pan nothing but their own scroll area, so a drag in the wrong spot never moves the page. */
 .sheet-backdrop, .sheet, .nav-sheet, .menu-backdrop, .settings-backdrop { touch-action: none; }
 .sheet-scroll, .nav-steps, .menu-scroll, .settings-scroll, .ac-list { touch-action: pan-y pinch-zoom; }

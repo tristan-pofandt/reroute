@@ -1388,7 +1388,7 @@ function navScreen() {
     <div class="nav-top"><div class="nav-top-row"><div data-nav-banner>${navBannerHtml()}</div>${homeButton()}</div><div class="nav-stack" data-nav-notices>${navNoticesHtml()}</div></div>
     <div class="nav-fabs" data-nav-fabs>${navFabsHtml()}</div>
     <div class="visually-hidden" aria-live="polite" data-nav-say></div>
-    <div class="nav-sheet${n.sheetOpen ? " open" : ""}" data-nav-sheet>
+    <div class="nav-sheet${n.sheetOpen ? " open" : ""}${n.sheetOpen && n.half ? " half" : ""}" data-nav-sheet${n.half ? ` style="--half:${n.half}px"` : ""}>
       <button class="nav-grab" data-action="nav-sheet" aria-label="Show or hide the step list" aria-expanded="${n.sheetOpen}"><span></span></button>
       <div class="nav-eta"><button class="nav-eta-main" data-action="nav-sheet"><span data-nav-eta>${navEtaHtml()}</span>${hasLive(o) ? liveAge() : ""}</button><button class="btn btn-secondary nav-exit" data-action="exit-nav">${I.x(16)}${n.finished ? "Done" : "Exit"}</button></div>
       <div class="nav-steps" data-nav-steps ${n.sheetOpen ? "" : "inert"}>${navStepsHtml()}</div>
@@ -2628,6 +2628,25 @@ function mountMaps(root) {
   })).catch((error) => slots.forEach((el) => { mounting.delete(el); if (document.body.contains(el)) showMapFail(el, error.message); }));
 }
 
+// Draws a route out from its start, segment after segment, so the eye follows the trip. Reduced motion shows it whole.
+function drawRoute(parts) {
+  const total = parts.reduce((n, p) => n + p.path.length, 0);
+  if (prefersReducedMotion() || total < 3) return;
+  parts.forEach((p) => p.line.setPath([]));
+  const t0 = performance.now();
+  const frame = (now) => {
+    const t = Math.min(1, (now - t0) / 900);
+    let left = Math.ceil(total * (1 - Math.pow(1 - t, 3)));
+    parts.forEach((p) => {
+      const k = Math.max(0, Math.min(p.path.length, left));
+      left -= p.path.length;
+      if (p.line.getPath().getLength() !== k) p.line.setPath(p.path.slice(0, k));
+    });
+    if (t < 1 && parts[0].line.getMap()) requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
+
 function buildMap(el) {
   const id = el.dataset.map;
   if (id === "__nav") return buildNavMap(el);
@@ -2643,7 +2662,7 @@ function buildMap(el) {
   };
   const info = entry.info = new GM.InfoWindow();
   options.forEach((o, index) => {
-    const faded = id === "__all" && index > 0;
+    const faded = id === "__all" && index > 0, parts = [];
     (o.segments || []).forEach((s) => {
       if (!s.points?.length) return;
       const colour = s.colour || cssColour(SEGMENT_COLOUR[s.kind] || "var(--accent)");
@@ -2658,8 +2677,10 @@ function buildMap(el) {
         info.open({ map });
       });
       entry.lines.push({ line, kind: s.kind, colour: s.colour });
+      parts.push({ line, path });
       path.forEach((point) => entry.bounds.extend(point));
     });
+    drawRoute(parts);
   });
   const first = options[0];
   const pts = (first.segments || []).flatMap((s) => s.points || []);
@@ -3303,6 +3324,8 @@ const actions = {
   "nav-sheet": () => {
     const n = state.nav, sheet = currentPage.querySelector("[data-nav-sheet]");
     n.sheetOpen = !n.sheetOpen;
+    n.half = 0;
+    sheet.classList.remove("half");
     sheet.classList.toggle("open", n.sheetOpen);
     sheet.querySelector("[data-nav-steps]").toggleAttribute("inert", !n.sheetOpen);
     sheet.querySelector(".nav-grab").setAttribute("aria-expanded", String(n.sheetOpen));
@@ -3446,13 +3469,13 @@ document.addEventListener("click", (event) => {
 });
 
 // The live-directions step list follows the finger from its grab line or ETA, rubber-bands past either end, then settles
-// open or closed from where a flick would carry it (a tap still toggles it).
+// on the nearest of three heights (peek, half, full) to where a flick would carry it. A tap still toggles peek and full.
 document.addEventListener("pointerdown", (start) => {
   const sheet = start.target.closest?.("[data-nav-sheet]");
   if (!state.nav || !sheet || !start.target.closest(".nav-grab, .nav-eta-main") || (start.pointerType === "mouse" && start.button !== 0)) return;
   const map = sheet.parentElement.querySelector(".nav-map");
   const max = sheet.offsetHeight - (map ? sheet.parentElement.getBoundingClientRect().bottom - map.getBoundingClientRect().bottom : 124);
-  const base = state.nav.sheetOpen ? 0 : max;
+  const base = state.nav.sheetOpen ? state.nav.half || 0 : max;
   let active = false, y = base, lastY = start.clientY, lastT = start.timeStamp, speed = 0;
   const move = (e) => {
     if (e.pointerId !== start.pointerId) return;
@@ -3479,8 +3502,13 @@ document.addEventListener("pointerdown", (start) => {
     suppressClickUntil = performance.now() + 350;
     sheet.classList.remove("dragging");
     sheet.style.transform = "";
-    const open = e.type === "pointercancel" || !state.nav ? state.nav?.sheetOpen : y + speed * 180 < max / 2;
-    if (state.nav && open !== state.nav.sheetOpen) actions["nav-sheet"]();
+    if (e.type === "pointercancel" || !state.nav) return;
+    const target = y + speed * 180, mid = Math.round(max / 2);
+    const stop = [0, mid, max].reduce((a, b) => (Math.abs(b - target) < Math.abs(a - target) ? b : a));
+    if ((stop < max) !== state.nav.sheetOpen) actions["nav-sheet"]();
+    state.nav.half = stop === mid ? mid : 0;
+    sheet.style.setProperty("--half", `${mid}px`);
+    sheet.classList.toggle("half", stop === mid);
   };
   window.addEventListener("pointermove", move, { passive: false });
   window.addEventListener("pointerup", end);
