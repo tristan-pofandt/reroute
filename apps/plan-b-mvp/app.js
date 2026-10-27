@@ -2398,6 +2398,9 @@ let currentPage = null;
 let transitioning = false;
 const maps = new Map();
 const mounting = new Set();
+// Inside the React shell (web/), window.RerouteBridge exists: React owns the page elements, routing and transitions, and this file keeps the
+// state, the HTML builders (SCREENS) and every behaviour. Without it (the plain index.html) this file swaps pages itself, as before.
+const bridge = window.RerouteBridge || null;
 
 // Focus management. An open layer (menu, Settings, a sheet, a full-screen map, a pop-up or a dialog) is modal: the screen and
 // any layer under it are inert and Tab wraps inside it. Order matches the stacking order, top first.
@@ -2445,8 +2448,9 @@ function navigate(screen, direction = "forward", syncUrl = true) {
   if (transitioning || screen === state.screen) return;
   const legalPath = { terms: "/terms", privacy: "/privacy", sources: "/about" }[screen];
   // Legal pages get their own address and history entry; leaving one adds an entry for "/" so the browser Back button returns to it.
-  if (syncUrl && legalPath) history.pushState({ screen }, "", legalPath);
-  else if (syncUrl && location.pathname !== "/") history.pushState({ screen }, "", "/");
+  // (In the React shell the router does this, see bridge.navigate below.)
+  if (!bridge && syncUrl && legalPath) history.pushState({ screen }, "", legalPath);
+  else if (!bridge && syncUrl && location.pathname !== "/") history.pushState({ screen }, "", "/");
   if (state.screen === "nav") navStop();
   // Coming back to a finished answer keeps it; opening Journey disrupted? afresh locates again.
   if (screen === "panic" && !(direction === "back" && state.panic.phase === "answer")) startPanicLocate();
@@ -2461,6 +2465,12 @@ function navigate(screen, direction = "forward", syncUrl = true) {
   if (direction === "forward" || direction === "up") state.stack.push(screen);
   else { while (state.stack.length > 1 && state.stack[state.stack.length - 1] !== screen) state.stack.pop(); if (state.stack[state.stack.length - 1] !== screen) state.stack = [screen]; }
   state.screen = screen;
+  if (bridge) {
+    // React mounts the new page and animates it; it then calls pageMounted() and pageSettled(). The timer is only a safety net.
+    bridge.navigate(screen, direction, syncUrl);
+    setTimeout(() => { if (transitioning) pageSettled(); }, 2500);
+    return;
+  }
   document.dispatchEvent(new CustomEvent("reroute:before"));
   const incoming = makePage(screen);
   const outgoing = currentPage;
@@ -2486,6 +2496,24 @@ function navigate(screen, direction = "forward", syncUrl = true) {
   }, 400);
 }
 
+// React shell hooks. pageMounted: a page element for `screen` has just been put in the viewport (first load, navigation or Back).
+// pageSettled: the push animation has finished and the previous page is gone.
+function pageMounted(page, screen) {
+  enhanceClear(page);
+  currentPage = page;
+  app.dataset.screen = screen;
+  syncInert();
+  if (transitioning) focusLead(page); // a navigation leads with its heading; the first load leaves focus alone
+  mountMaps(page);
+  if (screen === "offline-area") buildAreaMap();
+  bindCharts(page);
+}
+function pageSettled() {
+  transitioning = false;
+  maps.forEach(resizeMap);
+  cleanMaps();
+}
+
 // Panic mode locates as soon as it opens.
 function startPanicLocate() {
   if (state.screen === "panic") return;
@@ -2499,7 +2527,7 @@ function startPanicLocate() {
 
 function goBack() {
   // A legal page this app opened has its own history entry: use the browser's Back so Back and Forward stay in step.
-  if (({ terms: 1, privacy: 1, sources: 1 })[state.screen] && history.state?.screen === state.screen) return history.back();
+  if (({ terms: 1, privacy: 1, sources: 1 })[state.screen] && (history.state?.usr || history.state)?.screen === state.screen) return history.back();
   if (state.stack.length < 2) return navigate("home", "back");
   const target = state.stack[state.stack.length - 2];
   navigate(target, state.screen === "panic" || state.screen === "nav" ? "down" : "back");
@@ -2511,6 +2539,8 @@ window.addEventListener("popstate", () => {
 });
 
 function rerender() {
+  if (bridge && !currentPage) return; // React has not mounted the first page yet; it renders from the current state when it does
+  if (bridge?.isNative(state.screen)) { document.dispatchEvent(new CustomEvent("reroute:rerender", { detail: { page: currentPage, native: true } })); return; }
   if (!currentPage) { currentPage = makePage(state.screen); viewport.appendChild(currentPage); }
   else {
     const scroller = currentPage.querySelector(".scroll");
@@ -2526,6 +2556,7 @@ function rerender() {
   mountMaps(currentPage);
   bindCharts(currentPage);
   cleanMaps();
+  document.dispatchEvent(new CustomEvent("reroute:rerender", { detail: { page: currentPage } })); // the shell re-attaches smooth scrolling
 }
 
 // Google Maps is loaded only when a map is opened, with the separate browser key from /api/config (the server key is never sent to the browser).
@@ -4599,5 +4630,9 @@ function disposePicker() {
 function acAttrs(path) {
   return `data-ac="${path}" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="ac-list" autocomplete="off" spellcheck="false"`;
 }
+
+// What the React shell (web/) uses: the screens, the state and the page hooks. Kept to a small, stable surface.
+window.RerouteLegacy = { SCREENS, state, navigate, goBack, rerender, pageMounted, pageSettled, enhanceClear, pageClass, isTransitioning: () => transitioning };
+bridge?.register({ rerender, pageMounted, pageSettled });
 
 boot();
