@@ -129,3 +129,53 @@ Runner: `C:\Users\tpofa\.claude\autopilot\` (session-bound timer started from a 
 - The Light screenshots from the first run were still drawn in Dark, because the app's theme setting overrides the system colour scheme. I checked Light separately by setting `data-theme="light"` (`card-412-light.png`, `sheet-428-light.png`).
 - The demo-mode API cost line (about 50 px) was not on screen in this check. With it, the first arrival time would still be above 844 px.
 - Live searches: none were made.
+
+### Step B4 done (16:09)
+
+**What changed** (commits `28c19f7`, `7fa857d` and `695bebc` on `feature/design-fixes`):
+- **Modal layers** (`app.js`: new `syncInert`, `topLayer`, `expandedMap`, `restoreFocus` and a Tab handler; changes to `openMenu`/`closeMenu`, `showDialog`/`closeDialog`, `openSettings`/`closeSettings`, `openSheet`/`closeSheet`, `openPopup`/`closePopup` and the `map-expand` action). The side menu, Settings, sheets, pop-ups, a full-screen map and dialogs are modal. While one is open, the screen, any layer under it and the demo pill are `inert`, and Tab and Shift+Tab wrap inside it. Escape still closes the top one (the existing handler). Focus returns to the control that opened it. If a re-render replaced that control, focus goes to its "twin" (the element with the same `data-*` attributes), and failing that to the heading. `closeMenu` now always returns focus to the logo first, so Settings or a sheet opened from the menu returns there too. A sheet or pop-up that replaces another one keeps the first opener.
+- **Screen changes** (`navigate`, `rerender`, `rerenderSettings`, new `focusLead`): a new screen moves focus to its first `h1` or `h2`. Screens without one lead with the Journey disrupted? answer, the directions banner or the area hint. The outgoing page is made inert during the slide. `rerender()` and `rerenderSettings()` now keep focus on the same control (or its twin) instead of dropping it to `BODY`. This replaces the old rule that only restored `data-field` inputs. Without it, the heading focus was lost as soon as a screen re-rendered (for example when Journey disrupted? finds your location) and every Settings switch dropped focus. Lead elements take focus with no outline (`app.css` `[data-lead]:focus`), because they are not controls.
+- **Option cards** (`optionCard`): the `aria-label="Details for …"` is gone, so the card body's own text is its accessible name, for example "29 + 66 Bus · Leave by 8:24 am Fits 8:45 am 10 min early $0.50 fare 8 min walk … Arrives 10 min early, no changes, 8 min walking." The card action ("Choose this option", "See why it doesn't fit" or "Open in Uber") has `tabindex="-1"`. Each card is one tab stop (7 stops for 7 cards, down from 14). The action stays clickable and in the accessibility tree, and the sheet the body opens repeats it.
+- **Journey disrupted? answer** (`panicScreen`, `panic-go`): the answer box is `role="group"`, `tabindex="-1"`, `aria-labelledby="panic-label panic-lead panic-answer"`, and gets focus when the answer arrives. Its accessible name reads: "BEST WAY NOW Leave by 8:24 am. 66. 8:52 am arrival 3 min before your 8:55 am deadline Arrives before your deadline … Avoids the 412 · Translink alert · Simulated Running to schedule". Coming back to it from See other options also focuses it.
+- **Contrast** (`app.css`):
+  - Dark `--accent` #6366F1 → #575AF0 (same hue and saturation): white text 4.47:1 → 5.09:1, and 4.53:1 in the 8% brighter hover state. As a non-text colour it stays at 3.16:1 or more on every Dark surface.
+  - The Plan a trip sentence lost its `opacity: 0.88` (it was 3.84:1).
+  - Placeholders, `.ac-foot` (the "Suggestions by Google Maps" line), pending `.area-progress` steps and `.map-skeleton` now use `--text-muted` instead of `--text-faint`. The token is unchanged and is left only on decorative marks and disabled steppers.
+  - Light `--warning-text` #B45309 → #92400E and `--success-text` #047857 → #065F46. Text on the 10 to 15% tints over base, surface and card is now at least 5.11:1 (amber) and 5.50:1 (green); it was 3.62 to 4.46:1. The tint tones are unchanged.
+- **Docs:** `DESIGN.md` has the new token values, the Faint Slate and status-text wording, the Plan a trip sentence, a "Focus between screens and layers" rule under Navigation, the option card's tab stop and name, and an appendix section "Contrast fixes (2026-10-27)" with before and after ratios. `.impeccable/design.json` has the matching canonical and OKLCH values (tonal ramps left as generated) and the component CSS fallbacks. `apps/plan-b-mvp/README.md` has a focus-management bullet and a limitation line.
+- `sw.js` VERSION is now `planb-reroute-12`.
+
+**Tests:** before, 344 passed and 17 subtests passed. After, 344 passed and 17 subtests passed (`python -m pytest apps/plan-b-mvp -q`, using the B1 venv). Nothing was failing before. No test was added: the changes are browser-only and were checked in the browser.
+
+**Browser check:** an isolated headless Chrome (Playwright from the npx cache) at 390×844, Dark and Light. The server ran with a dummy `MAPS_API_KEY` on port 8766. `/api/plan` was answered with B2's synthetic panic plan, the results came from B3's "somefit" plan, and `/api/autocomplete` and `/api/place` were stubbed. **0 billed Google searches.** By keyboard:
+- Menu: focus moved to Close, 25 Tabs and 25 Shift+Tabs never left it, and the page and demo pill were inert. Escape returned focus to the logo.
+- Settings: opened from the menu, focus went to Done, and 60 Tabs never left it. Toggling a switch kept focus on it. Escape returned focus to the logo.
+- Profile dialog: focus moved to OK, Tab stayed inside, and Escape returned focus to the avatar.
+- `navigate`: Plan a trip focused "Where are you going?", Back focused the home `h1`, and results focused "Your options".
+- Results: 1 tab stop on each of the 7 cards. The sheet trapped 40 Tabs each way, and Escape returned to the same card.
+- Full-screen map: driven through its action, because the expand button is not focusable without a browser map key. The map became the top layer with the sheet and page inert, and Escape restored them.
+- Journey disrupted?: keyboard "Get me there" led to focus on the answer (accessible name above). See other options then Back returned focus to the answer, with one plan request.
+
+There were no console errors. The rendered-page Impeccable detector on home reported no contrast findings, only the known items (the dark glow, Inter, the eyebrow, nested cards and the h1→h3 skip). The source scan found nothing on the changed lines. Scripts, results and screenshots are outside the repo in `%LOCALAPPDATA%\Temp\reroute-b4\`. The server was stopped afterwards: the two `python.exe server.py` processes behind port 8766 (the venv launcher and its child) were stopped by PID. A broader stop command was blocked by the permission classifier.
+
+**Decisions I made:**
+1. **"One tab stop per card" means the body.** The body is the stop because its text describes the option. The action is skipped by Tab rather than removed or hidden, so pointer and screen-reader browse users can still use it, and keyboard users reach Choose or Open in Uber in the sheet with one more key press. The alternative, which keeps two stops on cards whose two actions differ, would not meet "one tab stop" as asked.
+2. **The card's name is its whole text**, as the instruction said ("remove the aria-label"), not a shorter `aria-labelledby`. The name is long, but it carries the reasons and the Simulated labels that a shorter name would hide (a button's children are presentational).
+3. **"Announce" the answer by focusing it with a content-based name** rather than with a live region. A newly inserted live region is often not read, and doing both would read the answer twice.
+4. **The trap uses `inert` plus a Tab wrap**, not the native `<dialog>`, so the existing markup, animations and drag-to-close stay as they are. The demo pill is inert while a layer is open, because the layer is modal. It still floats above sheets, so it can't be tapped until the layer closes. The connection banner stays outside the inert set so that it can still announce.
+5. **A full-screen map counts as a layer**, because it covers the sheet or screen it came from. Without that, the Tab wrap would have pulled focus back under it.
+6. **Focus restore after in-place re-renders** (`rerender`, `rerenderSettings`) was needed for "focus the heading in navigate()" to last, so I included it. It finds the same control by its `data-*` attributes, or else the heading.
+7. **Leading elements have no focus outline.** They are not controls (WCAG 2.4.7 covers operable components), and a ring around a heading on every screen change would be noise.
+8. **Contrast: the smallest token changes that pass with a margin.**
+   - Dark accent: the first same-hue step at which the hover state also passes. #5B5EF0 would pass at rest (4.88:1) but fail on hover (4.33:1).
+   - Light amber and green: the next step down in the same Tailwind scales (amber-800 and emerald-800), as the audit suggested. That gives at least 5.1:1 on every tint recipe, including the 15% tint on base and the red-tinted Journey disrupted screen.
+   - `text-faint`: the usages changed, not the token, so the decorative tier stays distinct.
+   - Light `error-text` was not changed. It already measures 4.54:1 or more on its tints.
+
+**Skipped, or for Tristan / later steps:**
+- These audit P2 and P3 items are outside this step: skipped heading levels (home h1→h3, and the Journey screen's only `h2`), `transition: all` and the picker pin's layout animation, field edge contrast, the hero pin overlap, hard-coded colours and Light shadows, the incomplete DESIGN.md scales, and the segmented control's missing group name.
+- The search loading state is still not announced. The button is disabled, with visible text and `aria-busy`. While the search runs, focus sits on the Journey disrupted? heading (the disabled button can't hold it), then moves to the answer.
+- On a search error, focus stays on that heading and the error banner announces itself (`role="alert"`).
+- `accent-soft`, `accent-glow`, `border-focus` and `--chart` still mix from #6366F1. The difference can't be seen. DESIGN.md records it.
+- With no working browser map key, the full-screen map's focus behaviour was checked only through its action, not with a real map's keyboard controls. Nothing was checked with a real screen reader or on a phone.
+- Live searches: none were made.
