@@ -90,3 +90,42 @@ Runner: `C:\Users\tpofa\.claude\autopilot\` (session-bound timer started from a 
 - The "Saves X CO₂ compared with driving" panel on next steps and the green "I'm taking this trip" button are unchanged (B3 quieter / B5 polish).
 - The dashboard's eyebrow labels and the ring are the existing DESIGN.md anatomy and were kept. The critique's question 4 (a dashboard with no streak or ring) remains open for Tristan.
 - Live searches: none were made.
+
+### Step B3 done (13:10)
+
+**What changed** (commits `e6adb02` and `9e2f1b9` on `feature/design-fixes`):
+- **Quieter CO₂** (`app.js` `makesIt`, `lowestCo2`, `co2Block`, `co2Summary`; `app.css`):
+  - `makesIt` (on time when a deadline is set, and no disruption) moved up beside the CO₂ helpers, so the sort from B1 and the CO₂ cues use one definition.
+  - `lowestCo2` now chooses only among options that make it. So the Lowest CO₂ badge and the summary never go to a late or disrupted option. With no option that makes it, neither appears. When it leaves options out, it reports that through a new `filtered` flag.
+  - The badge is outline-only (`.badge.outline`, which replaces `.badge.solid`): no fill, green text, and a 45% green 1 px border.
+  - The summary is now one muted text line with a small green leaf, not a green box. When options were left out, its wording says so: "Greenest of the options on time with no disruption: **412**, about 380 g less CO₂ than driving the same trip alone (51% less)." Or: "Driving alone has the lowest CO₂ of the options on time with no disruption (about 740 g)." The wording also changed from "saves about" to "about … less CO₂ than", which is comparative rather than an impact claim.
+  - On option cards, an option that misses shows its CO₂ as one muted line (`.co2-mini`, for example "440 g CO₂ less than driving") instead of the tinted strip. In the detail sheet, it keeps the full strip with its basis line, but in the neutral tone, so the sheet still says where the number comes from.
+- **Layout** (`app.js` `resultsScreen`; `app.css` `.none-fit`): the "No option meets all your limits" card (icon, heading and paragraph) is now one amber tinted line. It names what still arrives on time, for example "No option meets every limit. On time: Drive." It names at most two options, then "+N". If nothing arrives on time it says "None arrives on time."
+- **Result:** with a deadline at 390×844, the first arrival time's bottom edge moved from 815 px to 566 px when no option fits, and sits at 535 px when some fit. At 320×640 it is at 638 px and 571 px.
+- `sw.js` VERSION is now `planb-reroute-11`. `README.md` (the "CO2 focus on results" bullet) describes the new rules.
+
+**Tests:** before, 344 passed and 17 subtests passed. After, 344 passed and 17 subtests passed (`python -m pytest apps/plan-b-mvp -q`, using the B1 venv). Nothing was failing before. No test was added: the logic is front-end only and was checked in the browser.
+
+**Other checks:**
+- Browser check: an isolated headless Chrome (Playwright from the npx cache) at 390×844 and 320×640, in Dark and Light. The server ran with a dummy `MAPS_API_KEY` on port 8766. There were two hand-built synthetic plans in `state.plan`:
+  - "none fit": a disrupted 428 with the lowest CO₂, three late buses, and a Drive over budget but 16 min early;
+  - "some fit": the same plus an on-time 29 + 66 and an on-time 412.
+- **0 billed Google searches.** The badge went to the 412, not the disrupted 428. In both plans, every late or disrupted card showed the muted line. The 428's sheet showed the neutral strip. There were no console errors.
+- Scripts and screenshots are outside the repo in `%LOCALAPPDATA%\Temp\reroute-b3\` (`before-*`/`after-*`, `card-*`, `sheet-*`). The server was stopped afterwards: two `python.exe server.py` processes, the venv launcher and its child.
+- The Impeccable detector found 0 layout-scope findings on `app.js` and `app.css`, and no findings on the changed lines in the full scan.
+
+**Decisions I made:**
+1. "Misses" means `!makesIt(o)`, the same definition as B1's sort. An option that is on time but over budget or over the walking limit (Drive in the test plan) keeps the full strip in its normal tone, because the decision was about the deadline and disruption.
+2. Without a deadline, only disrupted options lose the badge and the full strip. The summary then says "of the options with no disruption".
+3. The Lowest CO₂ sort chip still sorts every option by CO₂, disrupted ones included. It is an explicit choice, and its explanation line says what it does.
+4. In the detail sheet, an option that misses keeps a full but neutral strip rather than one line. The sheet is where the basis ("300 g for this trip, against 740 g driving alone") belongs, under Principle 3.
+5. The one-line message drops "Change a limit deliberately, or choose and verify". Each card's "See why it doesn't fit" still explains its own miss. The message uses "On time", the same wording as B1's sort line just below it.
+6. I made the summary a quiet line, not a box, in the same step. Shrinking only the "No option meets" card already brought the arrival time above the fold. But a green box was still the loudest block above the cards, and the decision was to keep CO₂ quieter.
+
+**Skipped, or for Tristan / later steps:**
+- In Light, `--warning-text` on `--warning-soft` measures about 4.1:1 (an audit P1). The new one-line message uses the same recipe as the existing amber banners, so it inherits that. The fix belongs to the colour fixes in B4 or B5.
+- The next steps "Saves X CO₂ compared with driving" panel and the green "I'm taking this trip" button are still unchanged (B5 polish).
+- Start directions under the Journey disrupted? answer and the collapsed driving steps (critique issue 2) were not part of this step.
+- The Light screenshots from the first run were still drawn in Dark, because the app's theme setting overrides the system colour scheme. I checked Light separately by setting `data-theme="light"` (`card-412-light.png`, `sheet-428-light.png`).
+- The demo-mode API cost line (about 50 px) was not on screen in this check. With it, the first arrival time would still be above 844 px.
+- Live searches: none were made.
