@@ -319,6 +319,15 @@ class DemoTests(unittest.TestCase):
         self.assertFalse(second_item["realtime"]["simulated"])
         self.assertTrue(second["fits"])
 
+    def test_panic_never_trades_a_disruption_for_more_spare_time(self):
+        routes = FakeRoutes(transit=[route_with_bus(), transit_route([nav_walk(), bus(name="66", depart="2026-10-19T22:30:00Z", arrive="2026-10-19T22:50:00Z"), nav_walk(120)])])
+        payload = transit_payload(purpose="panic", departure="", deadline="2026-10-20T08:55", demo={"disrupted": "bus"})
+        result = run(payload, routes=routes, static=FakeStatic(), monitor=StepMonitor())
+        disrupted, clear = option(result, "transit-0"), option(result, "transit-1")
+        # The simulated 412 alert leaves 8 min to spare and the 66 only 3, but the deadline being close never brings back a disrupted option.
+        self.assertEqual((limits(disrupted), disrupted["buffer_minutes"], clear["buffer_minutes"]), ({"disruption"}, 8, 3))
+        self.assertEqual(result["recommended_id"], "transit-1")
+
     def test_all_public_transport_disrupts_every_transit_option(self):
         routes = FakeRoutes(transit=[route_with_bus(), transit_route([nav_walk(), bus(name="66", depart="2026-10-19T22:30:00Z", arrive="2026-10-19T22:50:00Z"), nav_walk(120)])])
         result = run(transit_payload(demo={"disrupted": "all"}), routes=routes)

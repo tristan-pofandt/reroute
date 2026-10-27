@@ -303,12 +303,13 @@ class TransitTests(unittest.TestCase):
         self.assertIn("Flat fare", bus["cost_label"])
         self.assertTrue(bus["fits"])
 
-    def test_missing_fare_without_flat_fare_does_not_fit(self):
+    def test_missing_fare_without_flat_fare_is_price_unknown_not_a_failed_limit(self):
         bus = option(run(), "transit-0")
         self.assertFalse(bus["cost_known"])
-        self.assertFalse(bus["fits"])
-        self.assertEqual(limits(bus), {"cost"})
-        self.assertIn("Fare unavailable", bus["reasons"][0]["text"])
+        self.assertIsNone(bus["cost"])
+        self.assertEqual(bus["reasons"], [])
+        self.assertTrue(bus["fits"])
+        self.assertIn("Fare unavailable", bus["cost_unknown_text"])
 
     def test_deadline_miss_has_a_reason_and_negative_buffer(self):
         bus = option(run({"deadline": "2026-10-20T08:40", "transit_flat_fare": 3}), "transit-0")
@@ -367,8 +368,17 @@ class DriveTests(unittest.TestCase):
         self.assertFalse(drive["cost_known"])
         self.assertEqual(drive["cost"], 2.0)
         self.assertIn("parking cost", drive["cost_label"])
-        self.assertIn("cost", limits(drive))
-        self.assertIn("Paid parking", drive["reasons"][-1]["text"])
+        # $2 of fuel is inside the $5 budget and the parking price is unknown: its own state, not a failed limit.
+        self.assertNotIn("cost", limits(drive))
+        self.assertTrue(drive["fits"])
+        self.assertIn("Paid parking", drive["cost_unknown_text"])
+
+    def test_a_known_part_of_the_cost_over_the_budget_still_fails(self):
+        drive = option(run({**self.DRIVE, "budget": 1}, parking=lambda key, lat, lng: car_park()), "drive-0")
+        self.assertFalse(drive["cost_known"])
+        self.assertEqual(limits(drive), {"cost"})
+        self.assertIn("more than your $1 limit", drive["reasons"][0]["text"])
+        self.assertFalse(drive["fits"])
 
     def test_free_parking_nearby_makes_cost_known(self):
         free = car_park(paid=False, free=True)
@@ -438,7 +448,9 @@ class EmissionsAndComparisonTests(unittest.TestCase):
         self.assertEqual(float(query["dropoff[longitude]"][0]), 153.01)
         self.assertIsNone(uber["cost"])
         self.assertFalse(uber["cost_known"])
-        self.assertFalse(uber["fits"])
+        # On time with no walking: the unknown Uber price alone does not fail the fit.
+        self.assertEqual(uber["reasons"], [])
+        self.assertTrue(uber["fits"])
         self.assertEqual([item["id"] for item in result["options"]], ["rideshare-0"])
 
 
@@ -508,6 +520,35 @@ class FailureAndRecommendationTests(unittest.TestCase):
         result = run(payload)
         self.assertEqual(result["recommended_id"], "drive-0")
         self.assertTrue(result["recommended_reason"].startswith("Nothing makes your deadline"))
+
+    # Leaving at 8:01. EASY: 3 min walking, no changes, arrives 8:37. QUICK: 8 min walking and 1 change, arrives 8:26.
+    # HEAVY: 11 min walking, no changes, arrives 8:37 like EASY.
+    EASY = transit_route([walk(120), ride(1980, 10000, "412"), walk(60)], duration=2160)
+    QUICK = transit_route([walk(360), ride(600, 5000, "66"), ride(420, 5000, "29"), walk(120)], duration=1500)
+    HEAVY = transit_route([walk(420), ride(1500, 10000, "428"), walk(240)], duration=2160)
+
+    def panic(self, deadline, routes):
+        payload = {"purpose": "panic", "departure": "", "deadline": deadline, "transit_flat_fare": 3, "walking": 15}
+        return run(payload, routes=FakeRoutes(transit=routes))
+
+    def test_panic_with_a_close_deadline_prefers_the_most_time_to_spare_over_the_least_effort(self):
+        result = self.panic("2026-10-20T08:40", [self.EASY, self.QUICK])
+        # The easiest option would leave 3 min to spare, under CLOSE_BUFFER_MIN, so the one leaving 14 min wins.
+        self.assertEqual(option(result, "transit-0")["buffer_minutes"], 3)
+        self.assertEqual(option(result, "transit-1")["buffer_minutes"], 14)
+        self.assertEqual(result["recommended_id"], "transit-1")
+        self.assertIn("the most time to spare", result["recommended_reason"])
+
+    def test_panic_with_plenty_of_time_keeps_the_least_effort(self):
+        result = self.panic("2026-10-20T09:30", [self.EASY, self.QUICK])
+        self.assertEqual(result["recommended_id"], "transit-0")
+        self.assertIn("the least effort", result["recommended_reason"])
+
+    def test_panic_with_a_close_deadline_uses_effort_only_to_break_a_tie_in_spare_time(self):
+        result = self.panic("2026-10-20T08:45", [self.HEAVY, self.EASY])
+        self.assertEqual([option(result, f"transit-{n}")["buffer_minutes"] for n in (0, 1)], [8, 8])
+        self.assertEqual(result["recommended_id"], "transit-1")
+        self.assertNotIn("the most time to spare", result["recommended_reason"])
 
     def test_regular_search_has_no_recommendation(self):
         result = run({"purpose": "regular", "deadline": ""})

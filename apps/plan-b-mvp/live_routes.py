@@ -57,6 +57,9 @@ CYCLE_PROFILES = {"scooter": ("E-scooter", 15), "ebike": ("E-bike", 20), "bicycl
 PUSH_BIKE_ASSUMED_KMH = 12  # only used if Google returns no cycling duration
 PUSH_BIKE_MAX_KM = 5
 UNCHECKED_MODES = ("rideshare",) + CYCLE_MODES  # no price or availability check, so never the panic-mode recommendation
+# Panic mode: when the easiest on-time option leaves fewer spare minutes than this, the deadline counts as close and the most
+# spare time wins. A team assumption (twice the 5-minute "Tight" badge), not a measured value.
+CLOSE_BUFFER_MIN = 10
 # Shared e-scooter and e-bike hire (Lime and Neuron in Brisbane): an unlock fee plus a price per minute, times the assumed-speed riding time.
 # Neither operator publishes current Brisbane prices outside its app, so these defaults are assumptions within the range of older published
 # Brisbane rates ($1 unlock, 30 to 45 cents a minute); the traveller can change them in Settings. Not a quote, and passes are not modelled.
@@ -577,9 +580,9 @@ def _limits(option, journey):
         reasons.append({"limit": "walking", "text": "Walking time unavailable"})
     elif option["walking_minutes"] > journey["walking"]:
         reasons.append({"limit": "walking", "text": f"More than your {journey['walking']}-minute walking limit"})
-    if not option["cost_known"]:
-        reasons.append({"limit": "cost", "text": option.get("cost_unknown_text") or "Cost unknown, so your budget can't be confirmed"})
-    elif option["cost"] > journey["budget"]:
+    # An unknown price is its own state (cost_known False, explained by cost_unknown_text), not a failed limit.
+    # A known part (such as fuel without parking) that is already over the budget still fails.
+    if option["cost"] is not None and option["cost"] > journey["budget"]:
         reasons.append({"limit": "cost", "text": f"Costs more than your ${journey['budget']:g} limit"})
     realtime = option.get("realtime") or {}
     if any(alert["disruptive"] for alert in realtime.get("alerts", [])):
@@ -998,7 +1001,8 @@ def live(payload, services, now=None):
 
 
 def recommend(options, journey):
-    """Panic mode: the easiest undisrupted option that still makes the deadline."""
+    """Panic mode: an undisrupted option that makes the deadline, public transport first. The least effort wins unless it leaves
+    under CLOSE_BUFFER_MIN minutes to spare; then the most spare time wins and effort only breaks ties."""
     undisrupted = [option for option in options
                    if not any(reason["limit"] == "disruption" for reason in option["reasons"])
                    and option["mode"] not in UNCHECKED_MODES]
@@ -1014,11 +1018,19 @@ def recommend(options, journey):
         def effort(option):
             walking = option["walking_minutes"] if option["walking_minutes"] is not None else 30
             return walking + 8 * option["transfers"]
-        best = min(on_time, key=lambda option: (effort(option), option["arrival_dt"]))
+
+        def spare(option):
+            return math.floor((deadline - option["arrival_dt"]).total_seconds() / 60)
+
+        easiest = min(on_time, key=lambda option: (effort(option), option["arrival_dt"]))
+        close = deadline is not None and spare(easiest) < CLOSE_BUFFER_MIN
+        best = min(on_time, key=lambda option: (-spare(option), effort(option), option["arrival_dt"])) if close else easiest
         changes = "no changes" if best["transfers"] == 0 else f"{best['transfers']} change{'s' if best['transfers'] != 1 else ''}"
         walking = f"{best['walking_minutes']} min walking" if best["walking_minutes"] else "almost no walking"
         why = ("Arrives before your deadline" if deadline else "Gets you there") + f" with {changes} and {walking}"
-        if best is not min(on_time, key=lambda option: option["arrival_dt"]):
+        if close and best is not easiest:
+            why += ", the most time to spare of the options that are on time"
+        elif not close and best is not min(on_time, key=lambda option: option["arrival_dt"]):
             why += ", the least effort of the options that are on time"
     else:
         best = min(pool, key=lambda option: option["arrival_dt"])

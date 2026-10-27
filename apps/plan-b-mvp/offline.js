@@ -21,6 +21,7 @@ const HIRE_DEFAULTS = { scooter: [1, 0.45], ebike: [1, 0.45] }, HIRE_PROVIDERS =
 const FUEL_CO2_PER_L = { DIESEL: 2.68, LPG: 1.51 }, PETROL_CO2_PER_L = 2.31;
 const DEFAULT_FACTORS = { bus: 0.105, rail: 0.035, tram: 0.029, ferry: 0.019 };
 const UNCHECKED_MODES = ["rideshare", ...CYCLE_MODES]; // never the panic-mode pick (no price or availability check)
+const CLOSE_BUFFER_MIN = 10; // as in live_routes.py: under this many spare minutes, the most spare time beats the least effort
 const DRIVE_KMH = { motorway: 80, trunk: 70, primary: 55, secondary: 50, tertiary: 45, residential: 35, living: 15, service: 15, track: 15, pedestrian: 10 };
 const PATHS = new Set(["footway", "cycleway", "path", "steps", "track", "pedestrian"]);
 const NOTICE = "Offline estimate from downloaded data. Not live: check services and conditions when you can.";
@@ -1653,8 +1654,8 @@ function limits(o, req) {
   if (req.deadline && o._arrive > req.deadline) reasons.push({ limit: "deadline", text: "Arrives after your deadline" });
   if (o.walking_minutes === null) reasons.push({ limit: "walking", text: "Walking time unavailable" });
   else if (o.walking_minutes > req.walking) reasons.push({ limit: "walking", text: `More than your ${req.walking}-minute walking limit` });
-  if (!o.cost_known) reasons.push({ limit: "cost", text: o.cost_unknown_text || "Cost unknown, so your budget can't be confirmed" });
-  else if (o.cost > req.budget) reasons.push({ limit: "cost", text: `Costs more than your $${req.budget} limit` });
+  // An unknown price is its own state (cost_known false), not a failed limit; a known part already over the budget still fails.
+  if (o.cost !== null && o.cost !== undefined && o.cost > req.budget) reasons.push({ limit: "cost", text: `Costs more than your $${req.budget} limit` });
   return reasons;
 }
 const ends = (req) => ({ start: [req.from.lat, req.from.lng].map((v) => round(v, 6)), end: [req.to.lat, req.to.lng].map((v) => round(v, 6)) });
@@ -1858,10 +1859,14 @@ function recommend(options, req) {
   onTime = onTime.filter((o) => o.mode === "transit").length ? onTime.filter((o) => o.mode === "transit") : onTime;
   if (!onTime.length) { const best = pool.reduce((a, b) => (b._arrive < a._arrive ? b : a)); return { id: best.id, why: "Nothing makes your deadline. This is the earliest arrival." }; }
   const effort = (o) => (o.walking_minutes ?? 30) + 8 * o.transfers;
-  const best = onTime.reduce((a, b) => (effort(b) < effort(a) || (effort(b) === effort(a) && b._arrive < a._arrive) ? b : a));
+  const spare = (o) => Math.floor((req.deadline - o._arrive) / 60000);
+  const easiest = onTime.reduce((a, b) => (effort(b) < effort(a) || (effort(b) === effort(a) && b._arrive < a._arrive) ? b : a));
+  const close = Boolean(req.deadline) && spare(easiest) < CLOSE_BUFFER_MIN;
+  const best = close ? [...onTime].sort((a, b) => spare(b) - spare(a) || effort(a) - effort(b) || a._arrive - b._arrive)[0] : easiest;
   const earliest = onTime.reduce((a, b) => (b._arrive < a._arrive ? b : a));
   const changes = best.transfers === 0 ? "no changes" : `${best.transfers} change${best.transfers !== 1 ? "s" : ""}`, walking = best.walking_minutes ? `${best.walking_minutes} min walking` : "almost no walking";
-  return { id: best.id, why: `${req.deadline ? "Arrives before your deadline" : "Gets you there"} with ${changes} and ${walking}${best !== earliest ? ", the least effort of the options that are on time" : ""}.` };
+  const which = close ? (best !== easiest ? ", the most time to spare of the options that are on time" : "") : best !== earliest ? ", the least effort of the options that are on time" : "";
+  return { id: best.id, why: `${req.deadline ? "Arrives before your deadline" : "Gets you there"} with ${changes} and ${walking}${which}.` };
 }
 // The offline counterpart of POST /api/plan: the same plan shape app.js reads, from the downloaded pack only. Synchronous; awaiting it is fine.
 function plan(pack, request) {
