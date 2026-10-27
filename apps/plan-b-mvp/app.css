@@ -1206,10 +1206,10 @@ button.row:disabled { opacity: 0.45; cursor: default; }
 .area-wait { display: block; margin: -2px 0 2px 20px; font-size: 12px; color: var(--warning-text); }
 .offline-preview .picker-map { height: 100%; }
 
-/* Reduced motion: no looping or large-area motion, one-shot entrances land instantly. */
+/* Reduced motion: no looping or large-area motion, one-shot entrances land instantly (staggered cards and menu groups too, with no delay). */
 @media (prefers-reduced-motion: reduce) {
-  :root:not([data-motion="full"]) *, :root:not([data-motion="full"]) *::before, :root:not([data-motion="full"]) *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+  :root:not([data-motion="full"]) *, :root:not([data-motion="full"]) *::before, :root:not([data-motion="full"]) *::after { animation-duration: 1ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
   :root:not([data-motion="full"]) .skeleton::after, :root:not([data-motion="full"]) .is-loading::after, :root:not([data-motion="full"]) .live-dot::after, :root:not([data-motion="full"]) .panic-icon::after { animation: none !important; }
 }
-:root[data-motion="reduced"] *, :root[data-motion="reduced"] *::before, :root[data-motion="reduced"] *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+:root[data-motion="reduced"] *, :root[data-motion="reduced"] *::before, :root[data-motion="reduced"] *::after { animation-duration: 1ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
 :root[data-motion="reduced"] .skeleton::after, :root[data-motion="reduced"] .is-loading::after, :root[data-motion="reduced"] .live-dot::after, :root[data-motion="reduced"] .panic-icon::after { animation: none !important; }
