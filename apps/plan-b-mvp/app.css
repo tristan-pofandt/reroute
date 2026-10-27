@@ -1021,7 +1021,8 @@ button.row:disabled { opacity: 0.45; cursor: default; }
 .nav-sheet.dragging { transition: none; }
 /* Touches anywhere on a sheet, the menu or the backdrop pan nothing but their own scroll area, so a drag in the wrong spot never moves the page. */
 .sheet-backdrop, .sheet, .nav-sheet, .menu-backdrop, .settings-backdrop { touch-action: none; }
-.sheet-scroll, .nav-steps, .menu-scroll, .settings-scroll, .ac-list, .scroll { touch-action: pan-y; overscroll-behavior: contain; }
+.sheet-scroll, .nav-steps, .menu-scroll, .settings-scroll, .ac-list { touch-action: pan-y pinch-zoom; }
+.sheet-scroll, .nav-steps, .menu-scroll, .settings-scroll, .ac-list, .scroll { overscroll-behavior: contain; }
 .sheet input, .sheet textarea, .sheet select, .sheet [data-picker-map], .settings-backdrop input { touch-action: manipulation; }
 .sheet-backdrop.popup { z-index: 85; }
 .sheet-backdrop.picker .sheet { height: 92%; }
