@@ -14,7 +14,7 @@ colors:
   text-main: "#F1F5F9"
   text-muted: "#94A3B8"
   text-faint: "#64748B"
-  accent: "#6366F1"
+  accent: "#575AF0"
   accent-text: "#A5B4FC"
   accent-soft: "rgba(99, 102, 241, 0.16)"
   accent-glow: "rgba(99, 102, 241, 0.15)"
@@ -63,7 +63,7 @@ colors:
   light-accent-soft: "rgba(79, 70, 229, 0.1)"
   light-accent-glow: "rgba(79, 70, 229, 0.14)"
   light-success: "#047857"
-  light-success-text: "#047857"
+  light-success-text: "#065F46"
   light-success-soft: "rgba(4, 120, 87, 0.1)"
   light-on-success: "#FFFFFF"
   light-error: "#B91C1C"
@@ -71,7 +71,7 @@ colors:
   light-error-soft: "rgba(185, 28, 28, 0.08)"
   light-on-error: "#FFFFFF"
   light-warning: "#B45309"
-  light-warning-text: "#B45309"
+  light-warning-text: "#92400E"
   light-warning-soft: "rgba(180, 83, 9, 0.1)"
   light-teal: "#0F766E"
   light-violet: "#6D28D9"
@@ -270,13 +270,13 @@ A cool near-black ladder with one indigo signal, three status hues and a set of 
 - **Raised Surface** (`bg-surface`): cards, grouped lists, sheets, the hero and tiles.
 - **Card Inset** (`bg-card`): fields, secondary buttons, inset boxes inside cards, and grouped lists inside sheets.
 - **Pop** (`bg-pop`): anything floating above the page, such as suggestion lists, toasts, the profile menu, map controls and dialogs.
-- **Mist Text** (`text-main`), **Slate Text** (`text-muted`) and **Faint Slate** (`text-faint`): primary text, secondary text, and decorative or placeholder text.
+- **Mist Text** (`text-main`), **Slate Text** (`text-muted`) and **Faint Slate** (`text-faint`): primary text; secondary text, placeholders and small print such as the suggestion-list footer; and decorative marks (chevrons, the hero's dotted route, the avatar, empty streak weeks) and disabled steppers. Faint Slate is never used for text a traveller must read.
 - **Hairlines** (`border-subtle`, `border-strong`, `divider`): resting borders, hover or floating borders, and row dividers.
 - **Fills** (`fill`, `fill-strong`): hover and press washes, skeleton blocks, neutral chips and tracks.
 
 ### Status
-- **Signal Green** (`success`): on time, fits all limits, CO2 saved, the Impact button, logged trips and clean streak weeks.
-- **Platform Amber** (`warning`): tight buffers, late services, weather and offline banners, and stale live data.
+- **Signal Green** (`success`): on time, fits all limits, CO2 saved, the Impact button, logged trips and clean streak weeks. Its text variant (`success-text`) is one step darker than the fill tone in Light (#065F46 on a #047857 tint), so text on the tinted chips stays above 4.5:1.
+- **Platform Amber** (`warning`): tight buffers, late services, weather and offline banners, and stale live data. In Light its text variant (`warning-text`, #92400E) is likewise one step darker than the tint tone (#B45309).
 - **Disruption Red** (`error`): cancellations, missed deadlines, the Journey disrupted entry and its Go button, and destructive confirmations.
 - **Harbour Teal** (`teal`) and **Forecast Violet** (`violet`): the offline-mode banner, equivalent-distance icon and wind arrow; the next-hour rain forecast.
 
@@ -354,7 +354,7 @@ Tactile and calm. They are full-width by default, filled, and squeeze slightly o
 - **Secondary:** Card Inset fill, hairline border and main text. Hover raises it to Pop with the strong border.
 - **Text:** no fill, muted text at 500, and a faint wash on hover.
 - **Press / Focus / Disabled:** press scales to 0.98 at 86% opacity. Focus is a 2 px indigo outline plus a 5 px glow halo. Disabled is 45% opacity. While loading, the button becomes an indigo-tinted shimmer.
-- **Plan a trip (signature):** an 84 px indigo panel with a 20 px radius, a 48 px translucent-white icon tile, a 19 px title with a sentence under it, and a chevron. It is the only element with a coloured glow shadow.
+- **Plan a trip (signature):** an 84 px indigo panel with a 20 px radius, a 48 px translucent-white icon tile, a 19 px title with a 13 px sentence under it (full white, so it keeps 4.5:1 on indigo), and a chevron. It is the only element with a coloured glow shadow.
 - **Journey disrupted entry and Go:** the home entry is a surface card tinted 9% red with a red icon tile and a slow pulsing ring. On the Journey disrupted screen, which is itself tinted 6% red, the Go button is a 64 px solid red button with an 18 px radius at 18 px / 700.
 
 ### Chips
@@ -380,9 +380,10 @@ Tactile and calm. They are full-width by default, filled, and squeeze slightly o
 - **Sheets:** they rise from the bottom with a 28 px top radius, a 36 by 4 px grab line, a 22 px title, and a scrim that fades with the drag. They can be dragged down to dismiss.
 - **Side menu and Settings:** full-height panels that slide in from the left (menu, up to 360 px) and from the right (Settings) on Night Base, with the panel-edge shadow. The menu's groups stagger in 40 ms apart.
 - **Segmented control:** a recessed base track with a raised card thumb that slides on a spring. The selected label turns main and 600.
+- **Focus between screens and layers:** the side menu, Settings, sheets, pop-ups, a full-screen map and dialogs are modal. While one is open, the screen and any layer under it are `inert` and Tab wraps inside it. Escape closes the top one, and focus returns to the control that opened it (or, if a re-render replaced that control, to its twin with the same data attributes). A new screen moves focus to its first `h1` or `h2`; screens without one lead with the Journey disrupted? answer, the directions banner or the area hint. These lead elements take focus without an outline, because they are not controls.
 
 ### Option card (signature)
-This is the core decision surface. It has a 40 px mode tile tinted in the mode's colour, then the option name and a sub-line, then an inset arrival box (24 px tabular arrival time, a coloured buffer word and a stat column). Below that are a row of 10 px-radius fact pills (good, warn or bad tints), a CO2 line (a tinted 14 px-radius strip with a 32 px icon tile), a one-line trade-off sentence, and a full-width text action.
+This is the core decision surface. It has a 40 px mode tile tinted in the mode's colour, then the option name and a sub-line, then an inset arrival box (24 px tabular arrival time, a coloured buffer word and a stat column). Below that are a row of 10 px-radius fact pills (good, warn or bad tints), a CO2 line (a tinted 14 px-radius strip with a 32 px icon tile), a one-line trade-off sentence, and a full-width text action. The body above the action is one button that opens the detail sheet. It has no `aria-label`, so its own text (name, arrival, status, reasons) is what a screen reader announces, and it is the card's only tab stop. The text action stays clickable but is skipped by Tab, because the sheet repeats it.
 
 ### Live status tag and live dot
 Pill tags (20 px radius, 12 px / 600) with a 6 px dot in the current colour read "On time" (green), "N min late" (amber, red when major), "Cancelled" (red), "early" (indigo) or "No live data" (neutral). A 7 px live dot pings outward every 2 s. It turns amber when the data is stale.
@@ -415,7 +416,7 @@ Banners are 14 px-radius tinted strips (amber by default, then info indigo, erro
 
 ## Appendix: Code vs the original brief
 
-This appendix is for the team. It records differences between [`docs/design/design-system.md`](docs/design/design-system.md) and the shipped code, and issues observed while extracting the tokens. None of them have been fixed.
+This appendix is for the team. It records differences between [`docs/design/design-system.md`](docs/design/design-system.md) and the shipped code, and issues observed while extracting the tokens. The contrast issues were fixed on 2026-10-27 (see "Contrast fixes"); the others have not been fixed.
 
 ### Differences from the brief
 1. **Themes.** The brief defines dark tokens only. The code adds a derived Light theme (`:root[data-theme="light"]`) and an Auto option that follows the system. Dark is the default.
@@ -431,9 +432,12 @@ This appendix is for the team. It records differences between [`docs/design/desi
 11. **Skeleton shimmer.** The brief's skeleton is a moving three-stop gradient over `bg-card` with `rgba(255, 255, 255, 0.04)`. The code uses a `fill-strong` block with a translating `--shimmer` sweep (`rgba(255, 255, 255, 0.055)` in Dark, 0.75 in Light), which matches the brief's "transform only" rule.
 12. **Heading size.** The brief's example `h1` is 28 px. The code's screen titles are 30 px, and the home hero is 32 px.
 
+### Contrast fixes (2026-10-27)
+Measured with the WCAG 2.x contrast formula against the flat surface colours and the 10 to 15% tints laid over them, not on a device. Each fix is the smallest token or usage change that reaches the WCAG 2.2 AA 4.5:1 text threshold.
+- **White on Platform Indigo in Dark** was 4.47:1 (#FFFFFF on #6366F1), and the Plan a trip sentence at 88% opacity was 3.84:1. Dark `accent` is now #575AF0: the same hue and saturation, with HSL lightness down from 66.7% to 64.1%. White on it is 5.09:1, and 4.53:1 in the 8% brighter hover state. The sentence no longer has reduced opacity. As a non-text colour (switch tracks, chip borders, the goal ring) it keeps at least 3.16:1 on every Dark surface. Light is unchanged at 6.29:1 (on #4F46E5). `accent-soft`, `accent-glow`, `border-focus` and the chart colour still mix from #6366F1.
+- **`text-faint` on readable text** was 3.38 to 4.16:1 in Dark and 2.71 to 3.04:1 in Light. The token is unchanged, but placeholders, the suggestion-list footer (which carries the Google Maps attribution), the pending offline-download steps and the map-slot message now use `text-muted` (at least 6.27:1 in Dark and 5.20:1 in Light). `text-faint` remains only on decorative marks and disabled controls.
+- **Light amber and green text on tinted chips** was 3.62 to 4.46:1 (for example `warning-text` #B45309 on its 15% tint over base, and "0 kg" on the Impact button at 4.21:1). Light `warning-text` is now #92400E and `success-text` is now #065F46, one step darker in the same scales. Over the 10 to 15% tints on base, surface and card they measure at least 5.11:1 (amber) and 5.50:1 (green). The tint tones (`warning`, `success`) are unchanged. Light `error-text` (#B91C1C) already passed at 4.54:1 or more on its tints, including on the Journey disrupted screen, so it is unchanged. Dark status text was already at 7.7:1 or more.
+
 ### Observed issues (not fixed)
-These were measured with the WCAG 2.x contrast formula against the flat surface colours, not on a device.
-- **White on Platform Indigo in Dark is 4.47:1** (#FFFFFF on #6366F1). That is just below the 4.5:1 AA threshold for 15 px / 600 button text. Light passes at 6.29:1 (on #4F46E5).
-- **`text-faint` falls below 4.5:1** in both themes: 3.83:1 on Dark surface, 4.16:1 on Dark base, and 2.88:1 and 2.71:1 on Light surface and base. It is used for placeholders, chevrons, the suggestion-list footer (11 px) and the pending offline-download steps (13 px), and those last two are readable text.
 - **Hard-coded colours outside the token set:** the dropped-pin red (#EA4335), the Lime and Neuron brand colours, the radar scale gradient, the Google attribution label, the map-marker colours and the dark map style in `app.js`, the logo gradient, and several inline `rgba(0, 0, 0, …)` shadows (switch knob, segmented thumb, demo pill, brand mark, desktop frame).
 - **Light theme shadows:** the panel-edge, desktop-frame, knob and demo-pill shadows use black at the same alpha in both themes. Only the card and pop shadows have Light versions.

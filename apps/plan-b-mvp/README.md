@@ -97,6 +97,7 @@ The mapping from each rule and feature to what was built is in the [v3 feature l
 
 - **Design system look:** dark-first editorial layout using the tokens in [`design-system.md`](../../docs/design/design-system.md) (surface layers, subtle 1 px borders, Inter, 16 and 24 px spacing, one accent), with Auto, Light and Dark themes in Settings. The fake phone hardware and status bar of v2 were removed.
 - **States and tactility:** pressed state (scale 0.98), accessible focus rings, 44 px minimum tap targets, shimmer skeletons instead of spinners, and fading success and error banners. Animations use only `transform` and `opacity`, and respect the reduced-motion setting.
+- **Focus management (WCAG 2.2 AA target):** the side menu, Settings, sheets, pop-ups, a full-screen map and dialogs keep focus inside while open (the screen behind is `inert` and Tab wraps), close with Escape, and return focus to the control that opened them. A screen change moves focus to the new screen's heading. When Journey disrupted? finds an answer, focus moves to the answer, whose accessible name is the whole answer (label, leave time, arrival, deadline line, reason and avoided disruptions), so a screen reader reads it out. Each option card has one tab stop, its body, and its accessible name is its own text rather than a generic "Details for …" label. Status colours meet 4.5:1 for text in both themes (see the contrast fixes in `DESIGN.md`).
 - **Clear buttons:** every text, search and address input (From and To, the Journey disrupted? fields, saved places, the place editor, the ride form and the alerts filter) shows a small x once it has text. It is a 44 by 44 px target around a smaller icon, has an accessible name such as "Clear To", keeps focus in the field, closes the suggestions and resets any stored place ID. One helper (`enhanceClear` and `clearInput` in `app.js`) provides it for all fields.
 - **Icons and loading:** one set of inline SVG icons instead of emojis; Google Maps is loaded the first time a map appears and the QR image is lazy-loaded.
 
@@ -219,6 +220,7 @@ For manual review, check the Terms, Privacy and About pages, the home shortcut f
 - Added places are limited to 10 plus Home and Work/Uni. Deleting a place needs two taps. Places are stored only in this browser.
 - Renaming did not regenerate the logo or the icon files. The name Plan B remains in the interview scenario and in internal identifiers (see the name change section above).
 - The clear (x) buttons, saved-place editor and dashboard were not tried on a real phone or with a screen reader.
+- The focus management above was checked with the keyboard in headless Chrome on 2026-10-27, not with a screen reader or on a phone, and the full-screen map was checked only through its action, because no browser map key was available. Contrast ratios are calculated from the tokens, not measured on a device.
 - Google Routes estimates are not confirmed disruption notices, guaranteed arrival times or booking options. Verify services and directions before leaving.
 
 ## Prepared exercise values

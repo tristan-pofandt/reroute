@@ -199,8 +199,8 @@
       "accent": {
         "role": "primary",
         "displayName": "Platform Indigo",
-        "canonical": "#6366F1",
-        "oklch": "oklch(58.5% 0.204 277.1)",
+        "canonical": "#575AF0",
+        "oklch": "oklch(55.6% 0.220 275.7)",
         "tonalRamp": [
           "#07032A",
           "#1B185B",
@@ -983,8 +983,8 @@
       "light-success-text": {
         "role": "status",
         "displayName": "Signal Green Text (Light)",
-        "canonical": "#047857",
-        "oklch": "oklch(50.8% 0.105 165.6)",
+        "canonical": "#065F46",
+        "oklch": "oklch(43.2% 0.086 166.9)",
         "tonalRamp": [
           "#001007",
           "#002E1E",
@@ -1111,8 +1111,8 @@
       "light-warning-text": {
         "role": "status",
         "displayName": "Platform Amber Text (Light)",
-        "canonical": "#B45309",
-        "oklch": "oklch(55.5% 0.146 49.0)",
+        "canonical": "#92400E",
+        "oklch": "oklch(47.3% 0.125 46.2)",
         "tonalRamp": [
           "#1C0300",
           "#431400",
@@ -1561,7 +1561,7 @@
       "refersTo": "button-primary",
       "description": "The one 'act here' action on a screen: Platform Indigo, full width, 52 px.",
       "html": "<button class=\"ds-btn-primary\">See my alternatives</button>",
-      "css": ".ds-btn-primary { width: 100%; min-height: 52px; padding: 0 20px; border: 1px solid transparent; border-radius: 14px; background: var(--accent, #6366F1); color: var(--on-accent, #FFFFFF); font: 600 15px/1.5 Inter, -apple-system, sans-serif; letter-spacing: -0.01em; cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); } .ds-btn-primary:hover { filter: brightness(1.08); } .ds-btn-primary:active { transform: scale(0.98); opacity: 0.86; } .ds-btn-primary:focus-visible { outline: 2px solid var(--border-focus, rgba(99, 102, 241, 0.8)); outline-offset: 2px; box-shadow: 0 0 0 5px var(--accent-glow, rgba(99, 102, 241, 0.15)); }"
+      "css": ".ds-btn-primary { width: 100%; min-height: 52px; padding: 0 20px; border: 1px solid transparent; border-radius: 14px; background: var(--accent, #575AF0); color: var(--on-accent, #FFFFFF); font: 600 15px/1.5 Inter, -apple-system, sans-serif; letter-spacing: -0.01em; cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); } .ds-btn-primary:hover { filter: brightness(1.08); } .ds-btn-primary:active { transform: scale(0.98); opacity: 0.86; } .ds-btn-primary:focus-visible { outline: 2px solid var(--border-focus, rgba(99, 102, 241, 0.8)); outline-offset: 2px; box-shadow: 0 0 0 5px var(--accent-glow, rgba(99, 102, 241, 0.15)); }"
     },
     {
       "name": "Secondary Button",
@@ -1577,7 +1577,7 @@
       "refersTo": "chip",
       "description": "Sort and filter chips; the selected one turns indigo-soft.",
       "html": "<div class=\"ds-chips\"><button class=\"ds-chip\" aria-pressed=\"true\">Best fit</button><button class=\"ds-chip\" aria-pressed=\"false\">Arrival</button><button class=\"ds-chip\" aria-pressed=\"false\">Lowest CO2</button></div>",
-      "css": ".ds-chips { display: flex; gap: 8px; flex-wrap: wrap; } .ds-chip { min-height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06)); background: var(--bg-card, #181B24); color: var(--text-muted, #94A3B8); font: 500 13px/1.5 Inter, -apple-system, sans-serif; cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); } .ds-chip:hover { border-color: var(--border-strong, rgba(255, 255, 255, 0.12)); color: var(--text-main, #F1F5F9); } .ds-chip:active { transform: scale(0.98); } .ds-chip[aria-pressed=\"true\"] { background: var(--accent-soft, rgba(99, 102, 241, 0.16)); border-color: color-mix(in srgb, var(--accent, #6366F1) 50%, transparent); color: var(--accent-text, #A5B4FC); } .ds-chip:focus-visible { outline: 2px solid var(--border-focus, rgba(99, 102, 241, 0.8)); outline-offset: 2px; box-shadow: 0 0 0 5px var(--accent-glow, rgba(99, 102, 241, 0.15)); }"
+      "css": ".ds-chips { display: flex; gap: 8px; flex-wrap: wrap; } .ds-chip { min-height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06)); background: var(--bg-card, #181B24); color: var(--text-muted, #94A3B8); font: 500 13px/1.5 Inter, -apple-system, sans-serif; cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); } .ds-chip:hover { border-color: var(--border-strong, rgba(255, 255, 255, 0.12)); color: var(--text-main, #F1F5F9); } .ds-chip:active { transform: scale(0.98); } .ds-chip[aria-pressed=\"true\"] { background: var(--accent-soft, rgba(99, 102, 241, 0.16)); border-color: color-mix(in srgb, var(--accent, #575AF0) 50%, transparent); color: var(--accent-text, #A5B4FC); } .ds-chip:focus-visible { outline: 2px solid var(--border-focus, rgba(99, 102, 241, 0.8)); outline-offset: 2px; box-shadow: 0 0 0 5px var(--accent-glow, rgba(99, 102, 241, 0.15)); }"
     },
     {
       "name": "Text Field",
@@ -1585,7 +1585,7 @@
       "refersTo": "input",
       "description": "Form fields: Card Inset, 12 px radius, 16 px text, indigo border and glow on focus.",
       "html": "<label class=\"ds-field\">Destination<input class=\"ds-input\" placeholder=\"Where to?\"></label>",
-      "css": ".ds-field { display: flex; flex-direction: column; gap: 6px; font: 500 12px/1.5 Inter, -apple-system, sans-serif; letter-spacing: 0.02em; color: var(--text-muted, #94A3B8); } .ds-input { min-height: 48px; padding: 0 14px; border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06)); border-radius: 12px; background: var(--bg-card, #181B24); color: var(--text-main, #F1F5F9); font: 400 16px/1.5 Inter, -apple-system, sans-serif; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); } .ds-input::placeholder { color: var(--text-faint, #64748B); } .ds-input:focus-visible { outline: none; border-color: var(--border-focus, rgba(99, 102, 241, 0.8)); box-shadow: 0 0 0 3px var(--accent-glow, rgba(99, 102, 241, 0.15)); }"
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 6px; font: 500 12px/1.5 Inter, -apple-system, sans-serif; letter-spacing: 0.02em; color: var(--text-muted, #94A3B8); } .ds-input { min-height: 48px; padding: 0 14px; border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06)); border-radius: 12px; background: var(--bg-card, #181B24); color: var(--text-main, #F1F5F9); font: 400 16px/1.5 Inter, -apple-system, sans-serif; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); } .ds-input::placeholder { color: var(--text-muted, #94A3B8); } .ds-input:focus-visible { outline: none; border-color: var(--border-focus, rgba(99, 102, 241, 0.8)); box-shadow: 0 0 0 3px var(--accent-glow, rgba(99, 102, 241, 0.15)); }"
     },
     {
       "name": "Option Card",
