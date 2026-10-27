@@ -1,9 +1,9 @@
 /* Reroute service worker: offline app shell, network-first API reads, and Web Push notifications. */
 "use strict";
 
-const VERSION = "planb-reroute-20"; // keep the planb- prefix: activate() deletes older planb- caches
+const VERSION = "planb-reroute-21"; // keep the planb- prefix: activate() deletes older planb- caches
 // The React shell's hashed files (/assets/*) are found by reading the cached "/" page and the entry script, see precacheBuilt().
-// Legacy scripts are listed because the shell loads them as classic scripts; the old gsap/three layer is cached on first use only.
+// Legacy scripts are listed because the shell loads them as classic scripts; the old gsap layer (legacy index.html only) is cached on first use only.
 const SHELL = ["/", "/app.css", "/app.js", "/offline.js", "/favicon.svg", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png"];
 const ASSET = /\/?assets\/[A-Za-z0-9._-]+\.(?:js|css)|(?<=["']\.\/)[A-Za-z0-9._-]+\.(?:js|css)(?=["'])/g; // "/assets/x.js" in the page, "./x.js" between chunks
 

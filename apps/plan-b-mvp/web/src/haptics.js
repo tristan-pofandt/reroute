@@ -10,7 +10,6 @@ const load = () => (plugin ||= import("@capacitor/haptics").catch(() => null));
 const P = {
   tick: [6, (h) => h.impact({ style: "LIGHT" })],
   soft: [[10, 30, 6], (h) => h.impact({ style: "MEDIUM" })],
-  swell: [[6, 24, 14], (h) => h.vibrate({ duration: 40 })],
   thud: [16, (h) => h.impact({ style: "HEAVY" })],
   snap: [[8, 14, 8], (h) => h.selectionChanged()],
   error: [[30, 40, 30, 40, 60], (h) => h.notification({ type: "ERROR" })],
@@ -27,7 +26,6 @@ function fire(name) {
 
 export const tick = () => fire("tick");
 export const soft = () => fire("soft");
-export const swell = () => fire("swell");
 export const thud = () => fire("thud");
 export const snap = () => fire("snap");
 export const error = () => fire("error");

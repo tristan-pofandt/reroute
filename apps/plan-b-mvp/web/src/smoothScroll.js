@@ -1,11 +1,11 @@
 // Lenis smooth wheel scrolling for a page's own scroll area (the app scrolls inside `.scroll`, never the window), plus the scroll
-// velocity the WebGL canvas and the 3D scroll motion react to. Touch keeps the browser's native momentum; velocity is measured from
+// velocity the scroll reveals tilt with. Touch keeps the browser's native momentum; velocity is measured from
 // scroll events so it works for both. Legacy rerender() replaces the `.scroll` node, so the page re-binds on "reroute:rerender".
 //
 // Lenis is NOT given `autoRaf` (a rAF loop that never stops): a frame loop is started by a wheel event and runs only while Lenis is
 // gliding, so there is no per-frame work at rest. Turning Reduce motion on destroys Lenis at once; turning it off brings it back.
 import Lenis from "lenis";
-import { pushVelocity } from "./fxBus.js";
+import { pushVelocity } from "./motion/velocity.js";
 import { onReducedChange, reducedMotion } from "./reduced.js";
 
 export function attachSmoothScroll(page) {

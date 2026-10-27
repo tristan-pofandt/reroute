@@ -1,10 +1,8 @@
 /* Companion CSS for the motion layer (src/motion). Everything here is scoped to html.fm, the class MotionLayer sets while it is running,
    so with Reduce motion on (class removed) app.css behaves exactly as before. */
 
-/* Launch: the splash sits UNDER the WebGL canvas (z 60), so the veil sweeps over it; the shell removes it while the veil covers the
-   screen. app.css's own timed splashOut is switched off because the shell now decides when the splash ends. */
-html .splash { z-index: 55; animation: none; transition: opacity 200ms ease-out; }
-html .splash.is-out { opacity: 0; }
+/* Launch: app.css's own timed splashOut is switched off because the shell decides when the splash ends (motion/launch.js). */
+html .splash { animation: none; }
 
 /* The layer scales pressed controls through the individual `scale` property; drop the CSS :active transform so they do not stack. */
 html.fm :is(.btn, .icon-btn, .nav-back, .nav-action, .home-btn, button.row, a.row, .panic-btn, .panic-go, .panic-chip, .panic-exit, .segmented button, .stepper button, .card, .impact-btn, .cost-toggle, button.chip, button.banner-chip, button.tile-card):active { transform: none; }
@@ -13,5 +11,5 @@ html.fm :is(.btn, .icon-btn, .nav-back, .nav-action, .home-btn, button.row, a.ro
 html.fm [data-fm] { animation: none; transition-property: background-color, border-color, color, box-shadow, filter; }
 html.fm .chart-card .bar { transition-property: none; }
 
-/* The layer staggers the menu / settings / sheet rows itself. */
+/* The layer staggers the menu lines itself (panels.js). */
 html.fm .menu-backdrop.open .menu-scroll .group { animation: none; }
