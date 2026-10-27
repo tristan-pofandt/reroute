@@ -31,11 +31,3 @@ export const swell = () => fire("swell");
 export const thud = () => fire("thud");
 export const snap = () => fire("snap");
 export const error = () => fire("error");
-
-// A light tick on every press of a button-like control, as motion.js did.
-export function installPressHaptics() {
-  const PRESSABLE = ".btn, .icon-btn, .nav-back, .nav-action, .home-btn, button.row, a.row, .panic-btn, .panic-go, .panic-chip, .panic-exit, .segmented button, .stepper button, .card-body, .impact-btn, .cost-toggle";
-  const on = (e) => { if (e.target.closest?.(PRESSABLE) && !(e.pointerType === "mouse" && e.button !== 0)) tick(); };
-  document.addEventListener("pointerdown", on, { passive: true });
-  return () => document.removeEventListener("pointerdown", on);
-}

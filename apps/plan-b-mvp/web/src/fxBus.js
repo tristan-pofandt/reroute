@@ -14,8 +14,10 @@ export const scrollVelocity = motionValue(0); // px per frame (about 16.7 ms), s
 export const enter = motionValue(0); // 0..1 each time a page enters; accents fly in on it
 export const enterDir = { sign: 1 };
 
+export const stats = { frames: 0 }; // canvas frames actually rendered (read it twice at rest to prove the canvas sleeps)
+
 const bus = { until: 0, kick: null };
-export const wake = (ms = 800) => { bus.until = Math.max(bus.until, performance.now() + ms); bus.kick?.(); };
+export const wake = (ms = 800) => { bus.until = Math.max(bus.until, performance.now() + ms); if (!document.hidden) bus.kick?.(); };
 export const awake = () => performance.now() < bus.until;
 export const setKick = (fn) => { bus.kick = fn; };
 
@@ -50,4 +52,4 @@ export function pushVelocity(v) {
 }
 
 // Handy for debugging in the console, e.g. RerouteFx.veil.progress.set(0.5); RerouteFx.wake(). Not used by the app.
-window.RerouteFx = { veil, scrollVelocity, enter, wake, playVeil };
+window.RerouteFx = { veil, scrollVelocity, enter, wake, playVeil, stats };
