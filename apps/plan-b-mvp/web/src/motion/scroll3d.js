@@ -3,7 +3,7 @@
 //     (choreography.js `settle`), scrubbed by scroll progress, so they reverse when you scroll back; the last block always seats because
 //     the scrub range is clamped to the scrollable distance;
 //   * a card seating gives a `thud` haptic;
-//   * visible blocks tilt (rotateX) with the Lenis / native scroll velocity and ease flat when scrolling stops;
+//   * visible blocks lean (CSS `rotate`) with the Lenis / native scroll velocity and ease flat when scrolling stops;
 //   * chart bars grow from their baseline, the hero / lead figure drifts up and dims (parallax), KPI figures count up once.
 // (Blocks already on screen when a page is born are not touched here: the page choreography staggers them in.)
 // Cost model: layout is read only when something is registered or the viewport resizes (batched, one reflow); a scroll event reads one
@@ -106,11 +106,11 @@ function remeasure() {
 function flush() {
   queued = false;
   if (document.hidden) return;
-  const target = clamp(-scrollVelocity.get() * 0.24, -7, 7); // px/frame -> degrees; flicking up leans the blocks back
+  const target = clamp(-scrollVelocity.get() * 0.12, -3, 3); // px/frame -> degrees; flicking up leans the blocks back
   let busy = false;
   for (const S of scrollers.values()) {
     if (!S.el.isConnected) continue;
-    S.tilt += (target - S.tilt) * 0.3;
+    S.tilt += (target - S.tilt) * (Math.abs(target) < 0.03 ? 0.45 : 0.3); // quick return to rest
     if (Math.abs(S.tilt) < 0.03 && Math.abs(target) < 0.03) S.tilt = 0;
     else busy = true;
     const s = S.s;
@@ -128,15 +128,20 @@ function flush() {
         const sig = `${q.toFixed(3)}|${rx.toFixed(2)}`, seatedNow = Math.abs(q - 1) < 0.002;
         if (sig === it.sig && seatedNow) continue; // off the rest position it is rewritten every flush: framer or CSS may have overwritten the inline style
         it.sig = sig;
-        if (seatedNow && Math.abs(rx) < 0.05) {
+        // Velocity lean: the independent CSS `rotate` property, never `transform`, so it cannot
+        // fight framer's layout / entrance transforms. Removed outright at rest: no residue.
+        const lean = Math.abs(rx) < 0.05 ? "" : `1 0 0 ${rx.toFixed(2)}deg`;
+        if (lean) { touch(el, "rotate"); el.style.rotate = lean; it.lean = true; }
+        else if (it.lean) { el.style.removeProperty("rotate"); it.lean = false; }
+        if (seatedNow) {
           if (!it.clean) { el.style.removeProperty("transform"); el.style.removeProperty("opacity"); it.clean = true; }
           continue;
         }
         it.clean = false;
         touch(el, "transform", "opacity");
         const f = 1 - q;
-        el.style.transform = `perspective(900px) translate3d(${(64 * it.sgn * f).toFixed(2)}px,${(24 * f).toFixed(2)}px,0) rotateX(${rx.toFixed(2)}deg)`;
-        el.style.opacity = seatedNow ? "" : clamp(q * 1.5).toFixed(3);
+        el.style.transform = `translate3d(${(64 * it.sgn * f).toFixed(2)}px,${(24 * f).toFixed(2)}px,0)`;
+        el.style.opacity = clamp(q * 1.5).toFixed(3);
       } else if (it.kind === "bars") {
         const p = clamp((s - it.s0) / (it.s1 - it.s0)), n = it.bars.length, sig = p.toFixed(3);
         if (sig === it.sig) continue;

@@ -13,3 +13,14 @@ html.fm .chart-card .bar { transition-property: none; }
 
 /* The layer staggers the menu lines itself (panels.js). */
 html.fm .menu-backdrop.open .menu-scroll .group { animation: none; }
+
+/* Root of the exit flicker / slow late entry: app.css gives buttons, rows, cards ... `transition: opacity 0.2s, transform 0.2s`. The page and panel
+   choreography writes opacity / translate / transform on every frame, so each write started a 200 ms CSS transition that lagged behind it (a late,
+   sluggish entry) and, when an exit finished and values snapped back, eased the element back into view (the flicker). Inside pages and panels only
+   colours and shadows may transition; the panels themselves, switches and the chevrons keep theirs. */
+html.fm :is(.page, .menu-backdrop, .settings-backdrop, .sheet-backdrop) :not(svg, svg *, .menu-panel, .settings-panel, .sheet, .nav-sheet, .switch *, .segmented *, .chev, .brand-chev, .pick-lift, .pick-shadow, .profile-menu) {
+  transition-property: background-color, border-color, color, box-shadow, filter;
+}
+
+/* Profile menu: panels.js animates it (grows out of the avatar); the CSS opacity switch stays only as the closed/open anchor. */
+html.fm .profile-menu { transition: none; transform: none; transform-origin: calc(100% - 22px) -30px; }

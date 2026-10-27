@@ -8,7 +8,7 @@
 //   * a soft haptic marks a menu / Settings opening, a snap a sheet.
 // A panel that is being dragged shut is left alone: it is already moving under the finger.
 import { animate, stagger } from "framer-motion";
-import { slide, slow } from "../choreography.js";
+import { EASE, EASE_IN, slide, slow, spring } from "../choreography.js";
 import { snap, soft } from "../haptics.js";
 import { track, touch, untrack } from "./fm.js";
 
@@ -36,14 +36,31 @@ function panelChange(backdrop, opened) {
     return;
   }
   if (!backdrop.isConnected || panel.classList.contains("dragging") || panel.style.transform) return;
-  // Hold the panel where it is (the class change has not been styled yet), slide the lines out bottom-first, then let the panel go.
-  touch(panel, "transition", "transform");
-  panel.style.transition = "none";
-  panel.style.transform = "none";
-  const release = () => { panel.style.removeProperty("transition"); panel.style.removeProperty("transform"); };
-  const run = slide(lines.reverse(), offset, { out: true, step: 0.008, cap });
-  const timer = setTimeout(() => { release(); live.set(panel, { run }); }, 170 * slow());
-  live.set(panel, { run, timer, release });
+  // The panel slides away at once (CSS); the lines leave top-first with a short stagger in the same breath.
+  live.set(panel, { run: slide(lines, offset, { out: true, step: 0.012, cap }) });
+}
+
+// Profile menu: grows out of the avatar (top right) diagonally down and left; the items stagger in, closing reverses quickly.
+let profile = null;
+const CLIP_IN = "inset(0% -30% 62% 55% round 16px)", CLIP_OUT = "inset(-30% -30% -30% -30% round 16px)";
+function profileChange(menu, opened) {
+  profile?.c.stop(); profile?.run.stop(); profile?.clean();
+  const items = [...menu.querySelectorAll("button")];
+  const clean = () => ["opacity", "transform", "clip-path"].forEach((p) => menu.style.removeProperty(p));
+  touch(menu, "opacity", "transform", "clip-path");
+  // First frame written synchronously, before paint: closed look (opening) or open look (closing; CSS has already dropped .open).
+  menu.style.opacity = opened ? "0" : "1";
+  menu.style.transform = opened ? "translate(18px,-18px) scale(0.7)" : "none";
+  menu.style.clipPath = opened ? CLIP_IN : CLIP_OUT;
+  if (opened) soft();
+  const c = track(animate(menu,
+    opened ? { opacity: [0, 1], x: [18, 0], y: [-18, 0], scale: [0.7, 1], clipPath: [CLIP_IN, CLIP_OUT] }
+      : { opacity: [1, 0], x: [0, 10], y: [0, -10], scale: [1, 0.85] },
+    opened ? { default: { ...spring(), duration: 0.42 * slow() }, opacity: { duration: 0.18 * slow(), ease: EASE } } : { duration: 0.14 * slow(), ease: EASE_IN },
+  ));
+  c.then(() => { untrack(c); clean(); });
+  const run = slide(opened ? items : items.reverse(), { x: 14, y: -10 }, { out: !opened, delay: opened ? 0.05 : 0, step: opened ? 0.035 : 0.012, cap: 6 });
+  profile = { c, run, clean };
 }
 
 // Busy buttons get a loader drawn from the logo: the direct route bends into the detour and back, the app's idea in one line.
@@ -81,6 +98,7 @@ export function handleMutations(list, done) {
     if (m.type === "attributes") {
       const t = m.target, was = (m.oldValue || "").split(" ").includes("open"), now = t.classList.contains("open");
       if (was !== now && t.matches(".menu-backdrop, .settings-backdrop, .sheet-backdrop")) panelChange(t, now);
+      if (was !== now && t.matches(".profile-menu")) profileChange(t, now);
       if (t.matches("button.is-loading")) addLoader(t);
     } else {
       if (m.removedNodes.length) crossFade(m, done);
