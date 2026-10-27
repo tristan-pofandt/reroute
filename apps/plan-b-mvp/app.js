@@ -613,9 +613,9 @@ function homeScreen() {
         <span class="trip-text"><strong>Plan a trip</strong><small>Everyday routes, public transport first</small></span>
         <span class="chev">${I.arrowRight(18)}</span>
       </button>
-      <button class="panic-btn" data-action="go" data-screen="panic" aria-label="Journey disrupted? Get the best working way there now. On time first, no decisions.">
+      <button class="panic-btn" data-action="go" data-screen="panic" aria-label="Journey disrupted? The best way there, right now.">
         <span class="panic-icon">${I.bolt(24)}</span>
-        <span><strong>Journey disrupted?</strong><small>Get the best working way there now — on time first, no decisions.</small></span>
+        <span><strong>Journey disrupted?</strong><small>The best way there, right now.</small></span>
       </button>
       <p class="section-header">Right now</p>
       ${weatherCard()}
@@ -1247,25 +1247,29 @@ function panicScreen() {
     if (o) {
       const late = state.plan.deadline && o.buffer_minutes < 0;
       const stepOf = stepNav(o);
-      const steps = o.steps.slice(0, 8).map((s) => { const ni = stepOf(s); return `<li><span>${esc(s.title)}${s.board_time || s.minutes ? `<small>${[s.board_time && `Board at ${s.board_time}`, s.minutes && `${s.minutes} min`].filter(Boolean).join(" · ")}</small>` : ""}${ni >= 0 ? liveSlot(o, ni) : ""}</span></li>`; }).join("");
+      const steps = o.steps.map((s) => { const ni = stepOf(s); return `<li><span>${esc(s.title)}${s.board_time || s.minutes ? `<small>${[s.board_time && `Board at ${s.board_time}`, s.minutes && `${s.minutes} min`].filter(Boolean).join(" · ")}</small>` : ""}${ni >= 0 ? liveSlot(o, ni) : ""}</span></li>`; });
+      // A calm answer reads as time, deadline and steps; the reasoning waits behind "Why this route" unless it is a warning.
+      const warn = late || state.plan.options.every(isDisrupted);
       const facts = avoidedFacts(o) + realtimeFact(o) + weatherFact(o) + trafficFact(o);
       return `${top}<div class="scroll">
         <p class="lead" id="panic-lead">${leaveLabel(o, true)}. ${esc(o.title)}.</p>
         <div class="panic-answer" id="panic-answer" role="group" tabindex="-1" aria-labelledby="panic-label panic-lead panic-answer">
           <div class="when">${timeOf(o.arrival)} <small>arrival</small></div>
           ${deadlineLine(o)}
-          <p class="why ${late ? "bad" : ""}">${esc(state.plan.recommended_reason)}</p>
+          ${warn ? `<p class="why bad">${esc(state.plan.recommended_reason)}</p>` : ""}
           ${facts ? `<div class="facts" style="margin:12px 0 0">${facts}</div>` : ""}
         </div>
         ${hasLive(o) ? liveAge() : ""}
         ${costLine()}
-        <ol class="panic-steps">${steps}</ol>
+        <ol class="panic-steps">${steps.slice(0, 3).join("")}</ol>
+        ${steps.length > 3 ? `<details class="panic-more"><summary>All ${steps.length} steps</summary><ol class="panic-steps" start="4">${steps.slice(3).join("")}</ol></details>` : ""}
+        ${warn ? "" : `<details class="panic-more"><summary>Why this route</summary><p>${esc(state.plan.recommended_reason)}</p></details>`}
         <div class="actions">
           ${o.nav?.length ? `<button class="panic-go" data-action="start-nav" data-id="${esc(o.id)}">Start directions</button>` : `<a class="panic-go" href="${esc(o.maps_url)}" target="_blank" rel="noopener noreferrer">Start directions</a>`}
           ${o.offline ? "" : `<a class="btn btn-secondary" href="${esc(o.maps_url)}" target="_blank" rel="noopener noreferrer">Open in Google Maps ${I.external(16)}</a>`}
           <button class="btn btn-secondary" data-action="panic-others">See other options</button>
         </div>
-        ${notice(o.offline ? "Offline estimate from Translink's timetable and an OpenStreetMap route, not live. Check signs at the stop." : "Estimate from Google and Translink. Check signs at the stop.")}
+        ${notice(o.offline ? "Offline timetable estimate, not live · check signs at the stop." : "Estimate · check signs at the stop.")}
       </div>`;
     }
   }
