@@ -1,8 +1,8 @@
 /* Reroute service worker: offline app shell, network-first API reads, and Web Push notifications. */
 "use strict";
 
-const VERSION = "planb-reroute-18"; // keep the planb- prefix: activate() deletes older planb- caches
-const SHELL = ["/", "/app.css", "/app.js", "/offline.js", "/motion.js", "/vendor/gsap.min.js", "/vendor/ScrollTrigger.min.js", "/favicon.svg", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png"];
+const VERSION = "planb-reroute-19"; // keep the planb- prefix: activate() deletes older planb- caches
+const SHELL = ["/", "/app.css", "/app.js", "/offline.js", "/motion.js", "/fx.js", "/vendor/three.module.min.js", "/vendor/Flip.min.js", "/vendor/lenis.min.js", "/vendor/gsap.min.js", "/vendor/ScrollTrigger.min.js", "/favicon.svg", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(VERSION).then((cache) => Promise.all(SHELL.map((url) => cache.add(url).catch(() => {})))).then(() => self.skipWaiting()));

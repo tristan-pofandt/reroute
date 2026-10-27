@@ -98,7 +98,40 @@
   // Blocks below the fold rise in tied to the scroll position of their own scroll area (the app scrolls inside .scroll, not the window),
   // so they reverse as you scroll back. clamp() ends each one within the scroll range, so the last block is always fully shown at the bottom.
   const REVEAL = ".scroll > .group, .scroll > .card, .scroll > .ride-card, .scroll > .wx, .scroll .chart-card, .scroll > .empty-card, .sheet-scroll > .group";
+  let reveals = 0, lastThud = 0;
+  // A card seating into place is a heavier, shorter tap than the soft pulse of a panel opening; throttled so a fast flick isn't a buzz.
+  const thud = () => { const now = performance.now(); if (now - lastThud > 140) { lastThud = now; buzz(14); } };
+  // Scroll velocity tilts the blocks on screen (rotateX leans back as you flick up) and eases back to flat when scrolling stops.
+  const scrollers = new Map(); // scroll area -> { last time, last top, lenis }
+  document.addEventListener("scroll", (e) => {
+    const el = e.target;
+    if (!el.classList?.contains("scroll") || reduced()) return;
+    const s = scrollers.get(el) || { t: performance.now(), y: el.scrollTop };
+    const now = performance.now(), v = (el.scrollTop - s.y) / Math.max(now - s.t, 1);
+    Object.assign(s, { t: now, y: el.scrollTop });
+    scrollers.set(el, s);
+    const targets = [...el.children].slice(0, 12);
+    gsap.to(targets, { rotationX: gsap.utils.clamp(-7, 7, v * -4), duration: 0.12, overwrite: "auto", transformPerspective: 900 });
+    clearTimeout(s.rest);
+    s.rest = setTimeout(() => gsap.to(targets, { rotationX: 0, duration: 0.6, ease: "elastic.out(1, 0.6)", overwrite: "auto" }), 90);
+  }, { capture: true, passive: true });
+
+  // Wheel and trackpad scrolling gets Lenis's eased glide; touch keeps the browser's native momentum, which already feels right.
+  function glide(root) {
+    if (!window.Lenis) return;
+    root.querySelectorAll(".scroll").forEach((el) => {
+      if (el.dataset.lenis) return;
+      el.dataset.lenis = "1";
+      const lenis = new window.Lenis({ wrapper: el, content: el, lerp: 0.1, smoothWheel: true });
+      const tick = (time) => lenis.raf(time * 1000);
+      gsap.ticker.add(tick);
+      const watch = new MutationObserver(() => { if (!el.isConnected) { gsap.ticker.remove(tick); lenis.destroy(); watch.disconnect(); } });
+      watch.observe(viewport, { childList: true });
+    });
+  }
+
   function bindScroll(root) {
+    if (!reduced()) glide(root);
     let added = false;
     root.querySelectorAll(REVEAL).forEach((el) => {
       if (el.dataset.st) return;
@@ -106,8 +139,12 @@
       const scroller = el.closest(".scroll, .sheet-scroll");
       if (!scroller || el.getBoundingClientRect().top < innerHeight) return; // on screen already: its own entrance plays
       added = true;
-      gsap.fromTo(el, { opacity: 0, y: 28, scale: 0.98 }, { opacity: 1, y: 0, scale: 1, ease: "none",
-        scrollTrigger: { trigger: el, scroller, start: "clamp(top 98%)", end: "clamp(top 70%)", scrub: 0.3 } });
+      const side = (reveals++ % 2 ? 1 : -1);
+      gsap.set(scroller, { perspective: 900 });
+      gsap.fromTo(el, { opacity: 0, y: 28, scale: 0.98, z: -220, rotationY: 26 * side, transformOrigin: side > 0 ? "100% 50%" : "0% 50%" },
+        { opacity: 1, y: 0, scale: 1, z: 0, rotationY: 0, ease: "none",
+          scrollTrigger: { trigger: el, scroller, start: "clamp(top 98%)", end: "clamp(top 70%)", scrub: 0.3,
+            onLeave: () => { if (el.matches(".card, .ride-card")) thud(); } } });
     });
     // Chart bars grow from their baseline as the chart crosses the screen, and shrink back if you scroll away.
     root.querySelectorAll(".scroll .chart-card").forEach((card) => {

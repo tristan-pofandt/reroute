@@ -2461,6 +2461,7 @@ function navigate(screen, direction = "forward", syncUrl = true) {
   if (direction === "forward" || direction === "up") state.stack.push(screen);
   else { while (state.stack.length > 1 && state.stack[state.stack.length - 1] !== screen) state.stack.pop(); if (state.stack[state.stack.length - 1] !== screen) state.stack = [screen]; }
   state.screen = screen;
+  document.dispatchEvent(new CustomEvent("reroute:before"));
   const incoming = makePage(screen);
   const outgoing = currentPage;
   const inCls = { forward: "in-forward", back: "in-back", up: "in-up", down: "in-back" }[direction];
@@ -2470,6 +2471,7 @@ function navigate(screen, direction = "forward", syncUrl = true) {
   outgoing?.classList.add(outCls);
   if (outgoing) outgoing.inert = true;
   currentPage = incoming;
+  document.dispatchEvent(new CustomEvent("reroute:nav", { detail: { direction, page: incoming } }));
   syncInert();
   focusLead(incoming);
   mountMaps(incoming);
