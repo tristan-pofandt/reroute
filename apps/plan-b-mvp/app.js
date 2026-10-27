@@ -484,7 +484,7 @@ const renderSync = () => { const el = currentPage?.querySelector("[data-sync]");
 
 // Header Impact button: this month's CO₂ avoided, straight to the dashboard.
 function impactButton(impact) {
-  return `<button class="impact-btn" data-action="go" data-screen="dashboard" aria-label="Impact Dashboard: ${kgShort(impact.co2)} CO₂ avoided this month">${I.leaf(18)}<span>${kgShort(impact.co2)}</span></button>`;
+  return `<button class="impact-btn" data-action="go" data-screen="dashboard" aria-label="Impact Dashboard: ${kgShort(impact.co2)} estimated CO₂ avoided this month">${I.leaf(18)}<span>${kgShort(impact.co2)}</span></button>`;
 }
 
 // Header profile button: a blank default picture. Accounts are not built yet, so both items only say so (a template for later work).
@@ -627,9 +627,9 @@ function homeScreen() {
       <button class="tile-card" data-action="go" data-screen="dashboard">
         <div class="tile-head"><h3>${I.leaf(16)}Your impact this month</h3>${I.chevronRight()}</div>
         <div class="stat-row">
-          <div class="stat"><b>${kg(impact.co2)}</b><span>CO₂ avoided</span></div>
-          <div class="stat"><b>${money(impact.saved)}</b><span>saved vs driving</span></div>
-          <div class="stat"><b>${impact.greenTrips}</b><span>low-car trips</span></div>
+          <div class="stat"><b>${kg(impact.co2)}</b><span>est. CO₂ avoided</span></div>
+          <div class="stat"><b>${savedText(impact)}</b><span>saved vs driving</span></div>
+          <div class="stat"><b>${impact.greenTrips}</b><span>planned not by car</span></div>
         </div>
       </button>
       <button class="tile-card" data-action="go" data-screen="rides">
@@ -1130,12 +1130,12 @@ function impactPanel(o, logged) {
     const entry = store.get("trips", []).find((t) => t.ref === tripRef(o));
     const added = entry ? entry.co2_saved : saved;
     return `<div class="impact-card done" role="status"><span class="impact-ic">${I.checkCircle(22)}</span><div>
-      <b>${added > 0.005 ? `${kg(added)} ${o.co2_note ? "tailpipe " : ""}CO₂ avoided, added to your month` : "Trip added to your history"}</b>
-      <small>New total this month: <strong>${kg(month.co2)}</strong> of your ${goal} kg goal</small>${progressBar(month.co2 / goal)}</div></div>`;
+      <b>${added > 0.005 ? `About ${kg(added)} less ${o.co2_note ? "tailpipe " : ""}CO₂ than driving (estimate), added to your month` : "Trip added to your history"}</b>
+      <small>New total this month: <strong>${kg(month.co2)}</strong> of ${goalText()}</small>${progressBar(month.co2 / goal)}</div></div>`;
   }
   if (saved > 0.05) {
     return `<div class="impact-card"><span class="impact-ic">${I.leaf(22)}</span><div><b>Saves ${kg(saved)} ${o.co2_note ? "tailpipe " : ""}CO₂ compared with driving</b>
-      <small>${o.co2_note ? `${esc(o.co2_note)}. ` : ""}Add it to your month with “I'm taking this trip”. This month so far: ${kg(month.co2)} of your ${goal} kg goal.</small></div></div>`;
+      <small>${o.co2_note ? `${esc(o.co2_note)}. ` : ""}Add it to your month with “I'm taking this trip”. This month so far: ${kg(month.co2)} of ${goalText()}.</small></div></div>`;
   }
   return `<div class="impact-card neutral"><span class="impact-ic">${I.leaf(22)}</span><div><b>${o.mode === "drive" ? "This is the driving baseline" : "No CO₂ saving compared with driving"}</b>
     <small>${o.mode === "drive" ? "Logging it counts as a driving trip and does not add to your CO₂ total." : "Logging it records the trip without adding to your CO₂ total."}</small></div></div>`;
@@ -1593,10 +1593,16 @@ function impactTotals(trips) {
   return {
     co2: trips.reduce((s, t) => s + Math.max(0, t.co2_saved || 0), 0),
     saved: trips.reduce((s, t) => s + Math.max(0, t.cost_saved || 0), 0),
+    unknownSaved: trips.filter((t) => t.cost_saved === null || t.cost_saved === undefined).length,
     greenTrips: trips.filter((t) => t.mode !== "drive").length,
     trips: trips.length,
   };
 }
+
+// A total made only of unknown savings is "Unknown", not $0.
+const savedText = (t) => (t.trips && t.unknownSaved === t.trips ? "Unknown" : money(t.saved));
+// 10 kg is the team's assumed default, not a target the traveller chose, so it is named as such until they change it.
+const goalText = () => (settings.co2_goal_kg === DEFAULT_SETTINGS.co2_goal_kg ? `the team's default goal of ${settings.co2_goal_kg} kg` : `your ${settings.co2_goal_kg} kg goal`);
 
 function monthSeries() {
   const trips = store.get("trips", []);
@@ -1611,15 +1617,15 @@ function monthSeries() {
   return months;
 }
 
-// Weekly streak: consecutive weeks (Monday to Sunday) with at least one logged trip and no logged trip by your own car. An empty current week
-// does not break the streak, but a driving trip logged this week does. Only trips logged in the app count.
+// Weekly streak: consecutive finished weeks (Monday to Sunday) with at least one logged trip and no logged trip by your own car. The current
+// week counts only once it ends, but a driving trip logged this week ends the streak now. Only trips logged in the app count.
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 function weeklyStreak(trips) {
   const weeks = new Map();
   trips.forEach((t) => { const w = weekOf(t.date), e = weeks.get(w) || { n: 0, drove: 0 }; e.n++; if (t.mode === "drive") e.drove++; weeks.set(w, e); });
   const current = weekOf(new Date().toISOString());
   const clean = (w) => weeks.get(w)?.n > 0 && !weeks.get(w).drove;
-  let streak = 0, w = weeks.get(current)?.drove ? null : clean(current) ? current : current - 1;
+  let streak = 0, w = weeks.get(current)?.drove ? null : current - 1;
   while (w !== null && clean(w)) { streak++; w--; }
   const recent = Array.from({ length: 8 }, (_, i) => {
     const wk = current - 7 + i, e = weeks.get(wk);
@@ -1627,7 +1633,7 @@ function weeklyStreak(trips) {
     const label = `${monday.getUTCDate()} ${MONTHS[monday.getUTCMonth()]}`;
     return { wk, label, state: !e ? "empty" : e.drove ? "drove" : "clean", n: e?.n || 0, now: wk === current };
   });
-  return { streak, recent };
+  return { streak, recent, thisWeek: weeks.get(current) };
 }
 
 // Car emissions per km from the user's own Settings: litres per km times kg CO₂ per litre (the same factors the server uses for driving).
@@ -1673,7 +1679,7 @@ function barChart(id, months, field, format, title, subtitle) {
 // Goal ring: a stroke-dasharray arc, drawn once (no looping or animated stroke).
 function goalRing(value, goal) {
   const frac = goal > 0 ? Math.min(1, value / goal) : 0, R = 52, C = 2 * Math.PI * R;
-  return `<div class="ring-wrap"><svg class="ring" viewBox="0 0 128 128" role="img" aria-label="${kgShort(value)} of your ${goal} kg monthly goal">
+  return `<div class="ring-wrap"><svg class="ring" viewBox="0 0 128 128" role="img" aria-label="${kgShort(value)} of ${goalText()} for the month">
       <circle class="ring-track" cx="64" cy="64" r="${R}"/>
       ${frac > 0 ? `<circle class="ring-bar${frac >= 1 ? " done" : ""}" cx="64" cy="64" r="${R}" stroke-dasharray="${(C * frac).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 64 64)"/>` : ""}</svg>
     <div class="ring-center"><b>${Math.round(frac * 100)}%</b><span>of ${goal} kg</span></div></div>`;
@@ -1685,25 +1691,26 @@ function goalCard(monthCo2) {
     ${goalRing(monthCo2, goal)}
     <div class="goal-text"><p class="eyebrow" id="goal-title">Monthly CO₂ goal</p>
       <h3>${reached ? "Goal reached" : `${kgShort(left)} to go`}</h3>
-      <p>${kgShort(monthCo2)} avoided this month, against a goal of ${goal} kg.</p>
+      <p>About ${kg(monthCo2)} avoided this month (estimate), against ${goalText()}.${goal === DEFAULT_SETTINGS.co2_goal_kg ? " It is an assumption, not a target you set." : ""}</p>
       <button class="btn btn-text" data-action="open-settings">${I.gear(16)}Change goal</button></div></section>`;
 }
 
 function equivalentCard(monthCo2, allCo2) {
   const perKm = carKgPerKm(), fuel = (state.status?.fuel_types || {})[settings.fuel_type] || settings.fuel_type;
   return `<section class="equiv-card"><span class="equiv-ic">${I.car(22)}</span><div>
-    <p class="equiv-big">Equivalent to <b>${kmText(monthCo2 / perKm)}</b> not driven this month</p>
-    <p class="fine">${kmText(allCo2 / perKm)} not driven in total. Assumption: your car uses ${settings.fuel_l_per_100km} L/100 km of ${esc(fuel)} and each litre burned gives ${(FUEL_CO2_PER_L[settings.fuel_type] ?? PETROL_CO2_PER_L).toFixed(2)} kg of CO₂, so each km driven is about ${perKm.toFixed(3)} kg. This is an estimate from your Settings, not a measurement.</p></div></section>`;
+    <p class="equiv-big">This month's estimate is about the CO₂ of driving <b>${kmText(monthCo2 / perKm)}</b> in your car</p>
+    <p class="fine">About ${kmText(allCo2 / perKm)} of driving in total. Assumption: your car uses ${settings.fuel_l_per_100km} L/100 km of ${esc(fuel)} and each litre burned gives ${(FUEL_CO2_PER_L[settings.fuel_type] ?? PETROL_CO2_PER_L).toFixed(2)} kg of CO₂, so each km driven is about ${perKm.toFixed(3)} kg. This is an estimate from your Settings, not a measurement.</p></div></section>`;
 }
 
 function streakCard(trips) {
-  const { streak, recent } = weeklyStreak(trips);
+  const { streak, recent, thisWeek } = weeklyStreak(trips);
+  const sofar = thisWeek && !thisWeek.drove ? ` This week so far: ${plural(thisWeek.n, "planned trip")}, none by car.` : "";
   const weekLabel = (w) => `Week of ${w.label}: ${w.state === "empty" ? "no trips logged" : w.state === "drove" ? `${plural(w.n, "trip")}, including driving` : `${plural(w.n, "trip")}, none by car`}`;
   return `<section class="streak-card"><div class="streak-head"><span class="streak-ic${streak ? " on" : ""}">${I.flame(22)}</span>
       <div><p class="eyebrow">Weekly streak</p><h3>${streak ? plural(streak, "week") : "No streak yet"}</h3></div></div>
-    <p class="hint">${streak ? `You have logged trips without driving your own car for ${plural(streak, "week")} in a row.` : "Log a trip that is not by your own car to start a streak. A week counts when you log at least one trip and none of them are by car."}</p>
+    <p class="hint">${streak ? `${plural(streak, "finished week")} in a row with planned trips and none by your own car. This week counts once it ends.` : "A week counts once it ends, if you logged at least one trip that week and none of them by your own car."}${sofar}</p>
     <div class="streak-weeks" role="list" aria-label="Last eight weeks">${recent.map((w, i) => `<span class="wk ${w.state}${w.now ? " now" : ""}" role="listitem" aria-label="${esc(weekLabel(w))}"><i></i><small>${w.now ? "Now" : i % 2 ? w.label : ""}</small></span>`).join("")}</div>
-    <p class="fine">Only trips you log count. Uber and shared rides are counted as not driving your own car.</p></section>`;
+    <p class="fine">Only trips you log count, and they are plans, not checked travel. Uber and shared rides are counted as not driving your own car.</p></section>`;
 }
 
 function breakdownCard(trips) {
@@ -1717,35 +1724,34 @@ function dashboardScreen() {
   const all = store.get("trips", []);
   const t = impactTotals(all), month = impactTotals(thisMonthTrips());
   const months = monthSeries();
-  const share = t.trips ? Math.round((t.greenTrips / t.trips) * 100) : 0;
-  const table = state.dashTable ? `<table class="data-table"><thead><tr><th>Month</th><th>Trips</th><th>CO₂ avoided</th><th>Saved</th></tr></thead><tbody>${months.map((m) => `<tr><td>${m.label}</td><td>${m.trips}</td><td>${kg(m.co2)}</td><td>${money(m.saved)}</td></tr>`).join("")}</tbody></table>` : "";
+  const table = state.dashTable ? `<table class="data-table"><thead><tr><th>Month</th><th>Trips</th><th>Est. CO₂ avoided</th><th>Saved</th></tr></thead><tbody>${months.map((m) => `<tr><td>${m.label}</td><td>${m.trips}</td><td>${kg(m.co2)}</td><td>${savedText(m)}</td></tr>`).join("")}</tbody></table>` : "";
   const recent = all.slice(-8).reverse();
   return `
     ${navbar(true)}
     <div class="scroll">
       <p class="eyebrow">Impact</p>
       <h2 class="large-title">Your impact</h2>
-      <p class="subtitle">Each trip you log is compared with driving the same journey alone in your car (fuel, tolls and parking where known).</p>
+      <p class="subtitle">Each trip you add with “I'm taking this trip” is compared with driving the same journey alone in your car (fuel, tolls and parking where known). These are estimates for trips you planned, not measured travel.</p>
+      ${all.length ? `
       <div class="kpis">
-        <div class="kpi lead"><span>CO₂ avoided</span><b>${kg(t.co2)}</b><small>all time · ${kgShort(month.co2)} this month</small></div>
+        <div class="kpi lead"><span>Estimated CO₂ avoided</span><b>${kg(t.co2)}</b><small>vs driving the same trips alone · all time · ${kg(month.co2)} this month</small></div>
         <div class="kpi-row">
-          <div class="kpi"><span>Saved</span><b>${money(t.saved)}</b><small>vs driving</small></div>
-          <div class="kpi"><span>Low-car</span><b>${t.greenTrips}</b><small>of ${t.trips} logged</small></div>
-          <div class="kpi"><span>Not driving</span><b>${share}%</b><small>of trips</small></div>
+          <div class="kpi"><span>Saved</span><b>${savedText(t)}</b><small>${t.unknownSaved && t.unknownSaved < t.trips ? `vs driving · ${t.unknownSaved} unknown` : "vs driving"}</small></div>
+          <div class="kpi"><span>Trips</span><b>${t.trips}</b><small>planned</small></div>
+          <div class="kpi"><span>Not by car</span><b>${t.greenTrips}</b><small>of ${t.trips}</small></div>
         </div>
       </div>
       ${goalCard(month.co2)}
       ${equivalentCard(month.co2, t.co2)}
       ${streakCard(all)}
-      ${all.length ? `
         ${breakdownCard(all)}
-        ${barChart("co2", months, "co2", (v, axis) => (axis ? `${v < 1 && v > 0 ? v.toFixed(1) : Math.round(v)}` : kg(v)), "CO₂ avoided per month", "kg CO₂, last six months")}
-        ${barChart("saved", months, "saved", (v, axis) => (axis ? `$${Math.round(v)}` : money(v)), "Money saved per month", "Compared with driving, last six months")}
+        ${barChart("co2", months, "co2", (v, axis) => (axis ? `${v < 1 && v > 0 ? v.toFixed(1) : Math.round(v)}` : kg(v)), "Estimated CO₂ avoided per month", "kg CO₂, last six months")}
+        ${barChart("saved", months, "saved", (v, axis) => (axis ? `$${Math.round(v)}` : money(v)), "Money saved per month", "Compared with driving, last six months. Trips with an unknown cost are left out.")}
         <button class="btn btn-text" data-action="toggle-table">${state.dashTable ? "Hide table" : "Show as a table"}</button>
         ${table}
         <p class="section-header" style="margin-top:16px">Recent trips</p>
         <div class="group"><div class="group-card">${recent.map((trip) => row((KIND_ICON[trip.kind] || I.route)(16), SEGMENT_COLOUR[trip.kind] || "var(--accent)", `${esc(trip.title)}<small>${dateLabel(trip.date)} · ${trip.co2_saved > 0 ? `${kg(trip.co2_saved)} CO₂ avoided` : "no CO₂ saving"}</small>`, valueSpan(trip.cost_saved > 0 ? `+${money(trip.cost_saved)}` : ""), "trip-row")).join("")}</div></div>`
-      : `<div class="empty-card"><div class="empty-icon" style="--tone:var(--success)">${I.leaf(24)}</div><h3>No trips logged yet</h3><p>Choose a route and tap “I'm taking this trip” to start tracking your savings.</p></div>`}
+      : `<div class="empty-card"><div class="empty-icon" style="--tone:var(--success)">${I.leaf(24)}</div><h3>No trips logged yet</h3><p>Choose a route and tap “I'm taking this trip”. Reroute then estimates the CO₂ and money compared with driving the same trip alone, against ${goalText()} a month.</p></div>`}
       ${notice("Savings are estimates using the CO₂ factors and car settings in Settings. Your trip history stays on this device.", "info")}
     </div>`;
 }
@@ -2283,7 +2289,7 @@ function settingsContent() {
 
       <p class="section-header">Impact goal</p>
       <div class="group"><div class="group-card">
-        ${row(I.leaf(18), "var(--success)", "Monthly CO₂ goal<small>CO₂ avoided by the trips you log</small>", stepper("co2_goal_kg", s.co2_goal_kg, `${s.co2_goal_kg} kg`, 1, 200, "Monthly CO₂ goal in kilograms"))}
+        ${row(I.leaf(18), "var(--success)", `Monthly CO₂ goal<small>Estimated CO₂ avoided by the trips you log. Starts at the team's default of ${DEFAULT_SETTINGS.co2_goal_kg} kg</small>`, stepper("co2_goal_kg", s.co2_goal_kg, `${s.co2_goal_kg} kg`, 1, 200, "Monthly CO₂ goal in kilograms"))}
       </div><p class="group-footer">Drives the progress ring on the Impact Dashboard. The default of 10 kg a month is a starting point the team chose, not a recommended target.</p></div>
 
       <p class="section-header">CO₂ factors (kg per passenger-km)</p>
@@ -3154,7 +3160,7 @@ const actions = {
     });
     store.set("trips", trips.slice(-500));
     const month = impactTotals(thisMonthTrips());
-    toast(o.vs_drive?.co2_saved_kg > 0.005 ? `Logged. ${kg(o.vs_drive.co2_saved_kg)} CO₂ avoided. ${kgShort(month.co2)} so far this month.` : "Logged to your trips.");
+    toast(o.vs_drive?.co2_saved_kg > 0.005 ? `Added. About ${kg(o.vs_drive.co2_saved_kg)} less CO₂ than driving (estimate), ${kg(month.co2)} this month.` : "Added to your trips.");
     rerender();
   },
   replan: () => {

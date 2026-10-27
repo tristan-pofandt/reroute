@@ -1,7 +1,7 @@
 /* Reroute service worker: offline app shell, network-first API reads, and Web Push notifications. */
 "use strict";
 
-const VERSION = "planb-reroute-9"; // keep the planb- prefix: activate() deletes older planb- caches
+const VERSION = "planb-reroute-10"; // keep the planb- prefix: activate() deletes older planb- caches
 const SHELL = ["/", "/app.css", "/app.js", "/offline.js", "/favicon.svg", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
