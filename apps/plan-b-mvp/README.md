@@ -61,6 +61,9 @@ The deployment settings are documented in [`infra/plan-b-mvp/README.md`](../../i
 | `PLANB_PLACE_LIMIT_PER_HOUR` | Map place lookups ("Choose on map") per visitor address per hour, default 60 |
 | `PLANB_OFFLINE_LIMIT_PER_HOUR` | Offline area downloads per visitor address per hour, counted separately for the map (`/api/offline/map`) and the timetable (`/api/offline/transit`), default 6 each. Applies with or without a Google key; the developer's own machine is not limited |
 | `PLANB_DATA_DIR` | Where the ride board, push subscriptions, VAPID keys, the GTFS index and zip (about 37 MB in all) and the offline map cache (`offline/`, up to 20 areas of about 3 MB each) are written, default `data/` here |
+| `PLANB_ADMIN_TOKEN` | Secret that turns on the ride-board moderation queue at `/admin/moderation` (404 while unset). 32+ random characters, host secret only |
+| `PLANB_CSP_ENFORCE` | `1` (default) enforces the Content-Security-Policy; `0` makes it report-only (violations are logged as warnings) |
+| `PLANB_CORS_ORIGINS` | Comma list of origins allowed to call the API cross-origin, default none. Native app: `capacitor://localhost,https://localhost,ionic://localhost` |
 | `ACCOUNTS_SECRET_KEY` | Turns accounts on (32+ random characters; signs CSRF tokens, encrypts the Apple token). Unset: accounts are off and Reroute is guest-only |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_IOS_CLIENT_ID`, `GOOGLE_ANDROID_CLIENT_ID` | Google sign-in (web client; iOS and Android client IDs are comma-separated lists accepted by `/auth/native/google`) |
 | `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_CLIENT_ID`, `APPLE_BUNDLE_ID`, `APPLE_PRIVATE_KEY` or `APPLE_PRIVATE_KEY_FILE` | Sign in with Apple (Services ID, bundle IDs and the `.p8` key; never commit the key) |
@@ -136,7 +139,7 @@ The mapping from each rule and feature to what was built is in the [v3 feature l
 ### Sharing and sustainability
 
 - **Share / QR:** a Share sheet shows a QR code (from `GET /qr.svg`, which encodes `PUBLIC_URL` or the address the request came to), the link, a copy button and the system share sheet where available.
-- **Ride board:** offer car seats or start a split Uber. Posts match when the start is within 2 km, the destination is within 2.5 km and departure is within 45 minutes. It stores only rounded points, no contact details, expires 30 minutes after departure and is visible only to people using the same server.
+- **Ride board:** offer car seats or start a split Uber. Posts match when the start is within 2 km, the destination is within 2.5 km and departure is within 45 minutes. It stores only rounded points, no contact details, expires 30 minutes after departure and is visible only to people using the same server. It is stored in `data/rides.sqlite3` (an old `rides.json` is imported once and kept). Every post has Report and Block, posting needs an acknowledgement of the community rules, a word and contact-detail filter and per-poster rate limits apply, three reports hide a post, and an operator queue at `/admin/moderation` (needs `PLANB_ADMIN_TOKEN`) approves, removes or bans. See `docs/engineering/ride-board-moderation.md`.
 - **CO2 focus on results:** each option card has a dedicated CO2 line (for example "1.2 kg CO2 less than driving", with the trip's own figure against the same journey driven alone), the lowest-CO2 option carries an outline "Lowest CO2" badge, and one muted line above the cards says how the greenest option compares with driving. Arrival comes first (2026-10-27): the badge and that line consider only options that arrive on time (when a deadline is set) with no disruption, and say so when they leave others out. Options that miss the deadline or are disrupted show their CO2 as one muted line on the card and a neutral strip in the detail sheet. When no option meets every limit, one line above the cards says so and names the options that still arrive on time. Everything derives from the per-option estimate, the driving baseline and the factors in Settings; the card field can be hidden in Settings.
 - **CO2 on next steps and logging:** the next-steps screen states the trip's CO2 saving, and logging the trip ("I'm taking this trip") changes it into a success state with the new monthly total against the goal.
 - **Impact button and Impact Dashboard:** a leaf button in the home header shows this month's CO2 avoided and goes straight to the dashboard. With no trips logged it shows only the empty-state message. Otherwise it has a hero total labelled "Estimated CO₂ avoided", the money saved ("Unknown" when every logged saving is unknown), the trips planned and how many were not by car, a monthly CO2 goal with a progress ring (the team's default of 10 kg, named as such until changed in Settings), an "about the CO₂ of driving N km" line computed from your own car settings with the assumption stated, a weekly streak of finished weeks with no driving of your own car, a breakdown by mode, the six-month charts and recent trips. All numbers come from the trips logged on this device, which are planned trips, not checked travel (2026-10-27). History stays in the browser.
@@ -177,10 +180,13 @@ The server is now Flask. The design-system brief ([`design-system.md`](../../doc
 | `push.py` | Web Push subscriptions, VAPID keys and the background watch thread |
 | `limits.py` | Per-visitor hourly limits and the daily Google cap |
 | `demo_mode.py` | Demo option validation and simulated disruptions |
-| `rides.py` | Shared ride board storage and matching |
+| `rides.py` | Shared ride board storage (SQLite), matching, reports, blocks and bans |
+| `contentfilter.py`, `moderation/wordlist.txt` | Objectionable-content, link and contact-detail filter and its editable word list |
+| `moderation.py` | Poster ids and the operator moderation queue (`/admin/moderation`) |
+| `security.py` | Security headers and CSP, CORS allow-list, error and log hygiene (`docs/engineering/security.md`) |
 | `requirements.txt` | Python packages (Flask, pywebpush, cryptography, segno, gunicorn) |
 | `demo.html`, `demo.js`, `styles.css` | Unchanged fictional Bus 412 interview scenario |
-| `test_live_routes.py`, `test_gtfs_rt.py`, `test_rides.py` | v2 offline tests |
+| `test_live_routes.py`, `test_gtfs_rt.py`, `test_rides.py`, `test_moderation.py`, `test_security.py` | v2 offline tests, ride-board safety and security headers |
 | `test_gtfs_static.py`, `test_plan_v3.py`, `test_push_limits.py`, `test_realtime_v3.py`, `test_server.py`, `test_weather_traffic.py` | v3 offline tests |
 | `test_offline.py` | Offline tests for the area limits, the OpenStreetMap conversion, the timetable extract and the offline endpoints (fictional data, no network) |
 | `test_branding.py` | Checks that the old product name stays out of the user-visible files |
