@@ -58,7 +58,7 @@ function profileChange(menu, opened) {
       : { opacity: [1, 0], x: [0, 6], y: [0, -6], scale: [1, 0.95] },
     opened ? { default: { ...spring(), duration: DUR.menu * slow() }, opacity: { duration: DUR.fade * slow(), ease: EASE }, onComplete: done } : { duration: DUR.menuOut * slow(), ease: EASE, onComplete: done },
   ));
-  const timer = setTimeout(done, (opened ? 700 : 260) * slow()); // framer may not report completion for the mixed spring: never leave inline styles behind
+  const timer = setTimeout(done, (opened ? 560 : 260) * slow()); // framer may not report completion for the mixed spring: never leave inline styles behind
   const run = slide(opened ? items : items.reverse(), { x: 14, y: -10 }, { out: !opened, delay: opened ? 0.04 : 0, step: opened ? STAGGER_IN : STAGGER_CLOSE, cap: 5 });
   profile = { c, run, clean: () => { clearTimeout(timer); clean(); } };
 }

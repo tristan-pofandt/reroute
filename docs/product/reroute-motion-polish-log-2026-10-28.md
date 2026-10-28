@@ -33,3 +33,26 @@ Real phone touch and haptics; the route options scroll lean and list view by eye
 ## Deployment note
 
 `main` deploys with no build step. This branch needs `npm run build` in `web/` and a Docker build change before it can go live.
+
+## Motion audit against Emil Kowalski's rules
+
+Credit: Claude Sonnet 5.5 via Claude Code at T.P's request. Every animation was checked for purpose, frequency, easing, duration, interruptibility and reduced motion. The feel that was kept (staggered page exits and entries, line-by-line menu, scroll reveals, `layoutId` morphs, press and hover, ambient loops, haptics) is unchanged in character; the scroll reveal ranges and logic were not touched. The full table is in `apps/plan-b-mvp/web/README.md` ("Motion principles and timings").
+
+| Item | Before | After | Why |
+| --- | --- | --- | --- |
+| Page exit | 140 ms each, 30 ms stagger, cap 7, ease-in (about 320 ms) | 120 ms each, 20 ms stagger, cap 5, ease-out (about 200 ms) | Ease-in feels sluggish; faster exit |
+| Page entry | spring 500 ms bounce 0.24, 35 ms stagger, cap 10 | spring 400 ms bounce 0.12, 30 ms stagger, cap 7 | Cascade about 350 ms, no wobble |
+| Impact morph | spring 550 ms bounce 0.14 | spring 450 ms bounce 0.08 | Calmer and shorter |
+| Press release | 220 ms `backOut` | 160 ms ease-out | The overshoot was 0.3 %, invisible; retargets cleanly |
+| Hover lift | `backOut` 180 ms | ease-out 150 ms | One easing vocabulary |
+| Field focus pop | 0.985 to 1 elastic | removed | Frequent, carries no information |
+| Autocomplete rows | rise 200 ms with 28 ms stagger, replayed on every keystroke | none (the list still fades in once) | Fails the frequency test |
+| Profile menu | scale from 0.7, spring 420 ms, close to 0.85 in 140 ms ease-in | scale from 0.9, spring 360 ms, close to 0.95 in 120 ms ease-out | Closer to a 0.95 start |
+| Menu lines | cap 14, 35 ms stagger (up to 490 ms) | cap 9, 30 ms stagger | Whole menu in about 300 ms |
+| Dialog | 200 ms both ways, scale 0.94 with an overshoot curve | open 200-220 ms, close 140 ms, scale 0.95 | Asymmetric |
+| Icon and chevron springs (`--spring`) | cubic-bezier with 32 % overshoot | the calm 2 % `--ease-spring` | No wobble |
+| Chart bar stagger | 30 ms per bar, unbounded (700 ms for 24 bars) | capped at 8 steps | Short cascade |
+| Ambient loops | sway -5 to 6 deg, breathe 1.04, glow 0.75, refresh spin 0.8 s | sway 4 deg, 1.03, 0.6, spin 0.7 s; paused when scrolled out of view | Calmer, no hidden cost |
+| Splash | the page cascade starts after 760 ms | 680 ms | The mark is drawn by then |
+
+Checked in headless Chrome at 390 px (sampled frames, no paid APIs): home to the trip screen exit finished in about 250 ms including a tick haptic, menu rows all visible within about 300 ms, press reached 0.97 and release cleared the inline styles, Impact to dashboard settled with no leftover transforms, zero console errors. Not checked: a real phone, haptics, frame rate under load, reduced motion mid-flight after this change, the profile menu by eye, the Cards/List toggle by eye.

@@ -33,7 +33,7 @@ index.html -> src/main.jsx -> App.jsx
 
 ## Choreography (`src/choreography.js`)
 
-One file holds the timing and travel every element transition uses (pages, side menu, Settings, sheets, launch splash), so they share one feel: opacity eases out (`EASE`), position slides and settles with a short spring (`spring()`: 0.5 s, bounce 0.24), elements arrive 35 ms apart (`STAGGER_IN`) and leave 30 ms apart (`STAGGER_OUT`, 140 ms each), capped (`CAP` 10 entering, `CAP_OUT` 7 leaving: the rest share the last delay and fade with the group, so a leaving page clears in about 300 ms).
+One file holds the timing and travel every element transition uses (pages, side menu, Settings, sheets, launch splash), so they share one feel: everything eases out (`EASE`, never an ease-in), position slides and settles with a short spring (`spring()`: 0.4 s, bounce 0.12), elements arrive 30 ms apart (`STAGGER_IN`) and leave 20 ms apart (`STAGGER_OUT`, 120 ms each), capped (`CAP` 7 entering, `CAP_OUT` 5 leaving: the rest share the last delay and fade with the group, so a leaving page clears in about 200 ms and arrives in about 350 ms). All other durations are the `DUR` table; see "Motion principles and timings" below.
 
 - **Direction** (`useDirection()`, `getDirection()`, `setDirection()`; set by the router before it renders): `forward` leaves left and arrives from the right, `back` is the reverse, `up` (sheet-like) leaves down and arrives from below, `down` leaves down and arrives from just above. `travel(direction, "in" | "out")` gives the displacement.
 - **Native React elements**: `PAGE` variants sit on the page root (`hidden` / `show` / `exit`, `staggerChildren`); every `motion.*` element with `{...staggerProps(i)}` (or `<Item tag index>` from `shared.jsx`) inherits the label and slides in or out. Variants are functions, so direction, reduced motion and slow motion are read when an animation starts.
@@ -48,6 +48,32 @@ Elements that persist across screens carry a framer-motion `layoutId` (the route
 
 Rules: (1) a shared element is a `<Shared id>`, never an `<Item>`: it takes no part in its screen's stagger, the elements around it stagger. (2) A container that holds a shared element is not itself animated (it would carry the element away); its children are staggered individually instead. `legacyNode()` applies both rules when legacy HTML becomes React (`screens/home/tree.jsx`, `screens/trip/LegacyTree.jsx`); the hand-written screens (`Navbar`, weather, legal) apply them by hand. Legacy innerHTML screens (panic, nav, offline-area) cannot carry a `layoutId`, so their Back/Home simply slide with the rest. With `mode="wait"` the old page is gone before the new one mounts; framer keeps the old shared node's last box and the new node morphs from it, so the Impact button stays in place while everything else leaves and then grows into the lead figure.
 
+## Motion principles and timings
+
+Rules applied (after Emil Kowalski's design-engineering notes): animate only what the user benefits from seeing, and less the more often they do it; ease-out only (a custom quint, never `ease-in`); leaving is faster than arriving; feedback under 160 ms and everything else under about 350 ms; press 0.97, never scale from 0 (0.9-0.95 plus opacity); origin from the trigger; transform and opacity only; interruptible (CSS transitions and springs retarget, no restarting keyframes on things that re-render); stagger 20-30 ms, capped; reduced motion removes movement. The vocabulary lives in `choreography.js` (`EASE`, `DUR`, `spring()`, `MORPH()`, `LAYOUT`, `STAGGER_*`, `CAP*`); new code imports it instead of writing numbers.
+
+| Interaction | Timing | Why |
+| --- | --- | --- |
+| Screen change, exit | 120 ms per element, 20 ms stagger, cap 5 (about 200 ms total), ease-out | Fast exit: the user has already decided |
+| Screen change, entry | spring 400 ms bounce 0.12, opacity 200 ms, 30 ms stagger, cap 7 (last starts at 180 ms) | The cascade reads as one gesture; late elements no longer trail |
+| Layout morph (Impact <-> figure, Back, title) | spring 450 ms bounce 0.08 | Rare, spatially meaningful, calm |
+| Press / release | 140 ms / 160 ms to scale 0.97, ease-out | Immediate acknowledgement; release retargets from the current value |
+| Hover lift (fine mouse only) | 2 px, 150 ms | Touch never hovers |
+| Side menu / Settings / sheet panel | open 220 ms, close 160 ms (drawer curve); lines stagger 30 ms (cap 9 / 7 / 6), close 12 ms | Closing is faster than opening |
+| Profile menu | open spring 360 ms from scale 0.9 out of the avatar, close 120 ms to 0.95 | Origin-aware; was 0.7 |
+| Dialog | open 200-220 ms from scale 0.95, close 140 ms | Asymmetric |
+| Skeleton to content | 240 ms fade and 6 px rise, 30 ms stagger | Hides the swap |
+| Toast, autocomplete list, banners | 160-220 ms ease-out | Occasional |
+| Autocomplete rows | none | Re-rendered on every keystroke |
+| Field focus | none | Frequent, no information |
+| Cards/List toggle thumb, switches | 200 ms, `--ease-spring` (2 % overshoot) | State change |
+| Refresh button | 700 ms linear rotation while loading | Constant motion; faster reads as faster |
+| Ambient loops | 3.6-7 s, rotation up to 4 deg, scale up to 3 %, glow up to 0.6; paused off-screen, in hidden tabs and with reduced motion | Calm background life |
+| Splash | the mark draws, leaves at about 680 ms, and the first screen cascades in | Rare, authored |
+| Scroll reveals (`scroll3d.js`) | unchanged | Scrubbed by scroll, signed off |
+
+`settle(k)` in `choreography.js` is a fixed spring curve used only by the scroll reveals; it is deliberately independent of `spring()`, so changing the page spring never moves the scroll ranges. Pages and panels use framer-motion, which runs on the main thread, so a busy page can drop frames; the CSS-driven pieces (drawers, dialogs, ambient loops) stay on the compositor. Not measured on a real phone.
+
 ## Motion layer (`src/motion/`)
 
 One `MotionLayer` (mounted in `App.jsx`) owns every DOM-level effect. It uses delegated pointer/focus listeners on `document` plus one `MutationObserver` on `#viewport`, so it treats legacy HTML-string screens and native React screens identically. It uses the imperative `animate()` from framer-motion on DOM nodes and never touches React state.
@@ -55,8 +81,9 @@ One `MotionLayer` (mounted in `App.jsx`) owns every DOM-level effect. It uses de
 | File | What it does |
 | --- | --- |
 | `MotionLayer.jsx` | Installs/uninstalls everything. Reduced motion (system preference or `data-motion`, including flipping mid-session) stops every animation, removes every inline style the layer wrote (`fm.js` keeps the registry), and removes the `html.fm` class and `data-fm` markers; turning it off installs the layer again. |
-| `micro.js` | Press sinks to 0.97 (140 ms) and releases with a `backOut` overshoot (220 ms); hover lift only for a fine mouse; elastic settle on a field tapped into (not keyboard focus). Drives the CSS individual `scale` / `translate` properties, never `transform`. `motion.css` neutralises the CSS `:active` transform while `html.fm` is set so the two do not stack. |
+| `micro.js` | Press sinks to 0.97 (140 ms) and releases in 160 ms, both on `EASE` (no overshoot); hover lift only for a fine mouse. No animation on field focus (it fails the frequency test). Drives the CSS individual `scale` / `translate` properties, never `transform`. `motion.css` neutralises the CSS `:active` transform while `html.fm` is set so the two do not stack. |
 | `panels.js` | Menu / settings / sheet backdrops (class `open` toggled by `app.js`): the panel slides in CSS as before and the lines inside it slide in one after another from the panel's own side (menu from the left, line by line; Settings from the right; sheets from below) with the choreography spring and stagger. Closing slides the lines out first (bottom first) while the panel is held, then lets the panel go; a panel being dragged shut is left alone. Soft haptic (menu, settings) or snap (sheet). Busy buttons (`button.is-loading`) get the route-bend loader. A skeleton replaced by content cross-fades over 240 ms. |
+| `ambient.js` | Adds `.amb-off` to scroll blocks that leave the viewport (IntersectionObserver); `ambient.css` pauses every loop inside them. |
 | `scroll3d.js` | Every direct child block of `.scroll` / `.sheet-scroll` (and `.chart-card`) below the fold slides in from alternating sides and settles (`settle`), scrubbed by scroll progress (reverses on scroll back; ranges are clamped to the scrollable distance so the last block always seats). Blocks tilt (rotateX, max 7 deg) with scroll velocity and ease flat. A card seating gives `thud`. Chart bars grow (`scaleY`), `.hero-art` / `.kpi.lead` drift up and dim, `.kpi b` figures count up once when 30% visible. Opt out with `data-fm-off`; opt a custom native block in via `data-fm-reveal`. Blocks already on screen are staggered by the page choreography, not here. |
 | `launch.js` | Splash sequence: the first page is mounted but hidden under the splash; once the app is ready and the mark has drawn, the mark slides away with the page-leave motion, the backdrop fades and the first screen's elements stagger in (the `launched` promise gates `Page.jsx`). Reduced motion: no splash. |
 | `velocity.js` | The scroll velocity motion value (fed by Lenis and native touch scroll). |
