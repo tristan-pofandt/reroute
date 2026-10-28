@@ -132,6 +132,7 @@ If Apple cannot be reached, nothing is deleted and the person is told to try aga
 | `APPLE_DOMAIN_ASSOCIATION` (`_FILE`) | `/.well-known/apple-developer-domain-association.txt` |
 | `APPLE_APP_SITE_ASSOCIATION_JSON`, `ANDROID_ASSETLINKS_JSON` (`_FILE`) | Native deep-link association files |
 | `PLANB_DEV`, `ACCOUNTS_FAKE_PROVIDER` | Local testing only: auto-generated secret key and a fake provider. The fake provider cannot be enabled without `PLANB_DEV=1`. |
+| `PLANB_CORS_ORIGINS` | Native app origins (`capacitor://localhost,https://localhost,ionic://localhost`, comma list, exact match). Used by `security.py` for CORS headers **and** by the account routes' `Origin` check, so the native app can call `/auth/native/*` and `/api/account/*`. Empty by default. |
 | `PLANB_DATA_DIR` | Where `accounts.db` lives. It must be on a persistent disk or volume or accounts vanish on redeploy. |
 
 Values live only in the host's settings or a git-ignored `.env`; `.env.example` lists the names.
@@ -200,7 +201,7 @@ Use the real address of the deployment for `{PUBLIC_URL}`. The deployment note i
 
 ## Going native
 
-1. Add the Capacitor Google and Apple sign-in plugins (not added here: the native work belongs to the other agent and needs a Mac and devices). Each must create a fresh random nonce, pass it (Apple: its SHA-256) to the SDK and send `{id_token, nonce}` to `POST /auth/native/google` or `/apple` (Apple may also send `authorization_code` so the server can revoke later).
+1. **Done in code, untested on a device:** `web/src/native/auth.js` (lazy, `@capgo/capacitor-social-login`) makes a fresh random nonce, gives the SDK the nonce (Apple: its SHA-256) and returns `{idToken, nonce, authorizationCode}`. `web/src/accounts/store.js` calls it when `Capacitor.isNativePlatform()` and the server reports `native[provider]` in `/api/auth/providers`, POSTs `{id_token, nonce, authorization_code?}` to `/auth/native/google|apple`, keeps the returned bearer token in `localStorage` (`planb.nativeToken`; move it to Keychain/Keystore with a secure-storage plugin before release, as WebView storage can be cleared) and sends `Authorization: Bearer` on every call. The client IDs the SDK needs come from `native_config` in the same response (public values). Apple sign-in is not offered on Android (it needs the web flow); on the web the redirect flow is unchanged. `src/native/api.js` now rewrites `/auth/...` as well as `/api/...` to `VITE_API_BASE`. Set `PLANB_CORS_ORIGINS` on the server.
 2. Create a Google **iOS** client ID (bundle ID `au.reroute.app`) and a Google **Android** client ID (package name and the SHA-1 of the signing key, from Play App Signing for release builds) in Google Cloud. Put them in `GOOGLE_IOS_CLIENT_ID` and `GOOGLE_ANDROID_CLIENT_ID`. The Google SDK's `serverClientId` must be the **web** client ID so the token's audience is on the allowed list.
 3. Set `APPLE_BUNDLE_ID` to the app's bundle ID. The same token audience check applies.
 4. Serve `apple-app-site-association` and `assetlinks.json` through `APPLE_APP_SITE_ASSOCIATION_JSON` and `ANDROID_ASSETLINKS_JSON` if universal links or app links are used.

@@ -309,6 +309,29 @@ class Native(unittest.TestCase):
         self.assertEqual(last.status_code, 429)
         self.assertIn("Retry-After", last.headers)
 
+    def test_native_origin_needs_the_cors_list(self):
+        origin = {"Origin": "capacitor://localhost"}
+        app, _, http, _ = build()
+        refused = app.test_client().post("/auth/native/google", json={"id_token": http.mint(nonce="n" * 24, aud="g-ios"), "nonce": "n" * 24}, headers=origin, base_url=PUBLIC)
+        self.assertEqual(refused.status_code, 403)
+        app, _, http, _ = build({**ENV, "PLANB_CORS_ORIGINS": "https://localhost, capacitor://localhost/"})
+        client = app.test_client()
+        for index, header in enumerate((origin, {"Origin": "https://localhost"})):
+            nonce = f"{index}" * 24
+            ok = client.post("/auth/native/google", json={"id_token": http.mint(nonce=nonce, aud="g-ios"), "nonce": nonce}, headers=header, base_url=PUBLIC)
+            self.assertEqual(ok.status_code, 200, header)
+        bearer = {"Authorization": "Bearer " + ok.get_json()["token"], **origin}
+        self.assertEqual(app.test_client().put("/api/account/data/settings", json={"version": 0, "value": {"a": 1}}, headers=bearer, base_url=PUBLIC).status_code, 200)
+        evil = app.test_client().post("/auth/native/google", json={"id_token": http.mint(nonce="e" * 24), "nonce": "e" * 24}, headers={"Origin": "https://evil.example"}, base_url=PUBLIC)
+        self.assertEqual(evil.status_code, 403)
+
+    def test_providers_tell_the_native_app_which_client_ids_to_use(self):
+        app, *_ = build()
+        found = app.test_client().get("/api/auth/providers").get_json()
+        self.assertEqual(found["native_config"], {"google": {"web_client_id": "g-web", "ios_client_id": "g-ios"}})
+        app, *_ = build({"ACCOUNTS_SECRET_KEY": SECRET})
+        self.assertEqual(app.test_client().get("/api/auth/providers").get_json()["native_config"], {})
+
     def test_unconfigured_native_provider_is_not_found(self):
         app, *_ = build({"ACCOUNTS_SECRET_KEY": SECRET})
         self.assertEqual(app.test_client().post("/auth/native/google", json={}).status_code, 404)

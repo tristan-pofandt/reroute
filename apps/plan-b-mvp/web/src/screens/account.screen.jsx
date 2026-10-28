@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Navbar } from "./legal/Chrome.jsx";
 import { Item, Shared } from "../shared.jsx";
-import { AUTH_ERRORS, useAccount } from "../accounts/store.js";
+import { AUTH_ERRORS, canSignIn, useAccount } from "../accounts/store.js";
 import "../accounts/account.css";
 
 const NAMES = { google: "Google", apple: "Apple", fake: "the test provider" };
@@ -79,7 +79,7 @@ function SignedIn({ account }) {
 
 function SignedOut({ account }) {
   const { providers } = account;
-  const shown = ["google", "apple"].filter((name) => providers[name]);
+  const shown = ["google", "apple"].filter((name) => canSignIn(account, name));
   return (
     <>
       <Item tag="p" className="subtitle" index={2}>Reroute works fully without an account. Signing in is optional.</Item>
@@ -89,8 +89,8 @@ function SignedOut({ account }) {
       <Item tag="p" index={6}>Your name and email address from Google or Apple, an ID from that provider, your sign-in times, and the data you sync. No passwords, no ads, no tracking. You can download or delete all of it at any time.</Item>
       {account.enabled && (shown.length > 0 || providers.fake) ? (
         <Item className="acct-signin" index={7}>
-          {providers.google && <button className="acct-brand acct-google" onClick={() => account.signIn("google")}><GoogleG /><span>Continue with Google</span></button>}
-          {providers.apple && <button className="acct-brand acct-apple" onClick={() => account.signIn("apple")}><AppleMark /><span>Sign in with Apple</span></button>}
+          {shown.includes("google") && <button className="acct-brand acct-google" disabled={account.busy} onClick={() => account.signIn("google")}><GoogleG /><span>Continue with Google</span></button>}
+          {shown.includes("apple") && <button className="acct-brand acct-apple" disabled={account.busy} onClick={() => account.signIn("apple")}><AppleMark /><span>Sign in with Apple</span></button>}
           {providers.fake && <button className="btn btn-secondary acct-fake" onClick={() => account.signIn("fake")}>Test sign-in (development only)</button>}
         </Item>
       ) : (

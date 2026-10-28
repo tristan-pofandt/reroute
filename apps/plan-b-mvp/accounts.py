@@ -515,9 +515,12 @@ def blueprint(acct, limits=None):
                     g.acct_renew = int(acct.clock()) + SESSION_DAYS * 86400
         return g.acct
 
+    # The native app's origins (capacitor://localhost, https://localhost) are the same list security.py uses for CORS.
+    native_origins = {item.strip().rstrip("/").lower() for item in acct.env.get("PLANB_CORS_ORIGINS", "").split(",") if item.strip()}
+
     def origin_ok():
         origin = request.headers.get("Origin")
-        if not origin:
+        if not origin or origin.rstrip("/").lower() in native_origins:
             return True
         allowed = {request.host.lower()}
         if acct.public_url:
@@ -584,7 +587,10 @@ def blueprint(acct, limits=None):
         names = {name: acct.web_ready(name) for name in ("google", "apple")}
         if acct.fake:
             names["fake"] = True
-        return reply({"enabled": acct.enabled, "providers": names, "native": {name: acct.native_ready(name) for name in ("google", "apple")}})
+        native = {name: acct.native_ready(name) for name in ("google", "apple")}
+        first = lambda key: acct.env.get(key, "").split(",")[0].strip()  # client IDs are public (they appear in the sign-in URL)
+        config = {"google": {"web_client_id": acct.providers["google"].web_client or "", "ios_client_id": first("GOOGLE_IOS_CLIENT_ID")}} if native["google"] else {}
+        return reply({"enabled": acct.enabled, "providers": names, "native": native, "native_config": config})
 
     @bp.get("/api/me")
     def me():

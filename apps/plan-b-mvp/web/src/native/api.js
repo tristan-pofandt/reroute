@@ -6,7 +6,7 @@ export function setupApiBase() {
   if (!BASE) return console.warn("[native] VITE_API_BASE not set: API calls will fail. Build with npm run build:native.");
   const orig = window.fetch.bind(window);
   window.fetch = (input, init) => {
-    if (typeof input === "string" && input.startsWith("/api/")) input = BASE + input;
+    if (typeof input === "string" && /^\/(api|auth)\//.test(input)) input = BASE + input; // /auth/native/* is the sign-in call
     return orig(input, init);
   };
   window.__REROUTE_API_BASE__ = BASE;

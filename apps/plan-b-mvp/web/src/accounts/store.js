@@ -7,8 +7,9 @@
 // (the server's copy wins ties and the answer says what happened), a stale write comes back as a conflict, and the person chooses.
 import { useSyncExternalStore } from "react";
 import { KEYS, readLocal, same, writeLocal } from "./adapter.js";
+import { isNative, platform } from "../native/platform.js";
 
-const SYNC_KEY = "planb.acct.sync";
+const SYNC_KEY = "planb.acct.sync", TOKEN_KEY = "planb.nativeToken"; // native only: the bearer token (a cookie may not survive in a WebView on another origin)
 const DEBOUNCE_MS = 2000, TICK_MS = 5000, PULL_MS = 60000;
 
 // What the page was opened with: the redirect back from a provider adds ?signed_in=1 or ?auth_error=<code>. Read once, then removed.
@@ -29,7 +30,7 @@ export const AUTH_ERRORS = {
   failed: "Sign-in could not be verified. Please try again.",
 };
 
-let state = { status: "loading", enabled: false, providers: {}, user: null, csrf: null, reauth: false, landing,
+let state = { status: "loading", enabled: false, providers: {}, native: {}, nativeConfig: {}, user: null, csrf: null, reauth: false, landing,
   sync: { state: "off", at: null }, conflicts: {}, notice: null, busy: false, error: null };
 const subs = new Set();
 const set = (patch) => { state = { ...state, ...patch }; subs.forEach((f) => f()); publish(); };
@@ -46,7 +47,8 @@ function publish() {
 // ── Talking to the server ───────────────────────────────────────────────────
 
 async function call(path, { method = "GET", body } = {}) {
-  const headers = {};
+  const headers = {}, token = nativeToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (method !== "GET" && state.csrf) headers["X-CSRF-Token"] = state.csrf;
   const response = await fetch(path, { method, headers, credentials: "same-origin", cache: "no-store", body: body === undefined ? undefined : JSON.stringify(body) });
@@ -69,7 +71,8 @@ export async function refresh() {
     const [providers, me] = await Promise.all([call("/api/auth/providers"), call("/api/me")]);
     if (!providers.ok || !me.ok) throw new Error("unavailable");
     const user = me.json.signed_in ? me.json.user : null;
-    set({ status: "ready", error: null, enabled: !!providers.json.enabled, providers: providers.json.providers || {}, user, csrf: me.json.csrf || null,
+    set({ status: "ready", error: null, enabled: !!providers.json.enabled, providers: providers.json.providers || {}, native: providers.json.native || {},
+      nativeConfig: providers.json.native_config || {}, user, csrf: me.json.csrf || null,
       reauth: !!me.json.reauth_required, sync: user ? state.sync : { state: "off", at: null } });
     if (user) startSync(); else stopSync();
   } catch {
@@ -79,22 +82,45 @@ export async function refresh() {
 
 // ── Actions ─────────────────────────────────────────────────────────────────
 
-// A full-page redirect (works in an installed PWA and in a WebView); the server brings the person back to `next` afterwards.
+const nativeToken = () => { try { return isNative() ? localStorage.getItem(TOKEN_KEY) : null; } catch { return null; } };
+const setNativeToken = (token) => { try { token ? localStorage.setItem(TOKEN_KEY, token) : localStorage.removeItem(TOKEN_KEY); } catch { /* blocked: the person signs in again next time */ } };
+
+// Whether a button should show: on web the redirect flow must be configured; in the store apps the platform SDK flow must be (no Apple on Android).
+export const canSignIn = (s, name) => (isNative() ? !!s.native?.[name] && !(name === "apple" && platform() === "android") : !!s.providers?.[name]);
+
+// Native: ask the platform SDK for an ID token and trade it for a bearer token. Web: a full-page redirect (works in an installed PWA); the server brings the person back to `next`.
+async function nativeSignIn(provider) {
+  set({ busy: true, error: null });
+  try {
+    const got = await (await import("../native/auth.js")).signIn(provider, state.nativeConfig);
+    if (!got.idToken) throw new Error("cancelled");
+    const reply = await call(`/auth/native/${provider}`, { method: "POST", body: { id_token: got.idToken, nonce: got.nonce, ...(got.authorizationCode ? { authorization_code: got.authorizationCode } : {}) } });
+    if (!reply.ok || !reply.json.token) throw new Error(reply.json.error || "failed");
+    setNativeToken(reply.json.token);
+    await refresh();
+    set({ busy: false });
+  } catch (error) {
+    const cancelled = /cancel/i.test(String(error?.message));
+    set({ busy: false, error: cancelled ? AUTH_ERRORS.cancelled : AUTH_ERRORS.failed });
+  }
+}
+
 export function signIn(provider, next = location.pathname + location.search) {
+  if (isNative() && state.native[provider]) return nativeSignIn(provider);
   location.assign(`/auth/${encodeURIComponent(provider)}/login?next=${encodeURIComponent(next)}`);
 }
 
 export async function signOut() {
   set({ busy: true });
   const reply = await call("/auth/logout", { method: "POST", body: {} }).catch(() => null);
-  if (reply?.ok) { stopSync(); forget(); set({ user: null, csrf: null, busy: false, conflicts: {}, notice: null, sync: { state: "off", at: null } }); }
+  if (reply?.ok) { setNativeToken(null); stopSync(); forget(); set({ user: null, csrf: null, busy: false, conflicts: {}, notice: null, sync: { state: "off", at: null } }); }
   else set({ busy: false, error: "Could not sign out. Try again." });
 }
 
 export async function deleteAccount() {
   set({ busy: true, error: null });
   const reply = await call("/api/account/delete", { method: "POST", body: { confirm: "delete" } }).catch(() => null);
-  if (reply?.ok) { stopSync(); forget(); set({ user: null, csrf: null, busy: false, conflicts: {}, notice: "deleted", sync: { state: "off", at: null } }); return true; }
+  if (reply?.ok) { setNativeToken(null); stopSync(); forget(); set({ user: null, csrf: null, busy: false, conflicts: {}, notice: "deleted", sync: { state: "off", at: null } }); return true; }
   if (reply?.json?.reauth) { set({ busy: false, reauth: true }); return false; }
   set({ busy: false, error: reply?.json?.error || "Could not delete the account. Nothing was deleted; try again." });
   return false;
