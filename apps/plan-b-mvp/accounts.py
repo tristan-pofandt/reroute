@@ -614,6 +614,11 @@ def blueprint(acct, limits=None):
                 text = Path(file).read_text(encoding="utf-8")
             except OSError:
                 text = ""
+        if entry and entry[1] == "application/json":
+            try:
+                json.loads(text)
+            except ValueError:  # an unset or mangled variable must not be served to Apple or Google as if it were the file
+                text = ""
         if not text.strip():
             return Response("Not found.", 404, mimetype="text/plain")
         return Response(text.replace("\\n", "\n") if entry[1].startswith("text/plain") else text, mimetype=entry[1].split(";")[0], headers={"Cache-Control": "public, max-age=3600"})

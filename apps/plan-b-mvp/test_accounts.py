@@ -466,6 +466,24 @@ class AccountApi(unittest.TestCase):
         self.assertEqual(client.get("/.well-known/assetlinks.json").status_code, 404)  # not configured
         self.assertEqual(client.get("/.well-known/passwd").status_code, 404)
 
+    def test_association_files_are_json_without_redirects_even_when_accounts_are_off(self):
+        aasa = '{"applinks": {"details": [{"appIDs": ["TEAM.au.reroute.app"], "components": [{"/": "/*"}]}]}}'
+        links = '[{"relation": ["delegate_permission/common.handle_all_urls"], "target": {"namespace": "android_app", "package_name": "au.reroute.app"}}]'
+        env = {"APPLE_APP_SITE_ASSOCIATION_JSON": aasa, "ANDROID_ASSETLINKS_JSON": links}
+        for name, extra in (("on", ENV), ("off", {})):  # the files do not depend on ACCOUNTS_SECRET_KEY
+            app, *_ = build({**extra, **env})
+            client = app.test_client()
+            for path, want in (("/.well-known/apple-app-site-association", aasa), ("/.well-known/assetlinks.json", links)):
+                reply = client.get(path)
+                self.assertEqual((reply.status_code, reply.mimetype, json.loads(reply.get_data(as_text=True))), (200, "application/json", json.loads(want)), (name, path))
+                self.assertNotIn("Location", reply.headers)
+            self.assertEqual(client.get("/.well-known/apple-developer-domain-association.txt").status_code, 200 if name == "on" else 404)
+
+    def test_a_broken_association_variable_is_not_served(self):
+        app, *_ = build({**ENV, "ANDROID_ASSETLINKS_JSON": "not json", "APPLE_APP_SITE_ASSOCIATION_JSON": "   "})
+        client = app.test_client()
+        self.assertEqual([client.get(f"/.well-known/{n}").status_code for n in ("assetlinks.json", "apple-app-site-association")], [404, 404])
+
     def test_public_deletion_page_needs_no_script_or_sign_in(self):
         app, *_ = build({"ACCOUNTS_SECRET_KEY": SECRET})
         reply = app.test_client().get("/account/delete")

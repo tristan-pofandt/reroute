@@ -7,6 +7,9 @@ FROM node:22-slim AS web
 WORKDIR /web
 COPY apps/plan-b-mvp/web/package.json apps/plan-b-mvp/web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
+# Same value as stage 2, so the front-end release tag (crash reports, analytics) matches /healthz.
+ARG GIT_SHA=dev
+ENV GIT_SHA=$GIT_SHA
 COPY apps/plan-b-mvp/web/ ./
 RUN npm run build
 
