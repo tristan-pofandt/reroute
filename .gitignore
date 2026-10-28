@@ -35,3 +35,7 @@ docs/discovery/interviews/raw transcripts/
 
 # Plan B MVP local ride-board store
 apps/plan-b-mvp/data/
+
+# Personal Claude Code context (per user and computer)
+CLAUDE.local.md
+.claude/settings.local.json
