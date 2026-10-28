@@ -634,7 +634,7 @@ function homeScreen() {
       <p class="section-header">Right now</p>
       ${weatherCard()}
       <div class="tile-wrap"><button class="tile-card" data-action="open-alerts">
-        <div class="tile-head"><h3>${state.alerts ? `<span class="live-dot"></span>` : ""}Translink right now</h3>${I.chevronRight()}</div>
+        <div class="tile-head"><h3 role="heading" aria-level="2">${state.alerts ? `<span class="live-dot"></span>` : ""}Translink right now</h3>${I.chevronRight()}</div>
         ${state.alertsError ? `<p class="hint">${esc(state.alertsError)}</p>`
           : !state.alerts ? skelLines("Checking live service alerts", 80, 60)
           : alerts.length ? `<div class="alert-list-mini">${alerts.slice(0, 3).map((a) => `<p>${a.lines.slice(0, 2).map((l) => `<span class="line-tag">${esc(l)}</span>`).join("")}<span>${esc(a.header)}</span></p>`).join("")}</div>
@@ -644,7 +644,7 @@ function homeScreen() {
       ${syncCard()}</div>
       <p class="section-header">Impact and sharing</p>
       <button class="tile-card" data-action="go" data-screen="dashboard">
-        <div class="tile-head"><h3><span class="leaf-sway">${I.leaf(16)}</span>Your impact this month</h3>${I.chevronRight()}</div>
+        <div class="tile-head"><h3 role="heading" aria-level="2"><span class="leaf-sway">${I.leaf(16)}</span>Your impact this month</h3>${I.chevronRight()}</div>
         <div class="stat-row">
           <div class="stat"><b>${kg(impact.co2)}</b><span>est. CO₂ avoided</span></div>
           <div class="stat"><b>${savedText(impact)}</b><span>saved vs driving</span></div>
@@ -652,7 +652,7 @@ function homeScreen() {
         </div>
       </button>
       <button class="tile-card" data-action="go" data-screen="rides">
-        <div class="tile-head"><h3>${I.users(16)}Shared rides</h3>${I.chevronRight()}</div>
+        <div class="tile-head"><h3 role="heading" aria-level="2">${I.users(16)}Shared rides</h3>${I.chevronRight()}</div>
         <p class="hint">${myRides ? `You're in ${plural(myRides, "shared ride")}.` : "Disrupted with lots of others? Share a car or split an Uber with people heading your way."}</p>
       </button>
       <p class="section-header">Get the app</p>
@@ -1058,7 +1058,7 @@ function sortedOptions() {
   return list.sort(by);
 }
 
-const ridesTile = (title, text) => `<button class="tile-card" data-action="go" data-screen="rides"><div class="tile-head"><h3>${I.users(16)}${title}</h3>${I.chevronRight()}</div><p class="hint">${text}</p></button>`;
+const ridesTile = (title, text) => `<button class="tile-card" data-action="go" data-screen="rides"><div class="tile-head"><h3 role="heading" aria-level="2">${I.users(16)}${title}</h3>${I.chevronRight()}</div><p class="hint">${text}</p></button>`;
 
 function resultsScreen() {
   const p = state.plan;
@@ -1067,7 +1067,7 @@ function resultsScreen() {
   const options = sortedOptions();
   const fit = options.filter((o) => o.fits).length;
   const unpriced = options.filter((o) => o.fits && !o.cost_known).length;
-  const chips = `<div class="chips">
+  const chips = `<div class="chips" tabindex="0" role="group" aria-label="Trip summary">
       ${p.deadline ? `<span class="chip">${I.clock(14)}By ${timeOf(p.deadline)}</span>` : ""}
       <span class="chip">${I.dollar(14)}$${f.budget} max</span>
       <span class="chip">${I.walk(14)}${f.walking} min walk</span>
@@ -4320,6 +4320,8 @@ async function savedPlacesFor(bbox) {
   }
   return out;
 }
+// "0-5", "5-25", "25+": a bucket label for analytics (cut points ascending), never the raw number.
+const bandOf = (n, cuts) => { const i = cuts.findIndex((c) => n < c); return i < 0 ? `${cuts.at(-1)}+` : `${i ? cuts[i - 1] : 0}-${cuts[i]}`; };
 async function downloadArea() {
   const lim = offlineLimits(), z = area.sizeKm, bbox = area.bbox;
   if (!bbox || !z) return;
@@ -4332,6 +4334,10 @@ async function downloadArea() {
   }
   offline.download = { busy: true, progress: { step: "map" }, error: null };
   rerenderArea();
+  const startedAt = Date.now();
+  // Reported on completion (success or failure), as buckets only; the analytics layer drops it unless the person opted in.
+  const report = (success, bytes = 0) => document.dispatchEvent(new CustomEvent("reroute:track", { detail: { event: "offline_area_downloaded", props: {
+    success, area_km2_band: bandOf(z.w * z.h, [5, 25, 100]), size_mb_band: bandOf(bytes / 1048576, [5, 25, 100]), duration_s_band: bandOf((Date.now() - startedAt) / 1000, [10, 30, 120]) } } }));
   try {
     const pack = await RerouteOffline.download(bbox, { days: offline.days, onProgress: (p) => { offline.download.progress = p; setHTML(currentPage?.querySelector("[data-area-progress]"), areaProgressInner()); } });
     offline.download.progress = { step: "saving" };
@@ -4347,9 +4353,11 @@ async function downloadArea() {
     offline.summary = RerouteOffline.packSummary(pack);
     RerouteOffline.setActivePack(pack);
     offline.download = null;
+    report(true, offline.summary.bytes || 0);
     toast(`Saved for offline use: ${pack.label} (${mb(offline.summary.bytes)}).`);
     goBack();
   } catch (error) {
+    report(false);
     offline.download = { busy: false, error: error.message || "The download failed. Try again." };
     rerenderArea();
   }

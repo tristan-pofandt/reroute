@@ -1287,6 +1287,8 @@ html[data-text="large"] .row > .segmented, html[data-text="large"] .row > .stepp
 html[data-text="large"] .stat-row, html[data-text="large"] .btn-row { grid-template-columns: 1fr; }
 html[data-text="large"] .panic-top, html[data-text="large"] .panic-by, html[data-text="large"] .navbar { flex-wrap: wrap; row-gap: 8px; }
 html[data-text="large"] .segmented button { padding: 0 6px; }
+html[data-text="large"] .area-days { flex-wrap: wrap; row-gap: 8px; }
+html[data-text="large"] .area-days .segmented { flex: 1 1 100%; }
 html[data-text="large"] .big-arrival { flex-wrap: wrap; gap: 8px 16px; }
 html[data-text="large"] .wx-now { flex: 1 1 8rem; }
 html[data-text="large"] .wx-main, html[data-text="large"] .wx-head { flex-wrap: wrap; }

@@ -13,7 +13,6 @@ const CLICK = {
   "ride-join": () => ["ride_joined", {}],
   "ride-create": () => ["ride_offered", {}],
   "panic-go": (el) => ["panic_option_chosen", { mode: el.dataset.mode }],
-  "offline-download": () => ["offline_area_downloaded", {}], // fired when the download is requested, not when it finishes (documented)
   "copy-link": () => ["invite_shared", { channel: "link" }],
   "share-native": () => ["invite_shared", { channel: "share_sheet" }],
   "toggle-cost": (el) => ["driving_cost_viewed", { visible: el.getAttribute("aria-pressed") !== "true" }],

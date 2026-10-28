@@ -13,6 +13,7 @@ describe("schema allow-list", () => {
     expect(clean("__proto__", {})).toBeNull();
     expect(clean("trip_planned", { origin_kind: "gps", address: "1 Main St", dest_kind: "somewhere" })).toEqual({ origin_kind: "gps" });
     expect(clean("trip_logged", { distance_band: "free text with spaces and an address" })).toEqual({});
+    expect(clean("offline_area_downloaded", { success: true, area_km2_band: "5-25", size_mb_band: "25+", duration_s_band: "0-10" })).toEqual({ success: true, area_km2_band: "5-25", size_mb_band: "25+", duration_s_band: "0-10" });
   });
   it("never allows a property that looks like PII", () => {
     const bad = /^(email|name|address|lat|lng|coords?|place|query|text|token|endpoint|note)$|_(name|address|text)$/;
