@@ -297,6 +297,9 @@ class Push:
         identifier = self.identifier(endpoint) if isinstance(endpoint, str) else None
         with self._lock:
             entry = self._subscriptions.get(identifier)
+            if not entry and identifier:  # the native app passes its FCM token as the endpoint
+                identifier = "n" + identifier
+                entry = self._subscriptions.get(identifier)
         if not entry:
             raise PushError("Turn on notifications for a trip first.", 404)
         label = entry["watch"]["label"] or (entry["watch"]["lines"] or ["your trip"])[0]

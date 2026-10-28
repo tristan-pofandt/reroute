@@ -13,6 +13,7 @@ export async function initNative() {
   safe(import("./geolocation.js").then((m) => m.install()));
   safe(import("./network.js").then((m) => m.install()));
   safe(import("./deeplinks.js").then((m) => m.install()));
+  safe(import("./push.js").then((m) => m.install()));
   safe(import("./share.js").then((m) => m.install()));
   safe(import("./chrome.js").then((m) => m.install(theme, DARK, LIGHT)));
 }

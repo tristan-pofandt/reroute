@@ -14,14 +14,18 @@ export function toRoute(url) {
   return null;
 }
 
+export function openRoute(route, url = route) {
+  history.pushState({}, "", route);
+  window.dispatchEvent(new PopStateEvent("popstate")); // react-router listens to popstate
+  window.dispatchEvent(new CustomEvent("reroute:deeplink", { detail: { url, route } }));
+}
+
 export function install() {
   App.addListener("appUrlOpen", ({ url }) => {
     const route = toRoute(url);
     if (!route) return;
     import("@capacitor/browser").then((m) => m.Browser.close()).catch(() => {});
-    history.pushState({}, "", route);
-    window.dispatchEvent(new PopStateEvent("popstate")); // react-router listens to popstate
-    window.dispatchEvent(new CustomEvent("reroute:deeplink", { detail: { url, route } }));
+    openRoute(route, url);
   });
   if (platform() === "android") App.addListener("backButton", ({ canGoBack }) => (canGoBack ? history.back() : App.minimizeApp()));
 }

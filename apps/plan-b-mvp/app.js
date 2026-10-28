@@ -3387,6 +3387,7 @@ const actions = {
   sort: (el) => { state.sort = el.dataset.value; rerender(); currentPage.querySelector(`[data-action="sort"][data-value="${state.sort}"]`)?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" }); },
   "open-sheet": (el) => { const o = findOption(el.dataset.id); if (o) { openSheet(sheetContent(o)); sheetEl.dataset.option = o.id; } },
   "close-sheet": () => closeSheet(),
+  "prime-answer": (el) => { const done = primeDone; closeSheet(); done?.(!!el.dataset.yes); },
   backdrop: (el, event) => { if (event.target === el) closeSheet(); },
   "map-overview": () => openSheet(`<div class="grabber"><span></span></div><div class="sheet-head"><h3 id="sheet-title">All routes</h3>${sheetClose()}</div><div class="sheet-scroll">${mapBlock("__all", "The first option in the list is drawn strongest. Tap a line for details.")}</div>`),
   choose: (el) => {
@@ -3996,6 +3997,11 @@ function pushSupport() {
   return null;
 }
 async function subscribePush(watch) {
+  if (window.rerouteNativePush) { // the native app (FCM): src/native/push.js shows our priming sheet before the OS prompt
+    const r = await window.rerouteNativePush.enable(watch, pushPrimeSheet);
+    if (!r.ok) throw new Error(r.message);
+    return { id: r.id, endpoint: r.token };
+  }
   const problem = pushSupport();
   if (problem) throw new Error(problem);
   const permission = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
@@ -4031,6 +4037,23 @@ function bgSlotInner() {
   return bg?.msg ? notice(esc(bg.msg.text), bg.msg.kind) : "";
 }
 const renderBg = () => { const el = currentPage?.querySelector("[data-bg-slot]"); if (el) el.innerHTML = bgSlotInner(); };
+// Our own explanation before the one-time OS prompt. Resolves true for "Turn on alerts", false for "Not now" or any other way of closing the sheet.
+let primeDone = null;
+function pushPrimeSheet() {
+  return new Promise((resolve) => {
+    openSheet(`<div class="grabber"><span></span></div>
+      <div class="sheet-head"><h3 id="sheet-title">Get disruption alerts?</h3>${sheetClose()}</div>
+      <div class="sheet-scroll"><p>Reroute can tell you when Translink posts a disruption or cancels a service on the trip you're watching, even when the app is closed. Next, your phone will ask to allow notifications.</p>
+        <p class="fine">You only get alerts for trips you choose to watch. Everything else in Reroute works without them.</p>
+        <button class="btn btn-primary" data-action="prime-answer" data-yes="1">${I.bell(16)}Turn on alerts</button>
+        <button class="btn btn-text" data-action="prime-answer">Not now</button></div>`);
+    const el = sheetEl, done = (yes) => { clearInterval(timer); primeDone = null; resolve(yes); };
+    const timer = setInterval(() => { if (!el.isConnected) done(false); }, 300);
+    primeDone = done;
+  });
+}
+window.addEventListener("reroute:push-received", (e) => toast(`${e.detail.title}. ${e.detail.body}`.trim(), "warning"));
+window.addEventListener("reroute:open-alternatives", (e) => openAlternatives(e.detail));
 async function bgWatchToggle(box) {
   const o = findOption(state.chosenId), on = box.checked;
   if (!o) return;
@@ -4057,6 +4080,7 @@ async function endBgWatch() {
   const b = store.get("bgwatch", null);
   if (!b) return;
   store.set("bgwatch", null);
+  if (window.rerouteNativePush) return window.rerouteNativePush.disable();
   await postJSON("/api/push/unsubscribe", { endpoint: b.endpoint }).catch(() => {});
   try { await (await navigator.serviceWorker.ready).pushManager.getSubscription().then((sub) => sub?.unsubscribe()); } catch { /* nothing to remove */ }
 }
