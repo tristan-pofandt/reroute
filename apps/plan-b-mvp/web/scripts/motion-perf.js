@@ -9,7 +9,7 @@
 //   impact: samples the Impact button / dashboard lead figure (opacity, painted x and y) after every frame and reports whether the path is
 //           monotonic (one direction, no flash) for home <-> results / weather / menu / dashboard, with and without a seeded trip.
 async (page) => {
-  const CFG = { base: "http://127.0.0.1:9101/", cpu: 1, mode: "busy", only: "", seed: false, fixture: "C:/Users/tpofa/OneDrive/UQ/Semester 2 2026/COMP1100/COMP1100-45_Kai/apps/plan-b-mvp/web/scripts/plan.fixture.json" };
+  const CFG = { base: "http://127.0.0.1:9101/", cpu: 1, mode: "busy", only: "", seed: false, fixture: "C:/dev/COMP1100-45_Kai/apps/plan-b-mvp/web/scripts/plan.fixture.json" };
   Object.assign(CFG, globalThis.BENCH_CFG || {});
   const ctx = page.context(), cdp = await ctx.newCDPSession(page);
   const sleep = (ms) => page.waitForTimeout(ms);

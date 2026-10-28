@@ -12,7 +12,7 @@
 //   * pageMounted / pageSettled / rerender durations and the time of every `reroute:rerender`
 
 async (page) => {
-  const CFG = { base: "http://127.0.0.1:9031/", cpu: 1, only: "", fixture: "C:/Users/tpofa/OneDrive/UQ/Semester 2 2026/COMP1100/COMP1100-45_Kai/apps/plan-b-mvp/web/scripts/plan.fixture.json", raw: "", css: "" };
+  const CFG = { base: "http://127.0.0.1:9031/", cpu: 1, only: "", fixture: "C:/dev/COMP1100-45_Kai/apps/plan-b-mvp/web/scripts/plan.fixture.json", raw: "", css: "" };
   Object.assign(CFG, globalThis.BENCH_CFG || {}); // the wrapper sets e.g. globalThis.BENCH_CFG = { cpu: 4, only: "menu", raw: "results:2" }
   const REC = () => {
     const B = (window.__mb = {});
