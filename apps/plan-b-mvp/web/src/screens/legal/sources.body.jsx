@@ -18,5 +18,8 @@ export default function SourcesBody() {
     </div></div>
     <p className="fine">Google Places does not publish parking prices in the fields this app requests. Parking price data therefore cannot be estimated from the Google response; the closest alternative is an optional typical-cost estimate you enter in Settings, shown separately from listed car-park availability. The QLDTraffic dataset is licensed CC BY 4.0 and supplied “as is”; check the linked dataset and disclaimer before public release.</p>
     <button className="btn btn-secondary" data-action="go" data-screen="terms">Read the Terms of Use</button>
+    <button className="btn btn-secondary" data-action="go" data-screen="community">Community Guidelines</button>
+    <button className="btn btn-secondary" data-action="go" data-screen="licences">Licences</button>
+    <button className="btn btn-secondary" data-action="go" data-screen="support">Support and contact</button>
   </>);
 }

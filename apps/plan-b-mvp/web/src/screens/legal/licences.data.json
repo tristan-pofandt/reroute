@@ -1,0 +1,499 @@
+{
+ "generated": "2026-10-28",
+ "npm": [
+  {
+   "name": "@capacitor/android",
+   "version": "8.5.3",
+   "license": "MIT",
+   "copyright": "Copyright (c) 2017-present Drifty Co.",
+   "url": "https://github.com/ionic-team/capacitor"
+  },
+  {
+   "name": "@capacitor/app",
+   "version": "8.1.2",
+   "license": "MIT",
+   "copyright": "Copyright 2020-present Ionic",
+   "url": "https://github.com/ionic-team/capacitor-plugins"
+  },
+  {
+   "name": "@capacitor/browser",
+   "version": "8.0.5",
+   "license": "MIT",
+   "copyright": "Copyright 2020-present Ionic",
+   "url": "https://github.com/ionic-team/capacitor-plugins"
+  },
+  {
+   "name": "@capacitor/core",
+   "version": "8.5.3",
+   "license": "MIT",
+   "copyright": "Copyright (c) 2017-present Drifty Co.",
+   "url": "https://github.com/ionic-team/capacitor"
+  },
+  {
+   "name": "@capacitor/device",
+   "version": "8.0.3",
+   "license": "MIT",
+   "copyright": "Copyright 2020-present Ionic",
+   "url": "https://github.com/ionic-team/capacitor-plugins"
+  },
+  {
+   "name": "@capacitor/geolocation",
+   "version": "8.2.4",
+   "license": "MIT",
+   "copyright": "Copyright (c) 2025 Ionic",
+   "url": "https://github.com/ionic-team/capacitor-geolocation"
+  },
+  {
+   "name": "@capacitor/haptics",
+   "version": "8.0.0",
+   "license": "MIT",
+   "copyright": "Copyright 2020-present Ionic",
+   "url": "https://github.com/ionic-team/capacitor-haptics"
+  },
+  {
+   "name": "@capacitor/ios",
+   "version": "8.5.3",
+   "license": "MIT",
+   "copyright": "Copyright (c) 2017-present Drifty Co.",
+   "url": "https://github.com/ionic-team/capacitor"
+  },
+  {
+   "name": "@capacitor/keyboard",
+   "version": "8.0.6",
+   "license": "MIT",
+   "copyright": "Copyright 2020-present Ionic",
+   "url": "https://github.com/ionic-team/capacitor-keyboard"
+  },
+  {
+   "name": "@capacitor/local-notifications",
+   "version": "8.3.1",
+   "license": "MIT",
+   "copyright": "Copyright 2020-present Ionic",
+   "url": "https://github.com/ionic-team/capacitor-local-notifications"
+  },
+  {
+   "name": "@capacitor/network",
+   "version": "8.0.1",
+   "license": "MIT",
+   "copyright": "Copyright 2020-present Ionic",
+   "url": "https://github.com/ionic-team/capacitor-plugins"
+  },
+  {
+   "name": "@capacitor/preferences",
+   "version": "8.0.1",
+   "license": "MIT",
+   "copyright": "Copyright 2020-present Ionic",
+   "url": "https://github.com/ionic-team/capacitor-plugins"
+  },
+  {
+   "name": "@capacitor/push-notifications",
+   "version": "8.1.3",
+   "license": "MIT",
+   "copyright": "Copyright 2020-present Ionic",
+   "url": "https://github.com/ionic-team/capacitor-plugins"
+  },
+  {
+   "name": "@capacitor/share",
+   "version": "8.0.3",
+   "license": "MIT",
+   "copyright": "Copyright 2020-present Ionic",
+   "url": "https://github.com/ionic-team/capacitor-plugins"
+  },
+  {
+   "name": "@capacitor/splash-screen",
+   "version": "8.0.2",
+   "license": "MIT",
+   "copyright": "Copyright 2020-present Ionic",
+   "url": "https://github.com/ionic-team/capacitor-plugins"
+  },
+  {
+   "name": "@capacitor/status-bar",
+   "version": "8.0.4",
+   "license": "MIT",
+   "copyright": "Copyright 2020-present Ionic",
+   "url": "https://github.com/ionic-team/capacitor-plugins"
+  },
+  {
+   "name": "@capacitor/synapse",
+   "version": "1.0.4",
+   "license": "ISC",
+   "copyright": "Copyright (c) 2025 Ionic",
+   "url": "https://www.npmjs.com/package/@capacitor/synapse"
+  },
+  {
+   "name": "@capgo/capacitor-social-login",
+   "version": "8.7.5",
+   "license": "MPL-2.0",
+   "copyright": "(c) under Patent Claims infringed by Covered Software in the absence of",
+   "url": "https://github.com/Cap-go/capacitor-social-login"
+  },
+  {
+   "name": "@remix-run/router",
+   "version": "1.23.0",
+   "license": "MIT",
+   "copyright": "Copyright (c) React Training LLC 2015-2019",
+   "url": "https://github.com/remix-run/react-router"
+  },
+  {
+   "name": "@sentry-internal/browser-utils",
+   "version": "8.47.0",
+   "license": "MIT",
+   "copyright": "Copyright (c) 2020-2024 Functional Software, Inc. dba Sentry",
+   "url": "https://github.com/getsentry/sentry-javascript"
+  },
+  {
+   "name": "@sentry-internal/feedback",
+   "version": "8.47.0",
+   "license": "MIT",
+   "copyright": "Copyright (c) 2023-2024 Functional Software, Inc. dba Sentry",
+   "url": "https://github.com/getsentry/sentry-javascript"
+  },
+  {
+   "name": "@sentry-internal/replay",
+   "version": "8.47.0",
+   "license": "MIT",
+   "copyright": "Copyright (c) 2022-2024 Functional Software, Inc. dba Sentry",
+   "url": "https://github.com/getsentry/sentry-javascript"
+  },
+  {
+   "name": "@sentry-internal/replay-canvas",
+   "version": "8.47.0",
+   "license": "MIT",
+   "copyright": "Copyright (c) 2024 Functional Software, Inc. dba Sentry",
+   "url": "https://github.com/getsentry/sentry-javascript"
+  },
+  {
+   "name": "@sentry/browser",
+   "version": "8.47.0",
+   "license": "MIT",
+   "copyright": "Copyright (c) 2019-2024 Functional Software, Inc. dba Sentry",
+   "url": "https://github.com/getsentry/sentry-javascript"
+  },
+  {
+   "name": "@sentry/core",
+   "version": "8.47.0",
+   "license": "MIT",
+   "copyright": "Copyright (c) 2019-2024 Functional Software, Inc. dba Sentry",
+   "url": "https://github.com/getsentry/sentry-javascript"
+  },
+  {
+   "name": "framer-motion",
+   "version": "11.18.2",
+   "license": "MIT",
+   "copyright": "Copyright (c) 2018 Framer B.V.",
+   "url": "https://github.com/motiondivision/motion/"
+  },
+  {
+   "name": "js-tokens",
+   "version": "4.0.0",
+   "license": "MIT",
+   "copyright": "Copyright (c) 2014, 2015, 2016, 2017, 2018 Simon Lydell",
+   "url": "lydell/js-tokens"
+  },
+  {
+   "name": "lenis",
+   "version": "1.3.11",
+   "license": "MIT",
+   "copyright": "Copyright (c) 2024 darkroom.engineering",
+   "url": "https://github.com/darkroomengineering/lenis"
+  },
+  {
+   "name": "loose-envify",
+   "version": "1.4.0",
+   "license": "MIT",
+   "copyright": "Copyright (c) 2015 Andres Suarez <zertosh@gmail.com>",
+   "url": "https://github.com/zertosh/loose-envify"
+  },
+  {
+   "name": "motion-dom",
+   "version": "11.18.1",
+   "license": "MIT",
+   "copyright": "Copyright (c) 2024 [Motion](https://motion.dev) B.V.",
+   "url": "https://github.com/motiondivision/motion"
+  },
+  {
+   "name": "motion-utils",
+   "version": "11.18.1",
+   "license": "MIT",
+   "copyright": "Copyright (c) 2024 [Motion](https://motion.dev) B.V.",
+   "url": "https://github.com/motiondivision/motion"
+  },
+  {
+   "name": "react",
+   "version": "18.3.1",
+   "license": "MIT",
+   "copyright": "Copyright (c) Facebook, Inc. and its affiliates.",
+   "url": "https://github.com/facebook/react"
+  },
+  {
+   "name": "react-dom",
+   "version": "18.3.1",
+   "license": "MIT",
+   "copyright": "Copyright (c) Facebook, Inc. and its affiliates.",
+   "url": "https://github.com/facebook/react"
+  },
+  {
+   "name": "react-dom/node_modules/scheduler",
+   "version": "0.23.2",
+   "license": "MIT",
+   "copyright": "Copyright (c) Facebook, Inc. and its affiliates.",
+   "url": "https://github.com/facebook/react"
+  },
+  {
+   "name": "react-router",
+   "version": "6.30.1",
+   "license": "MIT",
+   "copyright": "Copyright (c) React Training LLC 2015-2019",
+   "url": "https://github.com/remix-run/react-router"
+  },
+  {
+   "name": "react-router-dom",
+   "version": "6.30.1",
+   "license": "MIT",
+   "copyright": "Copyright (c) React Training LLC 2015-2019",
+   "url": "https://github.com/remix-run/react-router"
+  },
+  {
+   "name": "tslib",
+   "version": "2.8.1",
+   "license": "0BSD",
+   "copyright": "Copyright (c) Microsoft Corporation.",
+   "url": "https://github.com/Microsoft/tslib"
+  }
+ ],
+ "python": [
+  {
+   "name": "aiohappyeyeballs",
+   "version": "2.7.1",
+   "license": "Python Software Foundation License",
+   "copyright": "",
+   "url": "https://github.com/aio-libs/aiohappyeyeballs/issues"
+  },
+  {
+   "name": "aiohttp",
+   "version": "3.14.5",
+   "license": "Apache-2.0 AND MIT",
+   "copyright": "",
+   "url": "https://github.com/aio-libs/aiohttp"
+  },
+  {
+   "name": "aiosignal",
+   "version": "1.4.0",
+   "license": "Apache Software License",
+   "copyright": "",
+   "url": "https://github.com/aio-libs/aiosignal"
+  },
+  {
+   "name": "attrs",
+   "version": "26.1.0",
+   "license": "MIT",
+   "copyright": "",
+   "url": "https://www.attrs.org/"
+  },
+  {
+   "name": "Authlib",
+   "version": "1.9.1",
+   "license": "BSD License",
+   "copyright": "",
+   "url": "https://docs.authlib.org/"
+  },
+  {
+   "name": "blinker",
+   "version": "1.9.0",
+   "license": "MIT License",
+   "copyright": "",
+   "url": "https://discord.gg/pallets"
+  },
+  {
+   "name": "certifi",
+   "version": "2026.10.19",
+   "license": "Mozilla Public License 2.0 (MPL 2.0)",
+   "copyright": "",
+   "url": "https://github.com/certifi/python-certifi"
+  },
+  {
+   "name": "cffi",
+   "version": "2.1.1",
+   "license": "MIT-0",
+   "copyright": "",
+   "url": "https://cffi.readthedocs.io/"
+  },
+  {
+   "name": "charset-normalizer",
+   "version": "3.5.2",
+   "license": "MIT",
+   "copyright": "",
+   "url": "https://github.com/jawah/charset_normalizer/blob/master/CHANGELOG.md"
+  },
+  {
+   "name": "click",
+   "version": "8.5.0",
+   "license": "BSD-3-Clause",
+   "copyright": "",
+   "url": "https://click.palletsprojects.com/page/changes/"
+  },
+  {
+   "name": "cryptography",
+   "version": "50.0.2",
+   "license": "Apache-2.0 OR BSD-3-Clause",
+   "copyright": "",
+   "url": "https://cryptography.io/en/latest/changelog/"
+  },
+  {
+   "name": "Flask",
+   "version": "3.1.3",
+   "license": "BSD-3-Clause",
+   "copyright": "",
+   "url": "https://flask.palletsprojects.com/page/changes/"
+  },
+  {
+   "name": "frozenlist",
+   "version": "1.8.0",
+   "license": "Apache-2.0",
+   "copyright": "",
+   "url": "https://github.com/aio-libs/frozenlist"
+  },
+  {
+   "name": "gunicorn",
+   "version": "",
+   "license": "MIT",
+   "copyright": "",
+   "url": "https://pypi.org/project/gunicorn/"
+  },
+  {
+   "name": "http_ece",
+   "version": "1.2.1",
+   "license": "MIT License",
+   "copyright": "",
+   "url": "https://github.com/martinthomson/encrypted-content-encoding"
+  },
+  {
+   "name": "idna",
+   "version": "3.20",
+   "license": "BSD-3-Clause",
+   "copyright": "",
+   "url": "https://github.com/kjd/idna/blob/master/HISTORY.md"
+  },
+  {
+   "name": "itsdangerous",
+   "version": "2.2.0",
+   "license": "BSD License",
+   "copyright": "",
+   "url": "https://itsdangerous.palletsprojects.com/changes/"
+  },
+  {
+   "name": "Jinja2",
+   "version": "3.1.6",
+   "license": "BSD License",
+   "copyright": "",
+   "url": "https://jinja.palletsprojects.com/changes/"
+  },
+  {
+   "name": "joserfc",
+   "version": "1.7.7",
+   "license": "BSD License",
+   "copyright": "",
+   "url": "https://jose.authlib.org/"
+  },
+  {
+   "name": "MarkupSafe",
+   "version": "3.0.4",
+   "license": "BSD-3-Clause",
+   "copyright": "",
+   "url": "https://palletsprojects.com/donate"
+  },
+  {
+   "name": "multidict",
+   "version": "7.1.0",
+   "license": "Apache-2.0",
+   "copyright": "",
+   "url": "https://github.com/aio-libs/multidict"
+  },
+  {
+   "name": "propcache",
+   "version": "0.5.4",
+   "license": "Apache-2.0",
+   "copyright": "",
+   "url": "https://github.com/aio-libs/propcache"
+  },
+  {
+   "name": "py-vapid",
+   "version": "1.9.6",
+   "license": "MPL-2.0",
+   "copyright": "",
+   "url": "https://github.com/mozilla-services/vapid"
+  },
+  {
+   "name": "pycparser",
+   "version": "3.11",
+   "license": "BSD-3-Clause",
+   "copyright": "",
+   "url": "https://github.com/eliben/pycparser"
+  },
+  {
+   "name": "pywebpush",
+   "version": "2.5.0",
+   "license": "MPL-2.0",
+   "copyright": "",
+   "url": "https://github.com/web-push-libs/pywebpush"
+  },
+  {
+   "name": "requests",
+   "version": "2.34.2",
+   "license": "Apache Software License",
+   "copyright": "",
+   "url": "https://requests.readthedocs.io"
+  },
+  {
+   "name": "segno",
+   "version": "1.6.6",
+   "license": "BSD License",
+   "copyright": "",
+   "url": "https://github.com/heuer/segno/blob/master/CHANGES.rst"
+  },
+  {
+   "name": "urllib3",
+   "version": "2.8.0",
+   "license": "MIT",
+   "copyright": "",
+   "url": "https://github.com/urllib3/urllib3/blob/main/CHANGES.rst"
+  },
+  {
+   "name": "Werkzeug",
+   "version": "3.1.9",
+   "license": "BSD-3-Clause",
+   "copyright": "",
+   "url": "https://werkzeug.palletsprojects.com/page/changes/"
+  },
+  {
+   "name": "yarl",
+   "version": "1.25.1",
+   "license": "Apache-2.0",
+   "copyright": "",
+   "url": "https://github.com/aio-libs/yarl"
+  }
+ ],
+ "vendored": [
+  {
+   "name": "GSAP (with ScrollTrigger and Flip)",
+   "version": "3.12.5",
+   "license": "GreenSock Standard License",
+   "copyright": "Copyright 2024, GreenSock",
+   "url": "https://gsap.com/standard-license"
+  },
+  {
+   "name": "Lenis (vendored build)",
+   "version": "",
+   "license": "MIT",
+   "copyright": "Copyright (c) Studio Freight / Darkroom Engineering",
+   "url": "https://github.com/darkroomengineering/lenis"
+  },
+  {
+   "name": "Inter typeface (served by Google Fonts)",
+   "version": "",
+   "license": "OFL-1.1",
+   "copyright": "Copyright (c) The Inter Project Authors",
+   "url": "https://github.com/rsms/inter"
+  }
+ ]
+}
