@@ -17,13 +17,16 @@ function install() {
   const offMicro = installMicro();
   const offScroll = installScroll3d(viewport);
   const amb = installAmbient(viewport);
+  // Registering new blocks is not needed for the frame that mounted them: it waits for an idle moment (and sweep itself waits for the page to settle).
+  let sweepTimer = 0, dead = false;
+  const later = window.requestIdleCallback ? (f) => requestIdleCallback(f, { timeout: 400 }) : (f) => setTimeout(f, 120);
   const mo = new MutationObserver((list) => {
     handleMutations(list, invalidate);
-    if (list.some((m) => m.type === "childList" && m.addedNodes.length)) { sweep(viewport); amb.scan(); }
+    if (!sweepTimer && list.some((m) => m.type === "childList" && m.addedNodes.length)) sweepTimer = later(() => { sweepTimer = 0; if (!dead) { sweep(viewport); amb.scan(); } });
   });
   mo.observe(viewport, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"], attributeOldValue: true });
   return () => {
-    mo.disconnect(); offMicro(); offScroll(); amb.stop();
+    dead = true; mo.disconnect(); offMicro(); offScroll(); amb.stop();
     resetAll();
     document.documentElement.classList.remove("fm");
   };

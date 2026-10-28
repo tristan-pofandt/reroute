@@ -7,10 +7,10 @@
 //     that is over just before the panel is; reopening mid-close eases the lines back from where they are (no restart);
 //   * a soft haptic marks a menu / Settings opening, a snap a sheet.
 // A panel that is being dragged shut is left alone: it is already moving under the finger.
-import { animate, stagger } from "framer-motion";
-import { DUR, EASE, LINE_OUT, STAGGER_CLOSE, STAGGER_IN, slide, slow, spring } from "../choreography.js";
+import { animate } from "framer-motion";
+import { CSS_EASE, DUR, IN_CURVE, LINE_OUT, STAGGER_CLOSE, STAGGER_IN, clamp, fx, slide, slow } from "../choreography.js";
 import { snap, soft } from "../haptics.js";
-import { track, touch, untrack } from "./fm.js";
+import { track, untrack } from "./fm.js";
 
 const lerp = (a, b, t) => a + (b - a) * t;
 // [backdrop, panel, lines (slid one by one), offset the lines travel from, line cap, haptic]
@@ -30,9 +30,8 @@ function panelChange(backdrop, opened) {
   if (was) { was.run.stop(); clearTimeout(was.timer); was.release?.(); }
   const lines = [...backdrop.querySelectorAll(lineSel)];
   if (opened && was?.closing) { // interrupted close: the lines are part way out; ease them back from there instead of replaying the entrance
-    const done = () => lines.forEach((el) => { el.style.removeProperty("translate"); el.style.removeProperty("opacity"); });
-    const c = track(animate(lines, { opacity: 1, translate: "0px 0px" }, { duration: DUR.fade * slow(), ease: EASE, onComplete: () => { untrack(c); done(); } }));
-    live.set(panel, { run: { stop() { c.stop(); untrack(c); done(); } } });
+    const done = (el) => { el.style.removeProperty("translate"); el.style.removeProperty("opacity"); };
+    live.set(panel, { run: fx(lines, [{ opacity: 1, translate: "0px 0px" }], { duration: DUR.fade * 1000 * slow(), easing: CSS_EASE, done }) });
     return;
   }
   if (opened) {
@@ -46,32 +45,24 @@ function panelChange(backdrop, opened) {
 }
 
 // Profile menu: grows out of the avatar (top right) diagonally down and left; the items stagger in, closing reverses quickly.
+// Opacity + transform only (Web Animations, compositor thread); the CSS .open class is the resting look once the animation is cancelled.
 let profile = null;
-const CLIP_IN = "inset(0% -30% 62% 55% round 16px)", CLIP_OUT = "inset(-30% -30% -30% -30% round 16px)";
+const lerp1 = (a, b, v) => a + (b - a) * v;
+const POSE = (v) => `translate(${lerp1(12, 0, v).toFixed(2)}px,${lerp1(-12, 0, v).toFixed(2)}px) scale(${lerp1(0.9, 1, v).toFixed(4)})`;
+const OPEN = IN_CURVE.map((v, i) => ({ offset: i / (IN_CURVE.length - 1), opacity: clamp(v * 1.6), transform: POSE(v) }));
+const CLOSE = [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translate(6px,-6px) scale(0.95)" }];
 function profileChange(menu, opened) {
-  const mid = opened && profile?.closing; // reopened part way through a close: retarget from the current look, do not snap to closed first
-  const from = mid ? { opacity: getComputedStyle(menu).opacity, transform: getComputedStyle(menu).transform, clipPath: menu.style.clipPath } : null;
-  profile?.c.stop(); profile?.run.stop(); profile?.clean();
+  const mid = opened && profile?.closing; // reopened part way through a close: retarget from the current look (stop() keeps it), do not snap to closed first
+  profile?.c.stop(); profile?.run.stop();
   const items = [...menu.querySelectorAll("button")];
-  const clean = () => ["opacity", "transform", "clip-path"].forEach((p) => menu.style.removeProperty(p));
-  touch(menu, "opacity", "transform", "clip-path");
-  // First frame written synchronously, before paint: closed look (opening) or open look (closing; CSS has already dropped .open).
-  if (from) Object.assign(menu.style, { opacity: from.opacity, transform: from.transform, clipPath: from.clipPath });
-  else {
-    menu.style.opacity = opened ? "0" : "1";
-    menu.style.transform = opened ? "translate(12px,-12px) scale(0.9)" : "none";
-    menu.style.clipPath = opened ? CLIP_IN : CLIP_OUT;
-  }
   if (opened) soft();
-  const done = () => { untrack(c); clean(); if (profile) profile.closing = false; };
-  const c = track(animate(menu,
-    opened ? (from ? { opacity: 1, x: 0, y: 0, scale: 1, clipPath: CLIP_OUT } : { opacity: [0, 1], x: [12, 0], y: [-12, 0], scale: [0.9, 1], clipPath: [CLIP_IN, CLIP_OUT] })
-      : { opacity: [1, 0], x: [0, 6], y: [0, -6], scale: [1, 0.95] },
-    opened ? { default: { ...spring(), duration: DUR.menu * slow() }, opacity: { duration: DUR.fade * slow(), ease: EASE }, onComplete: done } : { duration: DUR.menuOut * slow(), ease: EASE, onComplete: done },
-  ));
-  const timer = setTimeout(done, (opened ? 560 : 320) * slow()); // framer may not report completion for the mixed spring: never leave inline styles behind
+  const s = slow() * 1000;
+  const done = (el) => { el.style.removeProperty("opacity"); el.style.removeProperty("transform"); };
+  const c = fx([menu], mid ? [{ opacity: 1, transform: "none" }] : opened ? OPEN : CLOSE,
+    { duration: (mid || !opened ? DUR.menuOut : DUR.menu) * s, easing: opened && !mid ? "linear" : CSS_EASE, props: ["opacity", "transform"], done });
   const run = slide(opened ? items : items.reverse(), { x: 14, y: -10 }, { out: !opened, delay: opened ? 0.04 : 0, step: opened ? STAGGER_IN : STAGGER_CLOSE, cap: 5 });
-  profile = { c, run, closing: !opened, clean: () => { clearTimeout(timer); clean(); } };
+  profile = { c, run, closing: !opened };
+  c.finished?.then(() => { if (profile?.c === c) profile.closing = false; });
 }
 
 // Busy buttons get a loader drawn from the logo: the direct route bends into the detour and back, the app's idea in one line.
@@ -96,11 +87,12 @@ function crossFade(m, done) {
   if (!wasSkeleton) return;
   const added = [...m.addedNodes].filter((n) => n.nodeType === 1 && n.isConnected && !n.matches(".skeleton, .morph-loader") && !n.querySelector(".skeleton")).slice(0, 8);
   if (!added.length) return;
-  added.forEach((n) => { n.style.opacity = "0"; touch(n, "opacity", "translate"); });
-  const c = track(animate(added, { opacity: [0, 1], translate: ["0 6px", "0 0"] }, {
-    duration: DUR.crossfade, ease: EASE, delay: stagger(STAGGER_IN),
-    onComplete: () => { untrack(c); added.forEach((n) => { n.style.removeProperty("opacity"); n.style.removeProperty("translate"); }); done(); },
-  }));
+  added.forEach((n) => { n.style.opacity = "0"; });
+  const c = fx(added, [{ opacity: 0, translate: "0 6px" }, { opacity: 1, translate: "0 0" }], {
+    duration: DUR.crossfade * 1000, easing: CSS_EASE, step: STAGGER_IN * 1000,
+    done: (n) => { n.style.removeProperty("opacity"); n.style.removeProperty("translate"); },
+  });
+  c.finished.then(done);
 }
 
 // Called by MotionLayer with each MutationObserver batch on #viewport.

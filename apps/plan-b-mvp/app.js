@@ -2509,17 +2509,28 @@ function navigate(screen, direction = "forward", syncUrl = true) {
 
 // React shell hooks. pageMounted: a page element for `screen` has just been put in the viewport (first load, navigation or Back).
 // pageSettled: the push animation has finished and the previous page is gone.
+// In the React shell the heavy half (focus, maps, charts) waits until the first frame of the page's entrance has been produced, so none of
+// it sits in front of the animation's start; pageSettled and rerender run anything still pending first.
+let lateMount = null;
+function flushLateMount() { const f = lateMount; lateMount = null; f?.(); }
 function pageMounted(page, screen) {
   enhanceClear(page);
   currentPage = page;
   app.dataset.screen = screen;
   syncInert();
-  if (transitioning) focusLead(page); // a navigation leads with its heading; the first load leaves focus alone
-  mountMaps(page);
-  if (screen === "offline-area") buildAreaMap();
-  bindCharts(page);
+  const rest = () => {
+    if (currentPage !== page) return;
+    if (transitioning) focusLead(page); // a navigation leads with its heading; the first load leaves focus alone
+    mountMaps(page);
+    if (screen === "offline-area") buildAreaMap();
+    bindCharts(page);
+  };
+  if (!bridge) return rest();
+  lateMount = rest;
+  requestAnimationFrame(() => setTimeout(flushLateMount, 0));
 }
 function pageSettled() {
+  flushLateMount();
   transitioning = false;
   maps.forEach(resizeMap);
   cleanMaps();
@@ -2553,6 +2564,7 @@ window.addEventListener("popstate", () => {
 
 function rerender() {
   if (bridge && !currentPage) return; // React has not mounted the first page yet; it renders from the current state when it does
+  flushLateMount();
   if (bridge && currentPage.dataset.screen !== state.screen) return; // mid-transition: the old page is still leaving, the new one renders from the current state when it mounts
   if (bridge?.isNative(state.screen)) { document.dispatchEvent(new CustomEvent("reroute:rerender", { detail: { page: currentPage, native: true } })); return; }
   if (!currentPage) { currentPage = makePage(state.screen); viewport.appendChild(currentPage); }
