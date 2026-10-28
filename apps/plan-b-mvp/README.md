@@ -61,6 +61,11 @@ The deployment settings are documented in [`infra/plan-b-mvp/README.md`](../../i
 | `PLANB_PLACE_LIMIT_PER_HOUR` | Map place lookups ("Choose on map") per visitor address per hour, default 60 |
 | `PLANB_OFFLINE_LIMIT_PER_HOUR` | Offline area downloads per visitor address per hour, counted separately for the map (`/api/offline/map`) and the timetable (`/api/offline/transit`), default 6 each. Applies with or without a Google key; the developer's own machine is not limited |
 | `PLANB_DATA_DIR` | Where the ride board, push subscriptions, VAPID keys, the GTFS index and zip (about 37 MB in all) and the offline map cache (`offline/`, up to 20 areas of about 3 MB each) are written, default `data/` here |
+| `ACCOUNTS_SECRET_KEY` | Turns accounts on (32+ random characters; signs CSRF tokens, encrypts the Apple token). Unset: accounts are off and Reroute is guest-only |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_IOS_CLIENT_ID`, `GOOGLE_ANDROID_CLIENT_ID` | Google sign-in (web client; iOS and Android client IDs are comma-separated lists accepted by `/auth/native/google`) |
+| `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_CLIENT_ID`, `APPLE_BUNDLE_ID`, `APPLE_PRIVATE_KEY` or `APPLE_PRIVATE_KEY_FILE` | Sign in with Apple (Services ID, bundle IDs and the `.p8` key; never commit the key) |
+| `APPLE_DOMAIN_ASSOCIATION`, `APPLE_APP_SITE_ASSOCIATION_JSON`, `ANDROID_ASSETLINKS_JSON` | Content of the `/.well-known/` files (each also accepts `_FILE`) |
+| `PLANB_DEV`, `ACCOUNTS_FAKE_PROVIDER` | Local testing only: random per-run secret key and a fake test provider. See [accounts](../../docs/engineering/accounts.md) |
 
 ## Data sources and what is sent where
 
@@ -157,6 +162,8 @@ The server is now Flask. The design-system brief ([`design-system.md`](../../doc
 | `manifest.webmanifest`, `sw.js`, `icons/` | PWA manifest, service worker (app shell, API caching, push handling) and icons |
 | `favicon.svg` | Reroute logo and favicon (the broken-route mark, unchanged from Plan B) |
 | `server.py` | Flask app: API routes, PWA files, `/qr.svg`, Origin check and request limits |
+| `accounts.py`, `test_accounts.py` | Optional accounts: Google and Apple sign-in (Authlib), SQLite `accounts.db` in `PLANB_DATA_DIR`, server-side sessions, synced data, export and deletion, `/account/delete`; tests use mocked providers and no network |
+| `web/src/accounts/`, `web/src/screens/account.screen.jsx` | Account store (`useAccount()`, debounced sync adapter over the `planb.*` localStorage keys) and the Account screen |
 | `live_routes.py` | Planner: route building, limits, ranking, cost, CO2, weather and traffic attachment |
 | `google_api.py` | Google Routes, Places (New) and elevation requests, and the API cost price table |
 | `nav.py` | Turns Google steps into the `nav` list used by in-app directions |
