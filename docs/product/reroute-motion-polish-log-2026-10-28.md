@@ -90,7 +90,7 @@ Before = commit 94d9445, after = HEAD. "Paths" counts elements whose painted pat
 | journey -> results | 4 -> 0 | 0, 9 -> 0, 7 | 1, 24 -> 2, 31 |
 | results -> next | 8 -> 0 (see note) | 0, 11 -> 0, 18 | 2, 31 -> 2, 53 |
 | next -> results | 4 -> 0 | 0, 8 -> 0, 20 | 1, 24 -> 1, 25 |
-| home -> panic | 5 (opacity flash) -> 0 | 0, 16 -> 0, 12 | 1, 24 -> 2, 24 |
+| home -> panic | 5 (opacity flash) -> 0 | 0, 16 -> 0, 12 | 1, 24 -> 2, 58 |
 | panic -> home | 4 -> 0 | 0, 9 -> 0, 7 | 1, 24 -> 0, 16 |
 | home -> nav | 5 -> 0, layout shift 0.052 on the old page -> 0 on it | 0, 15 -> 0, 18 | 0, 19 -> 1, 25 |
 | nav -> home | 5 -> 0 | 0, 9 -> 0, 8 | 1, 31 -> 2, 24 |
