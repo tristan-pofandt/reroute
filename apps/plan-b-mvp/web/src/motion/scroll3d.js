@@ -19,7 +19,7 @@ import { prune, touch, track, untrack } from "./fm.js";
 const ALL = `${REVEAL}, .scroll .kpi.lead, .scroll .hero-art, .scroll .kpi b`;
 const clamp = (v, a = 0, b = 1) => (v < a ? a : v > b ? b : v);
 
-let scrollers = new Map(), known = new WeakSet(), io = null, side = 1, lastThud = 0, queued = false;
+let scrollers = new Map(), known = new WeakSet(), io = null, blockRO = null, side = 1, lastThud = 0, queued = false;
 
 const state = (sc) => {
   let S = scrollers.get(sc);
@@ -75,6 +75,7 @@ function measure(fresh) {
       touch(el, "transform", "opacity");
     }
     S.list.push(it);
+    blockRO?.observe(el); // a block that grows later (a skeleton becomes content) may now sit below the fold
   }
   writes.forEach((w) => w());
   touched.forEach((S) => S.list.sort((a, b) => a.top - b.top));
@@ -94,6 +95,8 @@ function remeasure() {
       if (!it.el.isConnected) continue;
       const r = it.el.getBoundingClientRect();
       it.top = r.top - sr.top + S.s; it.h = r.height; it.sig = ""; it.clean = false;
+      // Measured while its neighbours were still skeletons, a block can end up below the fold only now: give it its reveal.
+      if (it.kind === "block" && !it.scrub && it.top - S.s >= S.H) { it.scrub = true; it.seated = false; touch(it.el, "transform", "opacity"); }
       if (it.kind === "block" && it.scrub) { it.s1 = Math.min(it.top - S.H * 0.7, S.max); it.s0 = Math.min(it.top - S.H * 0.98, it.s1 - 40); }
       if (it.kind === "depth") { it.s0 = it.top - 80; it.s1 = it.top + it.h; }
       if (it.kind === "bars") { it.s0 = it.top - S.H * 0.9; it.s1 = Math.min(it.top + it.h / 2 - S.H * 0.6, S.max); }
@@ -191,13 +194,19 @@ export function installScroll3d(viewport) {
   let first = true, timer = 0;
   const ro = new ResizeObserver(() => { if (first) { first = false; return; } clearTimeout(timer); timer = setTimeout(remeasure, 120); });
   ro.observe(viewport);
+  const sized = new WeakSet(); // each block reports once when first observed; only later changes matter
+  blockRO = new ResizeObserver((list) => { let changed = false; list.forEach((en) => { if (sized.has(en.target)) changed = true; else sized.add(en.target); }); if (changed) { clearTimeout(timer); timer = setTimeout(remeasure, 120); } });
+  // A native screen re-renders when live data arrives and framer writes its resting opacity / transform back onto the blocks: re-assert ours.
+  const onRerender = () => { setTimeout(invalidate, 60); setTimeout(invalidate, 450); };
+  document.addEventListener("reroute:rerender", onRerender);
   const onVisible = () => { if (!document.hidden) request(); };
   document.addEventListener("visibilitychange", onVisible);
   sweep(viewport);
   return () => {
     document.removeEventListener("scroll", onScroll, { capture: true });
     document.removeEventListener("visibilitychange", onVisible);
-    off(); ro.disconnect(); clearTimeout(timer); io.disconnect();
+    document.removeEventListener("reroute:rerender", onRerender);
+    off(); ro.disconnect(); blockRO.disconnect(); blockRO = null; clearTimeout(timer); io.disconnect();
     scrollers.clear();
   };
 }
