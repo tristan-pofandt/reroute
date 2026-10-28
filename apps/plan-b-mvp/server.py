@@ -408,7 +408,7 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
             return failure("Fuel prices need the Google Maps API key.", 503)
         query = request.args
         try:
-            lat, lng = float(query.get("lat", "-27.4698")), float(query.get("lng", "153.0251"))
+            lat, lng = _coordinates(query, (-27.4698, 153.0251))  # inside Australia only (also rejects NaN and infinity)
             fuel_type = query.get("type", "SP91")
             if fuel_type not in google_api.FUEL_TYPES:
                 raise ValueError
