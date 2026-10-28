@@ -25,12 +25,12 @@
 /* Weather icon by condition (data-wx); gentle float when unknown */
 .wx-icon { position: relative; }
 .wx-icon svg { animation: amb-float 5s ease-in-out infinite; }
-.wx-icon[data-wx="sun"] svg, .wx-icon[data-wx="snow"] svg { animation: amb-spin 40s linear infinite; }
-.wx-icon[data-wx="sun"]::after, .wx-icon[data-wx="heat"]::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: radial-gradient(circle, color-mix(in srgb, var(--tone) 38%, transparent), transparent 70%); opacity: 0; animation: amb-glow 4.5s ease-in-out infinite; }
-.wx-icon[data-wx="cloud"] svg, .wx-icon[data-wx="cloud-sun"] svg, .wx-icon[data-wx="fog"] svg, .wx-icon[data-wx="wind"] svg { animation: amb-drift 7s ease-in-out infinite; }
-.wx-icon[data-wx="rain"] svg, .wx-icon[data-wx="drizzle"] svg, .wx-icon[data-wx="storm"] svg { animation: none; }
-.wx-icon[data-wx="rain"] svg path:nth-child(2), .wx-icon[data-wx="drizzle"] svg path:nth-child(2) { animation: amb-fall 1.4s ease-in infinite; }
-.wx-icon[data-wx="storm"] svg path:nth-child(2) { animation: amb-flash 4s linear infinite; }
+.wx-icon[data-cond="sun"] svg, .wx-icon[data-cond="snow"] svg { animation: amb-spin 40s linear infinite; }
+.wx-icon[data-cond="sun"]::after, .wx-icon[data-cond="heat"]::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: radial-gradient(circle, color-mix(in srgb, var(--tone) 38%, transparent), transparent 70%); opacity: 0; animation: amb-glow 4.5s ease-in-out infinite; }
+.wx-icon[data-cond="cloud"] svg, .wx-icon[data-cond="cloud-sun"] svg, .wx-icon[data-cond="fog"] svg, .wx-icon[data-cond="wind"] svg { animation: amb-drift 7s ease-in-out infinite; }
+.wx-icon[data-cond="rain"] svg, .wx-icon[data-cond="drizzle"] svg, .wx-icon[data-cond="storm"] svg { animation: none; }
+.wx-icon[data-cond="rain"] svg path:nth-child(2), .wx-icon[data-cond="drizzle"] svg path:nth-child(2) { animation: amb-fall 1.4s ease-in infinite; }
+.wx-icon[data-cond="storm"] svg path:nth-child(2) { animation: amb-flash 4s linear infinite; }
 
 /* Home: refresh control beside "Translink right now" */
 .tile-wrap { position: relative; }

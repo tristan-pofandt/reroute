@@ -48,7 +48,7 @@ function Now({ d }) {
       <Item tag="section" index={2} className="wxp-now">
         <div className="wx-temp">{Math.round(c.temp_c)}<sup>°</sup></div>
         <div className="wx-now"><strong>{c.label}</strong><span>Feels like {Math.round(c.apparent_c)}°{today ? ` · High ${Math.round(today.max_c)}° · Low ${Math.round(today.min_c)}°` : ""}</span></div>
-        <span className="wx-icon" data-wx={c.icon} style={{ "--tone": WX_TONE[c.icon] || "var(--accent)" }}><WxIcon name={c.icon} size={30} /></span>
+        <span className="wx-icon" data-cond={c.icon} style={{ "--tone": WX_TONE[c.icon] || "var(--accent)" }}><WxIcon name={c.icon} size={30} /></span>
       </Item>
       {d.bad && d.warning ? (
         <Item className="wx-warn" role="alert" index={3}><Icon name="alert" size={18} /><div><b>{d.warning}<Sim on={d.simulated} /></b><span>Allow extra time if your trip includes walking between stops.</span></div></Item>

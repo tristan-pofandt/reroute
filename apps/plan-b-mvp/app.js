@@ -342,7 +342,7 @@ function weatherInner() {
   return `<div class="wx-head"><p class="eyebrow">${I.cloud(14)}Weather · ${esc(state.weatherPlace)}</p><span class="wx-more">${w.simulated ? `<span class="badge info">Simulated</span>` : ""}<span class="wx-open">Details${I.chevronRight(14)}</span></span></div>
     <div class="wx-main"><div class="wx-temp">${Math.round(c.temp_c)}<sup>°</sup></div>
       <div class="wx-now"><strong>${esc(c.label)}</strong><span>Feels like ${Math.round(c.apparent_c)}° · Wind ${Math.round(c.wind_kmh)} km/h${c.gust_kmh > c.wind_kmh + 10 ? `, gusts ${Math.round(c.gust_kmh)}` : ""}${c.precip_mm > 0 ? ` · ${c.precip_mm} mm rain` : ""}</span></div>
-      <span class="wx-icon" data-wx="${esc(c.icon)}" style="--tone:${WX_TONE[c.icon] || "var(--accent)"}">${wxIcon(c.icon, 28)}</span></div>
+      <span class="wx-icon" data-cond="${esc(c.icon)}" style="--tone:${WX_TONE[c.icon] || "var(--accent)"}">${wxIcon(c.icon, 28)}</span></div>
     ${warn}${hours ? `<div class="wx-hours" aria-label="Next hours">${hours}</div>` : ""}
     <p class="fine wx-foot">${esc(w.source)}${w.simulated ? "" : ` · updated ${timeOf(w.fetched_at)}`}${state.offline || !offline.online ? " · saved copy, not live" : ""}</p>`;
 }
@@ -1800,7 +1800,7 @@ function weatherTopInner() {
   return `<section class="wxp-now">
       <div class="wx-temp">${Math.round(c.temp_c)}<sup>°</sup></div>
       <div class="wx-now"><strong>${esc(c.label)}</strong><span>Feels like ${Math.round(c.apparent_c)}°${today ? ` · High ${Math.round(today.max_c)}° · Low ${Math.round(today.min_c)}°` : ""}</span></div>
-      <span class="wx-icon" data-wx="${esc(c.icon)}" style="--tone:${WX_TONE[c.icon] || "var(--accent)"}">${wxIcon(c.icon, 30)}</span>
+      <span class="wx-icon" data-cond="${esc(c.icon)}" style="--tone:${WX_TONE[c.icon] || "var(--accent)"}">${wxIcon(c.icon, 30)}</span>
     </section>
     ${warn}
     <div class="wxp-stats">
