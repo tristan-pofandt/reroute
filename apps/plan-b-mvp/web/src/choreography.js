@@ -4,11 +4,10 @@
 // Rules (README "Motion principles and timings"): ease-out only (never ease-in) on anything the user waits for; leaving is faster than arriving;
 // feedback under ~160 ms; stagger 20-30 ms and capped; the spring has a hair of overshoot, no wobble. Magic numbers live here, not in callers.
 //
-//   * variants (ITEM, MID, LATE, PAGE) and `staggerProps(i)` are for React elements inside a native screen (framer-motion variants, propagated
-//     from the page root with `staggerChildren`);
-//   * `slide(elements, offset, opts)` is the same motion done imperatively, for legacy HTML (panic, nav, offline-area, menu rows ...);
+//   * `slide(elements, offset, opts)` moves any list of DOM elements (native screens' Items, legacy HTML, menu rows, splash ...) with Web
+//     Animations on translate + opacity, which the browser runs on its compositor thread (see "Element animations" below);
 //   * `useDirection()` / `getDirection()` say which way the current navigation travels: forward, back, up or down.
-import { animate } from "framer-motion";
+import { cubicBezier, spring as fmSpring } from "framer-motion";
 import { useSyncExternalStore } from "react";
 import { reducedMotion } from "./reduced.js";
 import { touch, track, untrack } from "./motion/fm.js";
@@ -56,62 +55,65 @@ export function travel(d, phase) {
   if (d === "up") return { x: 0, y: h };
   return { x: 0, y: phase === "out" ? h : -h / 2 };
 }
-const rest = { opacity: 1, x: 0, y: 0 };
-const off = (phase) => (reducedMotion() ? rest : { ...travel(dir, phase), opacity: 0 });
 
-// ── Variants for React elements ──────────────────────────────────────────────
-// Functions, so direction, reduced motion and slow motion are read when an animation starts, not when the module loads.
-const enter = (delay = 0) => () => reducedMotion() ? { ...rest, transition: { duration: 0 } }
-  : { ...rest, transition: { default: { ...spring(), delay }, opacity: { duration: DUR.fade * slow(), ease: EASE, delay } } };
-const leave = (delay = 0) => () => reducedMotion() ? { ...rest, transition: { duration: 0 } }
-  : { ...off("out"), transition: { duration: OUT_TIME * slow(), ease: EASE, delay } };
-const hidden = () => ({ ...off("in"), transition: { duration: 0 } });
+// ── Element animations run by the browser's compositor ───────────────────────────
+// Everything that moves is a Web Animation (`element.animate`) on the CSS `translate` and `opacity` properties only. Those two run on the
+// compositor thread: once an animation has started, a busy main thread (React commit, GC, a slow phone) cannot make it drop a frame. The
+// old code ran framer-motion springs on the main thread and wrote inline style every frame. The spring is not lost: it is sampled once
+// into keyframes (springs are main-thread by nature, a sampled curve is not), and a position is never `transform` (scroll reveals and
+// framer's layout morphs own that). Animations use `fill: "both"`, so the first painted frame already shows the start pose (no flash), and
+// are cancelled the moment they finish (the end pose is written inline for a leaving element, removed for an arriving one), so nothing
+// is left holding an element at opacity 0 or with a stale will-change / animation effect.
+export const clamp = (v, a = 0, b = 1) => (v < a ? a : v > b ? b : v);
+export const CSS_EASE = `cubic-bezier(${EASE.join(",")})`;
+const IN_MS = 400, IN_N = 20, OUT_N = 12;
+// progress curves, sampled once: the arrival spring (the same one as spring()) and the leaving ease-out
+export const IN_CURVE = (() => { const g = fmSpring({ keyframes: [0, 1], duration: IN_MS, bounce: 0.12 }); return Array.from({ length: IN_N + 1 }, (_, i) => (i === IN_N ? 1 : g.next((i * IN_MS) / IN_N).value)); })();
+const OUT_CURVE = (() => { const e = cubicBezier(...EASE); return Array.from({ length: OUT_N + 1 }, (_, i) => e(i / OUT_N)); })();
+const px = (x, y, k) => `${(x * k).toFixed(2)}px ${(y * k).toFixed(2)}px`;
+const framesCache = new Map(); // "i|o" + offset -> keyframes, built once per distinct offset
+function keyframes(out, { x, y }) {
+  const key = `${out ? "o" : "i"}${x},${y}`;
+  let f = framesCache.get(key);
+  if (!f) {
+    const c = out ? OUT_CURVE : IN_CURVE;
+    f = c.map((v, i) => ({ offset: i / (c.length - 1), translate: px(x, y, out ? v : 1 - v), opacity: out ? 1 - clamp(v * 1.15) : clamp(v * 1.6) }));
+    framesCache.set(key, f);
+  }
+  return f;
+}
 
-export const ITEM = { hidden, show: enter(), exit: leave() };
-// Past a cap an element stops staggering: its delay is fixed at the last staggered element's, so a long page does not take longer.
-// Entering caps at CAP elements, leaving at CAP_OUT, hence 3 sets: ITEM (both staggered), MID (leaves with the group) and LATE.
-export const MID = { hidden, show: ITEM.show, exit: () => leave((CAP_OUT - 1) * STAGGER_OUT * slow())() };
-export const LATE = { hidden, show: () => enter((CAP - 1) * STAGGER_IN * slow())(), exit: MID.exit };
-// The page root carries no visuals of its own, only the stagger its children inherit.
-export const PAGE = {
-  hidden: {},
-  show: () => ({ transition: { staggerChildren: STAGGER_IN * slow() } }),
-  exit: () => ({ transition: { staggerChildren: STAGGER_OUT * slow() } }),
-};
-// `{...staggerProps(i)}` on any motion.* element inside a native screen makes it take part (i = its position, for the cap).
-export const staggerProps = (i = 0) => ({ variants: i >= CAP ? LATE : i >= CAP_OUT ? MID : ITEM });
-
-// ── The same motion for plain DOM elements (legacy HTML, menu rows, splash) ──────
-// Position is the CSS individual `translate` property and fades use opacity, so it composes with the press / hover micro-interactions
-// (which use `scale`) and never touches `transform` (scroll reveals and framer own that). Every write is registered with the motion
-// layer, so turning Reduce motion on mid-flight stops it and restores the DOM.
-const clamp = (v, a = 0, b = 1) => (v < a ? a : v > b ? b : v);
-
-// slide(els, { x, y }, { out, delay, step, cap }) -> { stop(), finished: Promise }
-//   in:  elements start displaced by the offset, invisible, and spring to rest (the first frame is written synchronously: no flash);
-//   out: elements leave to the offset while fading (ease-out: the move starts at once).
-export function slide(els, offset, { out = false, delay = 0, step = out ? STAGGER_OUT : STAGGER_IN, cap = CAP, time = OUT_TIME } = {}) {
+// fx(els, keyframes, { duration, delay, step, cap, easing, props, done }) -> { stop(), finished: Promise }   (all times in ms)
+//   element i starts at delay + min(i, cap - 1) * step; `done(el)` runs once when its animation has finished, just before it is cancelled.
+//   `hold`: a leaving page's elements stay at their end pose (fill forwards) until the page is removed, instead of writing it inline: framer's
+//   layout projection rewrites inline opacity on shared elements and would flash a held-by-inline element back to 1.
+//   stop() keeps what is on screen (commitStyles) and cancels. Registered with the motion layer, so turning Reduce motion on mid-flight
+//   cancels every running animation and restores the DOM.
+export function fx(els, frames, { duration, delay = 0, step = 0, cap = 1e9, easing = "linear", props = ["translate", "opacity"], done, hold = false } = {}) {
   const list = [...els].filter(Boolean);
   if (!list.length || reducedMotion()) return { stop() {}, finished: Promise.resolve() };
-  const s = slow();
-  const put = (el, k, v) => {
-    el.style.translate = k === 0 ? "" : `${(offset.x * k).toFixed(2)}px ${(offset.y * k).toFixed(2)}px`;
-    el.style.opacity = out ? String(1 - clamp(v * 1.15)) : String(clamp(v * 1.6));
-  };
-  list.forEach((el) => { touch(el, "translate", "opacity"); if (!out) put(el, 1, 0); });
-  const stopAt = [];
-  const runs = list.map((el, i) => new Promise((resolve) => {
-    const c = track(animate(0, 1, {
-      ...(out ? { duration: time * s, ease: EASE } : spring(s)),
-      delay: delay * s + Math.min(i, cap - 1) * step * s,
-      onUpdate: (v) => put(el, out ? v : 1 - v, v),
-      onComplete: () => { untrack(c); if (!out) { el.style.removeProperty("translate"); el.style.removeProperty("opacity"); } resolve(); },
-    }));
-    stopAt.push(c);
-  }));
-  const gone = new Promise((r) => setTimeout(r, 1500 * s)); // an animation stopped from outside never resolves; do not wait for it
-  return {
-    stop() { stopAt.forEach((c) => { c.stop(); untrack(c); }); },
-    finished: Promise.race([Promise.all(runs), gone]),
-  };
+  let live = true;
+  const anims = list.map((el, i) => {
+    touch(el, ...props);
+    return el.animate(frames, { duration, delay: delay + Math.min(i, cap - 1) * step, easing, fill: "both" });
+  });
+  const ctl = { stop() { if (!live && !hold) return; live = false; untrack(ctl); anims.forEach((a) => { try { a.commitStyles(); } catch { /* not rendered */ } a.cancel(); }); } };
+  track(ctl);
+  const all = Promise.all(anims.map((a, i) => a.finished.then(() => { if (hold) return; if (live) done?.(list[i]); a.cancel(); }, () => {}))).then(() => { live = false; untrack(ctl); });
+  // an animation stopped from outside never finishes; never wait for it
+  ctl.finished = Promise.race([all, new Promise((r) => setTimeout(r, duration + delay + step * list.length + 800))]);
+  return ctl;
+}
+
+// slide(els, { x, y }, { out, delay, step, cap, time }) -> { stop(), finished }   (delay, step, time in seconds)
+//   in:  elements start displaced by the offset, invisible, and spring to rest;
+//   out: elements leave to the offset while fading (ease-out: the move starts at once).
+// Used for pages, panel lines, profile-menu items and the splash mark; delays and durations are multiplied by slow() (inspection builds).
+export function slide(els, offset, { out = false, delay = 0, step = out ? STAGGER_OUT : STAGGER_IN, cap = CAP, time = OUT_TIME, hold = false } = {}) {
+  const s = slow() * 1000;
+  return fx(els, keyframes(out, offset), {
+    duration: out ? time * s : IN_MS * slow(), delay: delay * s, step: step * s, cap, hold: out && hold,
+    done: out ? (el) => { el.style.translate = px(offset.x, offset.y, 1); el.style.opacity = "0"; }
+      : (el) => { el.style.removeProperty("translate"); el.style.removeProperty("opacity"); },
+  });
 }

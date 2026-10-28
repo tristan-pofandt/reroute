@@ -4,7 +4,7 @@
 // `enter`: the element was mounted by a view switch mid-page (no page stagger runs then), so it fades and rises in by itself.
 import { createElement } from "react";
 import { motion } from "framer-motion";
-import { DUR, EASE, LAYOUT, STAGGER_IN, slow, staggerProps } from "../../choreography.js";
+import { DUR, EASE, LAYOUT, STAGGER_IN, slow } from "../../choreography.js";
 import { useReducedMotion } from "../../reduced.js";
 
 export function Rise({ tag = "div", props, kids, index = 0, layout = false, tap = false, enter = false }) {
@@ -15,7 +15,7 @@ export function Rise({ tag = "div", props, kids, index = 0, layout = false, tap 
     : { transition: reduced ? { duration: 0 } : { layout: LAYOUT } };
   return createElement(motion[tag], {
     ...rest,
-    ...staggerProps(index),
+    ...(enter ? null : { "data-item": "" }),
     style: { ...style, animation: "none", transitionProperty: "background-color, border-color, color, box-shadow" },
     layout: layout && !reduced ? "position" : false,
     whileTap: tap && !reduced ? { scale: 0.985 } : undefined,

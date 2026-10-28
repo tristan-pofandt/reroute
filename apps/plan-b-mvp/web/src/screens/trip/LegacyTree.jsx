@@ -4,8 +4,6 @@
 // `reroute:rerender`, so focus, scroll and node identity survive), the parts legacy code mutates in place stay "islands", and the
 // interesting elements (cards, steps, form controls) are swapped for React components by each screen's `custom` function.
 import { createElement, useEffect, useLayoutEffect, useReducer, useRef } from "react";
-import { motion } from "framer-motion";
-import { staggerProps } from "../../choreography.js";
 import { Item, Shared, holdsShared, sharedId } from "../../shared.jsx";
 import { error, snap, tick } from "../../haptics.js";
 import { coalesce } from "../../settled.js";
@@ -44,8 +42,7 @@ function propsOf(el) {
 export function Island({ tag, props, html, index }) {
   const ref = useRef(null);
   useLayoutEffect(() => { if (ref.current) legacy().enhanceClear(ref.current); }, [html]);
-  const T = index != null && motion[tag];
-  return createElement(T || tag, { ...props, ...(T ? staggerProps(index) : null), ref, dangerouslySetInnerHTML: { __html: html } });
+  return createElement(tag, { ...props, ...(index != null ? { "data-item": "" } : null), ref, dangerouslySetInnerHTML: { __html: html } });
 }
 
 // A checkbox or date input outside an island: uncontrolled, re-synced to the legacy state after each render unless being edited.

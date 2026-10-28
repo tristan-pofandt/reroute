@@ -9,6 +9,7 @@ import { AnimatePresence, LayoutGroup } from "framer-motion";
 import { attachRouter, bridge } from "./bridge.js";
 import { Page } from "./Page.jsx";
 import { setDirection } from "./choreography.js";
+import { setNav } from "./shared.jsx";
 
 const LEGAL = { terms: "/terms", privacy: "/privacy", sources: "/about" };
 const PATH_SCREEN = { "/terms": "terms", "/privacy": "privacy", "/about": "sources" };
@@ -42,6 +43,7 @@ function Screens() {
   const screen = popped ? pathScreen(location.pathname) : location.state?.screen || pathScreen(location.pathname);
   const direction = popped ? dir.current : location.state?.direction || "forward";
   const route = matchRoutes(ROUTES, `/${screen}`)?.[0].route ?? ROUTES[0];
+  if (route.name !== shown.current) setNav(shown.current, route.name); // before the pages render: shared elements ask where they come from / go to
   shown.current = route.name;
   if (popped) setDirection(direction);
   return (
