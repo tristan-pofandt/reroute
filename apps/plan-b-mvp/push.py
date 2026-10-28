@@ -20,6 +20,7 @@ import time
 from urllib.parse import urlsplit
 
 from gtfs_rt import FeedError, line_keys, train_codes, train_key_matches
+import push_native
 
 CHECK_EVERY = 60
 WATCH_AFTER_DEADLINE = timedelta(minutes=30)
@@ -150,8 +151,9 @@ def _start(trip):
 
 
 class Push:
-    def __init__(self, directory, monitor, sender=None, clock=time.time, env=None):
+    def __init__(self, directory, monitor, sender=None, clock=time.time, env=None, native=None):
         env = os.environ if env is None else env
+        self.native = native or push_native.FcmSender.from_env(env)
         self.directory = Path(directory)
         self.monitor = monitor
         self._sender = sender or default_sender
@@ -189,6 +191,9 @@ class Push:
     def ready(self):
         return bool(self.available and self.private_key and self.public_key)
 
+    def native_ready(self):
+        return self.native is not None
+
     def _read(self):
         try:
             return json.loads((self.directory / "push.json").read_text(encoding="utf-8"))
@@ -223,6 +228,52 @@ class Push:
             self._subscriptions[identifier] = {"subscription": subscription, "watch": watch, "expires": expires, "created": now, "sent": []}
             self._write()
         return identifier
+
+    def register_native(self, body, user_id=None):
+        """Store (or refresh) an FCM token with the same watch Web Push uses; the watch is optional until a trip is chosen."""
+        if not self.native_ready():
+            raise PushError("Native push notifications are not set up on this server.", 503)
+        token, platform = body.get("token"), body.get("platform")
+        if not isinstance(token, str) or not push_native.TOKEN.match(token):
+            raise PushError("The push token is not valid.")
+        if platform not in ("ios", "android"):
+            raise PushError("Platform must be ios or android.")
+        version, locale = body.get("app_version") or "", body.get("locale") or ""
+        if not isinstance(version, str) or (version and not push_native.VERSION.match(version)) or not isinstance(locale, str) or (locale and not push_native.LOCALE.match(locale)):
+            raise PushError("The app version or locale is not valid.")
+        now = self._clock()
+        if body.get("watch") is None:
+            watch, expires = {"label": "", "lines": [], "route_ids": [], "origin": "", "destination": "", "destination_place_id": None, "deadline": None}, now + WATCH_DEFAULT.total_seconds()
+        else:
+            watch, expires = clean_watch(body["watch"], now)
+        identifier = "n" + self.identifier(token)
+        with self._lock:
+            old = self._subscriptions.get(identifier)
+            if not old and len(self._subscriptions) >= MAX_SUBSCRIPTIONS:
+                raise PushError("Too many people are watching trips right now. Try again later.", 503)
+            self._subscriptions[identifier] = {"native": {"token": token, "platform": platform, "app_version": version, "locale": locale}, "user": user_id, "watch": watch,
+                                               "expires": expires, "created": now, "sent": old["sent"] if old else []}
+            self._write()
+        return identifier
+
+    def unregister_native(self, token):
+        if not isinstance(token, str):
+            raise PushError("Send the push token to stop alerts.")
+        with self._lock:
+            removed = self._subscriptions.pop("n" + self.identifier(token), None)
+            if removed:
+                self._write()
+        return bool(removed)
+
+    def forget_user(self, user_id):
+        """Account deletion: drop every token tied to the account."""
+        with self._lock:
+            gone = [i for i, entry in self._subscriptions.items() if user_id and entry.get("user") == user_id]
+            for identifier in gone:
+                del self._subscriptions[identifier]
+            if gone:
+                self._write()
+        return len(gone)
 
     def unsubscribe(self, endpoint):
         if not isinstance(endpoint, str):
@@ -263,9 +314,12 @@ class Push:
 
     def _send(self, identifier, entry, payload):
         try:
-            self._sender(entry["subscription"], json.dumps(payload), self.private_key, self.subject)
+            if entry.get("native"):
+                self.native.send(entry["native"]["token"], payload)
+            else:
+                self._sender(entry["subscription"], json.dumps(payload), self.private_key, self.subject)
             return True
-        except Gone:
+        except (Gone, push_native.Gone):
             with self._lock:
                 self._subscriptions.pop(identifier, None)
                 self._write()
@@ -322,7 +376,7 @@ class Push:
     def start(self):
         """Start the one-minute monitor thread (once per process)."""
         with self._lock:
-            if self._thread or not self.ready():
+            if self._thread or not (self.ready() or self.native_ready()):
                 return
             self._thread = threading.Thread(target=self._run, name="push-monitor", daemon=True)
             self._thread.start()

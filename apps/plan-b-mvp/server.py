@@ -30,6 +30,7 @@ import offline_area
 from ops import init_ops
 from offline_area import AreaError, Jobs, Pending, parse_bbox, parse_days
 from osm import OSM, OverpassBusy, OverpassError
+import push_native
 from push import Push, PushError
 from moderation import actor_id, init_moderation
 from rides import Board, RateLimited, RideError
@@ -611,6 +612,23 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
     def push_subscribe():
         return push_guard() or post(lambda body: {"id": push.subscribe(body.get("subscription"), body.get("watch"))}, limit=16384)
 
+    def native_guard():
+        # A custom header makes the request non-simple, so a browser only sends it cross-site when CORS allows the origin (CSRF-safe without cookies' token).
+        if not push_native.DEVICE.match(request.headers.get("X-Reroute-Device", "")):
+            return failure("Send the X-Reroute-Device header.", 400)
+        return push_guard()
+
+    @app.post("/api/push/native-register")
+    def push_native_register():
+        if not push.native_ready():
+            return failure("Native push notifications are not set up on this server.", 503)
+        accounts = app.extensions.get("accounts")
+        return native_guard() or post(lambda body: {"ok": True, "id": push.register_native(body, accounts.request_user(request) if accounts else None)}, limit=16384)
+
+    @app.post("/api/push/native-unregister")
+    def push_native_unregister():
+        return native_guard() or post(lambda body: {"ok": True, "removed": push.unregister_native(body.get("token"))})
+
     @app.post("/api/push/unsubscribe")
     def push_unsubscribe():
         return post(lambda body: {"removed": push.unsubscribe(body.get("endpoint"))})
@@ -621,7 +639,8 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
 
     # Accounts (Google / Apple sign-in, synced data); off unless ACCOUNTS_SECRET_KEY is set. See accounts.py.
     init_security(app)
-    init_accounts(app, data, limiter=limiter, client=client, public_url=public_url, trusted_proxy=bool(trusted), clock=clock)
+    acct = init_accounts(app, data, limiter=limiter, client=client, public_url=public_url, trusted_proxy=bool(trusted), clock=clock)
+    acct.on_delete.append(push.forget_user)
 
     app.config["PLANB_VERSION"] = VERSION
     init_ops(app, app.extensions["planb"])  # /healthz, /readyz, /admin/usage, optional Sentry (ops.py)

@@ -242,6 +242,7 @@ class Accounts:
         self.secret = self._secret(env.get("ACCOUNTS_SECRET_KEY", ""))
         self.enabled = self.secret is not None
         self._seen, self._seen_lock = {}, threading.Lock()
+        self.on_delete = []  # callables(user_id) run after an account is deleted (e.g. native push tokens)
         if not self.enabled:
             return
         self.fernet = Fernet(base64.urlsafe_b64encode(HKDF(hashes.SHA256(), 32, None, b"planb apple refresh token").derive(self.secret)))
@@ -402,8 +403,22 @@ class Accounts:
                       "sessions": conn.execute("SELECT COUNT(*) FROM sessions WHERE user_id = ?", (user_id,)).fetchone()[0],
                       "data_keys": conn.execute("SELECT COUNT(*) FROM user_data WHERE user_id = ?", (user_id,)).fetchone()[0]}
             conn.execute("DELETE FROM users WHERE id = ?", (user_id,))  # the other tables cascade
+        for hook in self.on_delete:
+            try:
+                counts["push_tokens"] = hook(user_id)
+            except Exception:
+                log.error("account delete hook failed user=%s", user_id)
         log.info("account deleted user=%s", user_id)
         return counts
+
+    def request_user(self, req):
+        """The signed-in user id for a Flask request (bearer token or session cookie), else None."""
+        if not self.enabled:
+            return None
+        bearer = req.headers.get("Authorization", "")
+        token = bearer[7:].strip() if bearer.lower().startswith("bearer ") else req.cookies.get("__Host-planb_session" if self.secure else "planb_session")
+        found = self.load_session(token)
+        return found[0]["user_id"] if found else None
 
     def seen_before(self, id_token, exp):
         """Native ID tokens are single-use: remember each for as long as it could still verify."""
