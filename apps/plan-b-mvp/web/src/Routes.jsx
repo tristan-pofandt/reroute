@@ -11,9 +11,9 @@ import { Page } from "./Page.jsx";
 import { setDirection } from "./choreography.js";
 import { setNav, warmShared } from "./shared.jsx";
 
-const LEGAL = { terms: "/terms", privacy: "/privacy", sources: "/about", community: "/community", licences: "/licences", support: "/support" };
-const PATH_SCREEN = { "/terms": "terms", "/privacy": "privacy", "/about": "sources", "/community": "community", "/licences": "licences", "/support": "support" };
-const NAMES = ["home", "journey", "results", "next", "panic", "nav", "dashboard", "rides", "weather", "offline-area", "terms", "privacy", "sources", "community", "licences", "support"];
+const LEGAL = { terms: "/terms", privacy: "/privacy", sources: "/about", community: "/community", licences: "/licences", support: "/support", account: "/account" };
+const PATH_SCREEN = { "/terms": "terms", "/privacy": "privacy", "/about": "sources", "/community": "community", "/licences": "licences", "/support": "support", "/account": "account" };
+const NAMES = ["home", "journey", "results", "next", "panic", "nav", "dashboard", "rides", "weather", "offline-area", "terms", "privacy", "sources", "community", "licences", "support", "account"];
 const ROUTES = NAMES.map((name) => ({ path: `/${name}`, name }));
 const pathScreen = (pathname) => PATH_SCREEN[pathname] || "home";
 

@@ -1,0 +1,27 @@
+/* Account screen only. Sign-in buttons follow the official brand rules: Google (G mark, "Continue with Google", light/dark themes) and
+   Apple Human Interface Guidelines (black or white button, Apple logo, "Sign in with Apple"). Both are the same size and weight. */
+.acct-signin { display: grid; gap: 12px; margin-top: 4px; }
+.acct-brand { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 48px; padding: 0 16px; border-radius: 12px; cursor: pointer; transition: opacity 0.14s, transform 0.14s; }
+.acct-brand:active { transform: scale(0.98); opacity: 0.88; }
+.acct-brand:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.acct-google { font: 500 14px/20px Roboto, "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.25px; background: #131314; color: #E3E3E3; border: 1px solid #8E918F; }
+.acct-apple { font: 600 17px/22px -apple-system, "SF Pro Text", "Helvetica Neue", Arial, sans-serif; letter-spacing: -0.022em; background: #FFFFFF; color: #000000; border: 1px solid #FFFFFF; }
+:root[data-theme="light"] .acct-google { background: #FFFFFF; color: #1F1F1F; border-color: #747775; }
+:root[data-theme="light"] .acct-apple { background: #000000; color: #FFFFFF; border-color: #000000; }
+.acct-fake { border-style: dashed; }
+.acct-card { display: grid; gap: 0; margin: 0; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 18px; overflow: hidden; }
+.acct-card > div { display: flex; justify-content: space-between; gap: 16px; padding: 14px 16px; border-bottom: 1px solid var(--divider); }
+.acct-card > div:last-child { border-bottom: 0; }
+.acct-card dt { color: var(--text-muted); font-size: 0.8125rem; flex-shrink: 0; }
+.acct-card dd { margin: 0; text-align: right; font-size: 0.875rem; color: var(--text-main); overflow-wrap: anywhere; }
+.acct-sync.synced { color: var(--success-text); }
+.acct-sync.offline, .acct-sync.error, .acct-sync.conflict { color: var(--error-text); }
+.acct-actions { display: grid; gap: 12px; }
+.acct-actions .btn { min-height: 48px; }
+.acct-panel { display: grid; gap: 12px; padding: 16px; border-radius: 14px; border: 1px solid var(--border-subtle); background: var(--bg-card); }
+.acct-panel.error { border-color: color-mix(in srgb, var(--error) 30%, transparent); background: var(--error-soft); }
+.acct-panel p { margin: 0; }
+.acct-panel h2 { margin: 0; }
+.acct-delete { color: var(--error-text); }
+.acct-confirm { background: var(--error); color: var(--on-error); }
+.acct-guest .btn, .acct-danger .btn-text { width: 100%; }
