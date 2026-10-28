@@ -11,7 +11,9 @@
     "android:open": "cap open android",
     "ios:open": "cap open ios",
     "android:build-debug": "node scripts/build-native.mjs --debug",
-    "cap:doctor": "cap doctor"
+    "cap:doctor": "cap doctor",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@capacitor/android": "8.5.3",
