@@ -1,9 +1,11 @@
 """Operations endpoints and optional error reporting: /healthz, /readyz, admin-only /admin/usage, and Sentry when SENTRY_DSN is set."""
 
 import hmac
+import json
 import os
 import re
 import time
+from pathlib import Path
 
 from flask import jsonify, request
 
@@ -11,6 +13,14 @@ import google_api
 import usage
 
 STARTED = time.time()
+
+
+def app_version():
+    """The app's marketing version: web/package.json is the single source (scripts/bump-version.mjs)."""
+    try:
+        return json.loads((Path(__file__).resolve().parent / "web" / "package.json").read_text(encoding="utf-8"))["version"]
+    except (OSError, ValueError, KeyError):
+        return ""
 
 
 def release():
@@ -46,7 +56,7 @@ def init_ops(app, parts):
     admin = lambda: os.getenv("PLANB_ADMIN_TOKEN", "").strip()  # read per request so the token can be rotated without a rebuild
 
     def health():
-        return {"status": "ok", "version": release(), "app_version": app.config.get("PLANB_VERSION", ""), "uptime_s": int(time.time() - STARTED)}
+        return {"status": "ok", "version": release(), "app_version": app_version(), "api_version": app.config.get("PLANB_VERSION", ""), "uptime_s": int(time.time() - STARTED)}
 
     @app.get("/healthz")
     def healthz():  # liveness: the process answers. Uptime Kuma: HTTP keyword "ok"

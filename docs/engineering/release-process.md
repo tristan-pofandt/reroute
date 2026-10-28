@@ -4,8 +4,9 @@ Prepared by Claude Sonnet 5.5 via Claude Code at T.P's request. **Human review r
 
 ## Versioning
 
-- **Marketing version** `MAJOR.MINOR.PATCH` (start `0.1.0`; `1.0.0` = first public store release). Keep `web/package.json` `version`, iOS `MARKETING_VERSION` and Android `versionName` equal.
-- **Build number**: one integer, increasing for every upload to either store (iOS `CFBundleVersion`, Android `versionCode`). Use the CI run number or a manual counter; a store rejects a reused number.
+- **One source of truth**: `apps/plan-b-mvp/web/package.json` (`version` = `MAJOR.MINOR.PATCH`, start `0.1.0`, `1.0.0` = first public store release; `buildNumber` = one integer that only goes up, used for every upload to either store).
+- **Bump with the script, never by hand**: `node scripts/bump-version.mjs patch|minor|major|1.2.3 [--build N] [--dry-run]` (build number +1 unless `--build`). It rewrites `package.json`, `package-lock.json`, Android `versionName`/`versionCode` (`android/app/build.gradle`) and iOS `MARKETING_VERSION`/`CURRENT_PROJECT_VERSION` (`project.pbxproj`, both configurations). The Support page shows `package.json` `version` and the build; `/healthz` returns it as `app_version` (plus `version` = git sha, `api_version`). `--sync` re-applies the current version to the native files; `--check` (run by `scripts/check.sh` and `test_versions.py`) fails if anything disagrees.
+- Stores reject a reused build number, so bump before every upload even when the marketing version is unchanged. Commit, then tag (below).
 - **Server/web**: the deployed web build is identified by `GIT_SHA` (`/healthz` shows it). Native apps load the bundled web build, so a web change that must reach store users needs a new binary unless the app loads the live site.
 - Tag releases `v0.1.0` on `main`. Changelog = the what's-new text (template in the listing docs).
 
