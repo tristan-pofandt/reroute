@@ -1,0 +1,22 @@
+App/build
+App/Pods
+App/output
+App/App/public
+DerivedData
+xcuserdata
+
+# Cordova plugins for Capacitor
+capacitor-cordova-ios-plugins
+
+# Generated Config files
+App/App/capacitor.config.json
+App/App/config.xml
+
+# Secrets and signing material: NEVER commit. See web/NATIVE.md for where these go.
+GoogleService-Info.plist
+*.p12
+*.p8
+*.mobileprovision
+*.cer
+*.certSigningRequest
+ExportOptions.local.plist
