@@ -25,3 +25,5 @@
 .acct-delete { color: var(--error-text); }
 .acct-confirm { background: var(--error); color: var(--on-error); }
 .acct-guest .btn, .acct-danger .btn-text { width: 100%; }
+.acct-card, .acct-panel, .acct-actions, .acct-signin, .acct-danger { flex-shrink: 0; } /* .legal-content is a flex column: never squash the card */
+.legal-content .fine .text-link { display: inline; min-height: 0; font-size: inherit; }
