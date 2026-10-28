@@ -56,3 +56,54 @@ Credit: Claude Sonnet 5.5 via Claude Code at T.P's request. Every animation was 
 | Splash | the page cascade starts after 760 ms | 680 ms | The mark is drawn by then |
 
 Checked in headless Chrome at 390 px (sampled frames, no paid APIs): home to the trip screen exit finished in about 250 ms including a tick haptic, menu rows all visible within about 300 ms, press reached 0.97 and release cleared the inline styles, Impact to dashboard settled with no leftover transforms, zero console errors. Not checked: a real phone, haptics, frame rate under load, reduced motion mid-flight after this change, the profile menu by eye, the Cards/List toggle by eye.
+
+## Transition jitter and the side-menu close (measured)
+
+Credit: Claude Sonnet 5.5 via Claude Code at T.P's request. Reported: a split-second jitter going back to the home screen and into "your options", some element-focused transitions feeling jolty, and the home side panel closing too quickly. This section is measured, not guessed: `apps/plan-b-mvp/web/scripts/motion-bench.js` (see web/README.md, "Measuring motion") records every `requestAnimationFrame` delta, `longtask`, `layout-shift` and, after every painted frame, the computed opacity / translate / transform of the moving elements, and flags any direction reversal (a snap-back or a flash). Headless Chrome at 390x844, demo mode, `/api/plan` answered from a fixture (no Google call), the display runs at about 144 Hz so a normal frame is 7 ms. "4x" is `Emulation.setCPUThrottlingRate` 4.
+
+### Root causes
+
+| # | Cause | Evidence | Fix |
+| --- | --- | --- | --- |
+| 1 | `scroll3d.js` `remeasure()` (a ResizeObserver on the blocks, 120 ms debounce, commit ef4a91e) cleared the inline transform / opacity of EVERY block, and the following flush cleared it again, while framer was animating the same blocks | the entering "your options" chips went 55 px -> 0 px -> 38 px -> 0 px, 120 ms into the entrance, and the view toggle (opacity 0 then) jumped 234 px -> 0 -> 234; the same on every page | Registration, re-measure and re-assert wait for `reroute:settled` (new event from `Page.jsx`); only blocks that start hidden are ever cleared; non-reveal blocks are never touched |
+| 2 | app.css `animation: rise / fbIn` CSS entrances on the page blocks (`.wx`, `.card`, `.hero`, `.confirm` ...) ran on top of the choreography and override inline transform / opacity; they had only been silenced by `data-fm`, which fix 1 now sets later | after fix 1 alone the home weather card sat at x = 0 for 80 ms while its opacity rose, then jumped to -89 px | `motion.css` switches those animations off for the direct children of a page's `.scroll`, header and footer |
+| 3 | `navigate()` set `app.dataset.screen` at the start of the exit, so the leaving page shifted (the demo pill's 44 px padding is dropped for `nav`) | `layout-shift` 0.052 on the old page, 8 ms after the tap, home -> nav and back | The shell sets it in `pageMounted` only |
+| 4 | `reroute:rerender` re-rendered the home / trip trees in the middle of an entrance | rerender marks at 1 ms and 7 ms into journey -> results | `settled.js` `coalesce()`: many events during one transition become one re-render on `reroute:settled` |
+| 5 | The close of the menu, Settings and sheets was 160 ms with a very fast start, the scrim 200 ms, and the lines (120 ms + 12 ms stagger) were still leaving when the panel was gone | panel at 66 % of its travel after 20 % of the time | Panel and scrim 300 ms with `--ease-close` (cubic-bezier .4 .55 .2 1: 36 % at 20 % of the time); lines 160 ms, 14 ms apart, top first, the last gone at 272 ms; closing panels let taps through; the menu and profile menu retarget when reopened mid-close |
+
+Not a cause (measured): `will-change` on the page blocks (no consistent gain, worse for weather), long tasks at 1x (none), layout shifts from fonts or scrollbars (none), framer layout (`measureScroll`) at about 6 ms per transition at 4x. Settings open and the weather mount each have one frame of 24-25 ms at 1x (about 100 ms at 4x for weather): the first layout of 400+ nodes; `content-visibility` on Settings gave no reliable gain, so it was left alone.
+
+### Before and after
+
+Before = commit 94d9445, after = HEAD. "Paths" counts elements whose painted path reverses (a visible snap or flash); "frames" are frames over 20 ms / worst frame, per transition window (about 1.3 s, 160-215 frames).
+
+| Transition | Paths before -> after | 1x frames >20 ms, max (before -> after) | 4x frames >20 ms, max (before -> after) |
+| --- | --- | --- | --- |
+| home -> results | 4 -> 0 | 0, 16 -> 0, 12 | 2, 30 -> 1, 30 |
+| results -> home | 4 -> 0 | 0, 9 -> 0, 13 | 1, 30 -> 2, 24 |
+| home -> dashboard | 2 -> 0 | 0, 8 -> 0, 12 | 0, 18 -> 0, 18 |
+| dashboard -> home | 4 -> 0 | 0, 9 -> 0, 12 | 1, 24 -> 0, 16 |
+| home -> weather | 3 -> 0 | 1, 32 -> 1, 25 | 3, 98 -> 4, 53 |
+| weather -> home | 4 -> 0 | 0, 15 -> 0, 12 | 2, 30 -> 1, 24 |
+| home -> journey | 1 -> 0 | 0, 9 -> 0, 13 | 1, 24 -> 2, 28 |
+| journey -> home | 4 -> 0 | 0, 8 -> 1, 31 (once) | 1, 24 -> 1, 24 |
+| journey -> results | 4 -> 0 | 0, 9 -> 0, 7 | 1, 24 -> 2, 31 |
+| results -> next | 8 -> 0 (see note) | 0, 11 -> 0, 18 | 2, 31 -> 2, 53 |
+| next -> results | 4 -> 0 | 0, 8 -> 0, 20 | 1, 24 -> 1, 25 |
+| home -> panic | 5 (opacity flash) -> 0 | 0, 16 -> 0, 12 | 1, 24 -> 2, 24 |
+| panic -> home | 4 -> 0 | 0, 9 -> 0, 7 | 1, 24 -> 0, 16 |
+| home -> nav | 5 -> 0, layout shift 0.052 on the old page -> 0 on it | 0, 15 -> 0, 18 | 0, 19 -> 1, 25 |
+| nav -> home | 5 -> 0 | 0, 9 -> 0, 8 | 1, 31 -> 2, 24 |
+| menu open | 0 -> 0 | 0 -> 0 | 0 -> 1 (one 25 ms frame) |
+| menu close | 0 -> 0 (panel now 300 ms) | 0, 8 -> 0, 8 | 0, 19 -> 1, 24 |
+| settings open / close | 0 -> 0 | 0, 16 -> 1, 25 / 0, 9 -> 0, 8 | 2, 49 -> 3, 48 / 0, 18 -> 1, 23 |
+| sheet open (share) | 4 (line flash) -> 0 | 0, 10 -> 0, 14 | 0, 19 -> 1, 24 |
+| sheet close, profile open / close | 0 -> 0 | 0 -> 0 | 0 -> 0 |
+
+The frame counts at 1x and 4x are dominated by one frame at the instant the next page mounts (React commit, `pageMounted`, Lenis, the first style and layout of the new tree: about 6 ms at 1x, 24 ms at 4x), where nothing is moving yet, so it is not the visible jitter; the snap-backs in the paths column were. Fixing the snaps did not change the frame counts, which were already near the floor; the 4x numbers move by noise (single frames of 24-31 ms either way). The `results -> next` after-note: one below-the-fold card is hidden by the reveal once the page has settled while it still sits under the footer clip (not visible). The raw before / after numbers vary by a frame or two between runs.
+
+Side menu close, measured (1x, frames sampled every second): the panel reaches 12 % of its travel at 27 ms, 65 % at 100 ms, 97 % at 200 ms and is at rest by 300 ms; the scrim is at 0.48 at 82 ms and 0 by 263 ms; the 5th row is gone by 100 ms and the 9th by 173 ms. Reopening 130 ms into a close: the panel turns round from -263 px (no jump to the closed position), one menu element, page inert again.
+
+### Not verified
+
+A real phone (touch, 60 Hz, the browser's compositor on a mobile GPU). The harness runs headless on a fast display, so jitter that comes from the GPU or from a 60 Hz vsync is outside what these numbers show; the 4x CPU throttle is only a proxy for a slower CPU.

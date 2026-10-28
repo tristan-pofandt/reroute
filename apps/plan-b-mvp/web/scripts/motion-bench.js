@@ -50,7 +50,7 @@ async (page) => {
           if (!e.isConnected) continue;
           const cs = getComputedStyle(e, pseudo || null);
           if (cs.display === "none") continue;
-          if (!pseudo && e.getBoundingClientRect().top >= innerHeight) continue; // below the fold: not visible, so not a visible glitch
+          if (!pseudo && e.getBoundingClientRect().top >= (e.closest(".scroll, .sheet-scroll")?.getBoundingClientRect().bottom ?? innerHeight)) continue; // clipped below the scroll area: not a visible glitch
           let id = B.ids.get(e); if (!id) { id = B.series.size + 1; B.ids.set(e, id); }
           const key = name + "#" + id;
           let s = B.series.get(key); if (!s) B.series.set(key, (s = []));
@@ -107,6 +107,7 @@ async (page) => {
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.route("**/api/plan", (r) => r.fulfill({ path: CFG.fixture, contentType: "application/json" }));
+  await page.route("**/api/status", async (r) => { const resp = await r.fetch(); const j = await resp.json(); j.live_available = true; await r.fulfill({ response: resp, json: j }); }); // the search button needs a live key; /api/plan is mocked, so none is used
   await page.goto(CFG.base);
   await page.evaluate(async () => {
     for (const r of (await navigator.serviceWorker?.getRegistrations()) || []) await r.unregister();
