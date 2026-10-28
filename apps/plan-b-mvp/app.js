@@ -967,18 +967,6 @@ function optionCard(o, index, highlight, lowest) {
 }
 
 const SORTS = [["best", "Best fit"], ["pt", "Public transport first"], ["arrival", "Earliest"], ["cost", "Cheapest"], ["walking", "Least walking"], ["co2", "Lowest CO₂"]];
-const SORT_WHY = {
-  best: "Options inside every limit come first, then the earliest arrival.",
-  pt: "Public transport comes first, then whatever fits your limits, then the earliest arrival.",
-  arrival: "Earliest estimated arrival first.",
-  cost: "Lowest known total cost first. Unknown costs go last.",
-  walking: "Least walking first.",
-  co2: "Lowest estimated CO₂ first.",
-};
-const SORT_WHY_DEADLINE = {
-  best: "Options inside every limit come first, then others that arrive on time with no disruption, then the earliest arrival.",
-  pt: "Options that arrive on time with no disruption come first, public transport first among them, then the earliest arrival.",
-};
 
 function sortedOptions() {
   const list = [...state.plan.options];
@@ -1027,7 +1015,6 @@ function resultsScreen() {
     const noneFit = !fit && p.deadline
       ? `<p class="none-fit">${I.alert(14)}<span>No option meets every limit. ${onTime.length ? `On time: ${esc(onTime.slice(0, 2).map((o) => o.title).join(", "))}${onTime.length > 2 ? ` +${onTime.length - 2}` : ""}.` : "None arrives on time."}</span></p>` : "";
     body = `<div class="view-toggle" data-view-toggle></div>` + noneFit
-      + `<p class="why-rank">${esc((p.deadline && SORT_WHY_DEADLINE[state.sort]) || SORT_WHY[state.sort])}</p>`
       + (settings.show.co2 ? co2Summary(p.options) : "")
       + `<div class="cards">${options.map((o, i) => optionCard(o, i, i === 0 && o.fits ? "best" : "", lowest)).join("")}</div>`;
   }

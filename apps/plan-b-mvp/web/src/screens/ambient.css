@@ -1,19 +1,29 @@
 /* Ambient loops: transform / opacity only (the dash flow is the one exception: one small stroke). Calm: <= 4 deg, <= 3 %, >= 3.6 s per cycle.
    Blocks scrolled out of view get .amb-off from motion/ambient.js and pause (below). app.css already collapses every animation to 1 ms / one iteration under prefers-reduced-motion
    and html[data-motion="reduced"] (also when toggled mid-session), so these loops stop and rest in their normal pose there. */
-@keyframes amb-sway { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
+/* A gust, then a lull: the leaf whips about its stem, turns edge-on as it flips, and settles. Rotation and translate only, so it stays on the compositor. */
+@keyframes amb-sway {
+  0%, 100% { transform: rotate(0deg) translate(0, 0); }
+  8% { transform: rotate(-16deg) translate(-1px, 0) scaleX(0.82); }
+  17% { transform: rotate(12deg) translate(1px, -1px) scaleX(1); }
+  27% { transform: rotate(-12deg) translate(-1px, 0) scaleX(0.86); }
+  38% { transform: rotate(8deg) translate(1px, -1px) scaleX(1); }
+  50% { transform: rotate(-6deg) translate(0, 0) scaleX(0.92); }
+  62% { transform: rotate(3deg) translate(0, 0) scaleX(1); }
+  78% { transform: rotate(-1deg); }
+}
 @keyframes amb-glow { 0%, 100% { opacity: 0; } 50% { opacity: 0.6; } }
 @keyframes amb-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.03); } }
 @keyframes amb-spin { to { transform: rotate(360deg); } }
-@keyframes amb-float { 0%, 100% { transform: translateY(1.5px); } 50% { transform: translateY(-2px); } }
-@keyframes amb-drift { 0%, 100% { transform: translateX(-2.5px); } 50% { transform: translateX(2.5px); } }
+@keyframes amb-float { 0%, 100% { transform: translateY(3px); } 50% { transform: translateY(-4px); } }
+@keyframes amb-drift { 0%, 100% { transform: translate(-7px, 1px); } 50% { transform: translate(7px, -2px); } }
 @keyframes amb-fall { 0% { transform: translateY(-2px); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(4px); opacity: 0; } }
 @keyframes amb-flash { 0%, 70%, 100% { opacity: 1; } 78% { opacity: 0.15; } 86% { opacity: 1; } 92% { opacity: 0.3; } }
 @keyframes amb-dash { to { stroke-dashoffset: -12; } }
 
 /* Leaves in light wind */
-.co2-ic svg, .card-row .row-meta svg, .co2-mini > svg, .co2-summary > svg, .impact-btn > svg, .impact-ic svg, .leaf-sway svg { transform-origin: 20% 90%; animation: amb-sway 5.5s ease-in-out infinite; }
-.impact-btn > svg { animation-duration: 6.5s; }
+.co2-ic svg, .card-row .row-meta svg, .co2-mini > svg, .co2-summary > svg, .impact-btn > svg, .impact-ic svg, .leaf-sway svg { transform-origin: 20% 90%; animation: amb-sway 3.6s ease-in-out infinite; }
+.impact-btn > svg { animation-duration: 4.4s; }
 .leaf-sway { display: inline-flex; }
 
 /* The greenest / fitting best option breathes very slightly */
@@ -28,7 +38,7 @@
 .wx-icon svg { animation: amb-float 5s ease-in-out infinite; }
 .wx-icon[data-cond="sun"] svg, .wx-icon[data-cond="snow"] svg { animation: amb-spin 40s linear infinite; }
 .wx-icon[data-cond="sun"]::after, .wx-icon[data-cond="heat"]::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: radial-gradient(circle, color-mix(in srgb, var(--tone) 38%, transparent), transparent 70%); opacity: 0; animation: amb-glow 4.5s ease-in-out infinite; }
-.wx-icon[data-cond="cloud"] svg, .wx-icon[data-cond="cloud-sun"] svg, .wx-icon[data-cond="fog"] svg, .wx-icon[data-cond="wind"] svg { animation: amb-drift 7s ease-in-out infinite; }
+.wx-icon[data-cond="cloud"] svg, .wx-icon[data-cond="cloud-sun"] svg, .wx-icon[data-cond="fog"] svg, .wx-icon[data-cond="wind"] svg { animation: amb-drift 5.5s ease-in-out infinite; }
 .wx-icon[data-cond="rain"] svg, .wx-icon[data-cond="drizzle"] svg, .wx-icon[data-cond="storm"] svg { animation: none; }
 .wx-icon[data-cond="rain"] svg path:nth-child(2), .wx-icon[data-cond="drizzle"] svg path:nth-child(2) { animation: amb-fall 1.4s ease-in infinite; }
 .wx-icon[data-cond="storm"] svg path:nth-child(2) { animation: amb-flash 4s linear infinite; }

@@ -69,8 +69,15 @@ export function resultsCustom(layout = false, list = false) {
 
 function ViewToggle() {
   useSyncExternalStore(subscribe, snapshot);
-  const b = (v, label) => <button type="button" aria-pressed={view === v} onClick={() => { if (view !== v) { tick(); setView(v); } }}>{label}</button>;
-  return <div className="segmented" role="group" aria-label="Results layout">{b("cards", "Cards")}{b("list", "List")}</div>;
+  const b = (v, label, icon) => <button type="button" aria-pressed={view === v} onClick={() => { if (view !== v) { tick(); setView(v); } }}>{icon}{label}</button>;
+  const ic = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.75, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true };
+  return (
+    <div className="segmented" role="group" aria-label="Results layout">
+      <span className="thumb" style={{ width: "calc((100% - 4px) / 2)", transform: `translateX(${view === "list" ? 100 : 0}%)` }} />
+      {b("cards", "Cards", <svg {...ic}><rect x="4" y="4" width="16" height="7" rx="2" /><rect x="4" y="13" width="16" height="7" rx="2" /></svg>)}
+      {b("list", "List", <svg {...ic}><path d="M4 7h16M4 12h16M4 17h16" /></svg>)}
+    </div>
+  );
 }
 
 // Dissolve `.cards` (not the loading skeleton, which is a status region) into its parent so cards are direct children of `.scroll`.

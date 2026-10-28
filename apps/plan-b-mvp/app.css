@@ -454,7 +454,6 @@ button.tile-card:active { transform: scale(0.97); background: var(--bg-card); }
 .empty-icon { --tone: var(--warning); width: 48px; height: 48px; border-radius: 14px; margin-bottom: 16px; color: var(--tone); background: color-mix(in srgb, var(--tone) 14%, transparent); display: flex; align-items: center; justify-content: center; }
 .empty-card h3 { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
 .empty-card p { font-size: 14px; color: var(--text-muted); line-height: 1.6; max-width: 30em; }
-.why-rank { font-size: 12px; color: var(--text-muted); margin: 0 4px 16px; line-height: 1.5; }
 /* "No option meets every limit" as one tinted line rather than a card, so the first arrival time stays above the fold. */
 .none-fit { --tone: var(--warning); display: flex; gap: 8px; align-items: flex-start; padding: 8px 12px; margin: 0 0 12px; border-radius: 12px; font-size: 13px; font-weight: 500; line-height: 1.45; color: var(--warning-text); background: var(--warning-soft); border: 1px solid color-mix(in srgb, var(--tone) 24%, transparent); animation: fbIn 0.2s var(--ease-out) backwards; }
 .none-fit svg { flex-shrink: 0; margin-top: 2px; }
