@@ -8,6 +8,7 @@ import { motion } from "framer-motion";
 import { staggerProps } from "../../choreography.js";
 import { Item, Shared, holdsShared, sharedId } from "../../shared.jsx";
 import { error, snap, tick } from "../../haptics.js";
+import { coalesce } from "../../settled.js";
 
 const legacy = () => window.RerouteLegacy;
 const RENAME = { class: "className", for: "htmlFor", tabindex: "tabIndex", autocomplete: "autoComplete", spellcheck: "spellCheck", readonly: "readOnly", maxlength: "maxLength", inputmode: "inputMode", colspan: "colSpan" };
@@ -104,12 +105,12 @@ export function useLegacyHtml(name) {
   const [tick_, bump] = useReducer((n) => n + 1, 0);
   const keep = useRef(null);
   useEffect(() => {
-    const on = (e) => {
+    const on = coalesce((e) => {
       if (!e.detail?.native) return;
       const a = document.activeElement;
       keep.current = a && a !== document.body && a.closest(`.page[data-screen="${name}"]`) ? a : null;
       bump();
-    };
+    });
     document.addEventListener("reroute:rerender", on);
     return () => document.removeEventListener("reroute:rerender", on);
   }, [name]);

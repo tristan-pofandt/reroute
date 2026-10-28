@@ -6,6 +6,7 @@
 import { createElement, useEffect, useMemo, useState } from "react";
 import { legacyNode } from "../../shared.jsx";
 import { snap, tick } from "../../haptics.js";
+import { coalesce } from "../../settled.js";
 
 const ATTR = { class: "className", for: "htmlFor", tabindex: "tabIndex", maxlength: "maxLength", readonly: "readOnly", autocomplete: "autoComplete", colspan: "colSpan", rowspan: "rowSpan", inputmode: "inputMode", value: "defaultValue", checked: "defaultChecked" };
 const BOOL = new Set(["disabled", "hidden", "required", "readonly", "checked", "multiple", "autofocus"]);
@@ -49,9 +50,9 @@ const html = (name) => window.RerouteLegacy.SCREENS[name]();
 export function useScreenHtml(name) {
   const [h, setH] = useState(() => html(name));
   useEffect(() => {
-    const on = () => setH(html(name));
+    const on = coalesce(() => setH(html(name)));
     document.addEventListener("reroute:rerender", on);
-    on(); // state may have changed between the first render and this effect
+    setH(html(name)); // state may have changed between the first render and this effect
     return () => document.removeEventListener("reroute:rerender", on);
   }, [name]);
   return h;

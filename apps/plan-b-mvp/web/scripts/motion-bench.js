@@ -12,7 +12,7 @@
 //   * pageMounted / pageSettled / rerender durations and the time of every `reroute:rerender`
 
 async (page) => {
-  const CFG = { base: "http://127.0.0.1:9031/", cpu: 1, only: "", fixture: "C:/Users/tpofa/OneDrive/UQ/Semester 2 2026/COMP1100/COMP1100-45_Kai/apps/plan-b-mvp/web/scripts/plan.fixture.json", raw: "" };
+  const CFG = { base: "http://127.0.0.1:9031/", cpu: 1, only: "", fixture: "C:/Users/tpofa/OneDrive/UQ/Semester 2 2026/COMP1100/COMP1100-45_Kai/apps/plan-b-mvp/web/scripts/plan.fixture.json", raw: "", css: "" };
   Object.assign(CFG, globalThis.BENCH_CFG || {}); // the wrapper sets e.g. globalThis.BENCH_CFG = { cpu: 4, only: "menu", raw: "results:2" }
   const REC = () => {
     const B = (window.__mb = {});
@@ -91,7 +91,7 @@ async (page) => {
         if (o.rev || x.rev || y.rev) paths.push(`${k} op:${o.rev}/${o.swing} x:${x.rev}/${x.swing} y:${y.rev}/${y.swing}`);
       }
       return {
-        frames: d.length, over20: d.filter((v) => v > 20).length, over33: d.filter((v) => v > 33).length, max: +Math.max(0, ...d).toFixed(1),
+        frames: d.length, over12: d.filter((v) => v > 12).length, over20: d.filter((v) => v > 20).length, over33: d.filter((v) => v > 33).length, max: +Math.max(0, ...d).toFixed(1),
         p95: +(sorted[Math.floor(sorted.length * 0.95)] || 0).toFixed(1), jank: jank.slice(0, 8), longtasks: B.lt, cls: +B.ls.reduce((a, e) => a + e[1], 0).toFixed(4),
         shifts: B.ls.slice(0, 3), marks: B.marks.filter((m) => m[0] !== "rerender" ? m[2] > 4 : true).slice(0, 10), tracked: B.series.size, paths: paths.slice(0, 12), raw,
       };
@@ -118,6 +118,7 @@ async (page) => {
   await page.evaluate((r) => { window.__mbRaw = r; }, CFG.raw);
   await page.waitForFunction(() => window.RerouteLegacy?.state && document.querySelector("#viewport .page"), null, { timeout: 15000 });
   await sleep(2500);
+  if (CFG.css) await page.addStyleTag({ content: CFG.css }); // A/B experiments: CSS injected after load
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: CFG.cpu });
   // Get a plan into the state once (journey -> results), through the real search flow.
   await click('[data-action="start"]'); await idle();
@@ -165,7 +166,7 @@ async (page) => {
         await page.evaluate((s) => window.__mb.start(s), pass === "paths");
         await act(); await sleep(ms);
         const r = await page.evaluate(() => window.__mb.stop());
-        if (pass === "frames") Object.assign(row, { frames: r.frames, over20: r.over20, over33: r.over33, max: r.max, p95: r.p95, jank: JSON.stringify(r.jank), longtasks: JSON.stringify(r.longtasks), cls: r.cls, shifts: JSON.stringify(r.shifts), marks: JSON.stringify(r.marks) });
+        if (pass === "frames") Object.assign(row, { frames: r.frames, over12: r.over12, over20: r.over20, over33: r.over33, max: r.max, p95: r.p95, jank: JSON.stringify(r.jank), longtasks: JSON.stringify(r.longtasks), cls: r.cls, shifts: JSON.stringify(r.shifts), marks: JSON.stringify(r.marks) });
         else { row.paths = r.paths.length ? r.paths : "ok"; if (CFG.raw) row.raw = r.raw; }
       } catch (e) { row.error = String(e).slice(0, 160); }
       await idle();
