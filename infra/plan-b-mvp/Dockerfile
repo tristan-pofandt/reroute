@@ -13,6 +13,9 @@ RUN npm run build
 # Stage 2: the Flask app. server.py serves web/dist, and falls back to the plain index.html if it is missing.
 FROM python:3.13-slim
 
+# The commit shown by /healthz: docker build --build-arg GIT_SHA=$(git rev-parse --short HEAD) ...
+ARG GIT_SHA=dev
+ENV GIT_SHA=$GIT_SHA
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \

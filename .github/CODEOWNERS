@@ -1,0 +1,5 @@
+# Placeholder: replace @OWNER with real GitHub handles or teams before enabling "Require review from Code Owners".
+*                          @OWNER
+/apps/plan-b-mvp/accounts.py   @OWNER
+/apps/plan-b-mvp/web/src/native/ @OWNER
+/docs/                     @OWNER

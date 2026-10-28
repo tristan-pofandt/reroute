@@ -8,6 +8,7 @@ const legacy = ["/api", "/app.js", "/offline.js", "/app.css", "/favicon.svg", "/
 export default defineConfig({
   base: "/",
   plugins: [react()],
+  test: { environment: "jsdom", setupFiles: ["./src/__tests__/setup.js"], include: ["src/**/*.test.{js,jsx}"] },
   build: { outDir: "dist", emptyOutDir: true },
   server: { host: "127.0.0.1", proxy: Object.fromEntries(legacy.map((p) => [p, FLASK])) },
 });
