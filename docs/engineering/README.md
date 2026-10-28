@@ -24,3 +24,5 @@ Application-specific setup commands belong with the relevant application under `
 - [Privacy data map](privacy-data-map.md): every data item (where stored, why, retention, who can access, deletion path); the store privacy forms must match it.
 - [Native wrapper](native-wrapper.md): Capacitor architecture, adapters, plugins, native push and sign-in contracts.
 - [Pre-submission audit (2026-10-28)](preflight-audit-2026-10-28.md): report-only audit of the build against store rules.
+- [Hand-off checklist (2026-10-28)](handoff-checklist-2026-10-28.md): the one ordered list a human follows: deploy, domain and email, Google and Apple set-up, Firebase, Android and iOS builds, store forms, legal review, testing, monitoring. Marks what only a human can do.
+- [Final fixes log (2026-10-28)](../product/reroute-final-fixes-log-2026-10-28.md): placeholders, versions, native hardening, store assets, accessibility, dependencies.
