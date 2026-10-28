@@ -181,7 +181,7 @@ const saveSettings = () => store.set("settings", settings);
 
 // ── App state ────────────────────────────────────────────────────────────────
 
-const INITIAL_SCREEN = ({ "/terms": "terms", "/privacy": "privacy", "/about": "sources" })[window.location.pathname] || "home";
+const INITIAL_SCREEN = ({ "/terms": "terms", "/privacy": "privacy", "/about": "sources", "/community": "community", "/licences": "licences", "/support": "support", "/account": "account" })[window.location.pathname] || "home";
 const state = {
   screen: INITIAL_SCREEN, stack: [INITIAL_SCREEN],
   status: null, alerts: null, alertsError: null, weather: null, weatherError: null, weatherPlace: "Brisbane", installEvent: null,
@@ -487,14 +487,14 @@ function impactButton(impact) {
   return `<button class="impact-btn" data-action="go" data-screen="dashboard" aria-label="Impact Dashboard: ${kgShort(impact.co2)} estimated CO₂ avoided this month">${I.leaf(18)}<span>${kgShort(impact.co2)}</span></button>`;
 }
 
-// Header profile button: a blank default picture. Accounts are not built yet, so both items only say so (a template for later work).
+// Header profile button: a blank default picture. Its one menu item opens the Account screen; the label is "Sign in" or the signed-in name
+// (window.RerouteAccount is kept up to date by web/src/accounts/store.js, which also patches any [data-account-label] already on screen).
 function profileButton() {
   return `<div class="profile-wrap"><button class="avatar-btn" data-action="toggle-profile" aria-label="Profile" aria-haspopup="menu" aria-expanded="false" aria-controls="profile-menu">
       <svg class="avatar" width="36" height="36" viewBox="0 0 36 36" aria-hidden="true"><defs><clipPath id="avatar-clip"><circle cx="18" cy="18" r="18"/></clipPath></defs>
         <g clip-path="url(#avatar-clip)"><rect width="36" height="36" class="avatar-bg"/><circle cx="18" cy="14" r="6.5" class="avatar-fg"/><circle cx="18" cy="37" r="13.5" class="avatar-fg"/></g></svg></button>
     <div class="profile-menu" id="profile-menu" role="menu" aria-label="Profile" hidden>
-      <button role="menuitem" data-action="account-feature">${I.user(18)}Account details</button>
-      <button role="menuitem" data-action="account-feature">${I.edit(18)}Edit profile</button>
+      <button role="menuitem" data-action="open-account">${I.user(18)}<span data-account-label>${esc(window.RerouteAccount?.label || "Sign in")}</span></button>
     </div></div>`;
 }
 function toggleProfileMenu(force) {
@@ -673,6 +673,12 @@ function termsScreen() {
     <p class="subtitle">A student prototype for exploring journey options. It is not an official transport service or a substitute for your own judgement.</p>
     <h2>Estimates, not guarantees</h2>
     <p>Route times, fares, parking availability, fuel costs, weather, live vehicle positions and disruption information can be incomplete, delayed or wrong. E-scooter and e-bike times use a Google Maps cycling route with an assumed average speed (15 and 20 km/h), not a measured one, and their hire cost is an estimate from assumed prices (an unlock fee plus a price per minute, editable in Settings), not a quote from Lime or Neuron. Push-bike times use Google's own cycling estimate, and the push bike is only offered for trips up to ${PUSH_BIKE_MAX_KM} km. The app does not check hire availability, real hire prices, local access rules or safe paths for any of them. The rain radar shows the last two hours of radar and is not a forecast. The CO₂ shown for them counts tailpipe emissions only, so charging and manufacturing are not counted. Check current signs, services, fares, prices and conditions before leaving.</p>
+// The Account screen is a React screen (web/src/screens/account.screen.jsx); this is only the plain-HTML fallback when the React shell is absent.
+function accountScreen() {
+  return `${navbar(true)}<div class="scroll legal-content"><p class="eyebrow">Reroute</p><h1 class="large-title">Account</h1>
+    <p class="subtitle">Accounts need the full app. Reroute works without one.</p></div>`;
+}
+
     <p>Offline maps use an area you downloaded earlier. Offline routes and times are estimates from that saved OpenStreetMap map and Translink's published timetables: they do not include live delays, cancellations, disruptions, road closures or traffic, and the timetables only cover the days you downloaded. Check signs, services and conditions when you can.</p>
     <p>Do not use the app while driving, riding or crossing a road. In-app directions and location readings may be inaccurate. Follow road rules and use your own judgement.</p>
     <h2>Third-party services</h2>
@@ -680,18 +686,23 @@ function termsScreen() {
     <h2>Shared rides and notifications</h2>
     <p>Ride-board posts are visible to people using the same Reroute server. Use a nickname and broad areas, not contact details or sensitive information. Posts expire automatically. Background alerts require a browser push subscription and may be delivered by your browser's push provider.</p>
     <h2>Prototype availability</h2>
-    <p>This prototype is provided as-is for evaluation. No account, transport booking, payment, scooter hire or emergency response is provided. The profile button is a placeholder: it has no account behind it. The team may change or stop the prototype at any time.</p>
+    <p>This prototype is provided as-is for evaluation. No transport booking, payment, scooter hire or emergency response is provided. The team may change or stop the prototype at any time.</p>
     <p class="fine">Review before public release: confirm the team's hosting terms, support contact and legal requirements. This page is plain-language product information, not legal advice.</p>
     <button class="btn btn-secondary" data-action="go" data-screen="privacy">Read the Privacy Policy</button>
   </div>`;
 }
+    <h2>Acceptable use of the ride board</h2>
+    <p>Be honest and considerate. Do not post anything unlawful, harassing, discriminatory, threatening or misleading. Do not post contact details, other people's personal information, advertising or spam, and do not use the board to sell services or to impersonate anyone. Reroute does not check posts or the people behind them: meet in public places, look after your own safety and use your own judgement before sharing a ride. Posts that break these rules may be removed without notice.</p>
+    <h2>Accounts</h2>
+    <p>An account is optional. You can sign in with Google or Apple to sync your settings, saved places and trip history between devices; without one the app works as before. You are responsible for your Google or Apple sign-in and for what happens under it, and should use only your own account. Synced data is a convenience copy, not a backup, so keep anything that matters elsewhere too.</p>
+    <p>You can delete your account at any time in Account (Delete my account), which erases it straight away. We may suspend or remove an account that breaks these terms or abuses the service, and may change or stop sign-in at any time. When an account ends its synced data is deleted; data kept only on your device is not affected. The Privacy Policy says what is stored.</p>
 
 function privacyScreen() {
   return `${navbar(true)}<div class="scroll legal-content">
     <p class="eyebrow">Your information</p><h1 class="large-title">Privacy Policy</h1>
-    <p class="subtitle">This prototype has no accounts or sign-in (the profile button is a placeholder that stores nothing). This page describes what the current code stores and sends; it is not a promise about third-party services or the hosting provider.</p>
+    <p class="subtitle">Accounts are optional: Reroute works fully without one. This page describes what the current code stores and sends; it is not a promise about third-party services or the hosting provider.</p>
     <h2>On your device</h2>
-    <p>Reroute saves settings (including travel modes, budget and walking limits, fuel and parking estimates, theme and accessibility choices), saved places and their Google place IDs, recent places, the last entered trip places, demo preferences, trip and CO₂ history, ride-board membership tokens, and disruption-watch details in this browser's local storage. This information is not synced to an account. Anyone with access to this browser profile may be able to see it. You can clear browser storage to remove it; clearing it may also stop local watch and ride-board controls from working. The app's service worker also keeps copies on this device of the app files and of recent read-only server answers (live alerts, weather, fuel prices, the address suggestions you asked for, app status and map settings) so the app can open offline.</p>
+    <p>Reroute saves settings (including travel modes, budget and walking limits, fuel and parking estimates, theme and accessibility choices), saved places and their Google place IDs, recent places, the last entered trip places, demo preferences, trip and CO₂ history, ride-board membership tokens, and disruption-watch details in this browser's local storage. This information stays on this device unless you sign in to an account, which can sync settings, saved places and trip history (see Accounts below). Anyone with access to this browser profile may be able to see it. You can clear browser storage to remove it; clearing it may also stop local watch and ride-board controls from working. The app's service worker also keeps copies on this device of the app files and of recent read-only server answers (live alerts, weather, fuel prices, the address suggestions you asked for, app status and map settings) so the app can open offline.</p>
     <p>If you download an area for offline use (Settings → Offline info), the map, place names, road and path network and Translink timetables for that area are stored in this browser's IndexedDB storage, together with the names, addresses and coordinates of your saved places inside the area. The download asks the Reroute server only for the area's corners and the number of days; for saved places that have a Google place ID, the app asks the server for their position (Google Place Details). Delete offline data in Settings, or clear browser storage, to remove it. While you have no internet, Reroute notices that its live data could not be reached and offers offline maps. In offline mode, routes are worked out on this device from the downloaded data; the app still checks for live alerts every minute (without trip details) so it can tell you when you are back online.</p>
     <p>The app asks for device location when a feature needs it: opening Plan a trip (the From field starts at your current location), current-location routing, Journey disrupted?, the map picker's locate button, live directions and a nearby weather forecast (the weather widget and weather page only use it if you have already allowed it). The browser controls that permission; if you block it, type your start or choose it on the map. Your position is not stored by Reroute. When it is used it is sent to the Reroute server as a starting point, to bias address suggestions or for weather, and from there to Google or Open-Meteo as described below. Live-directions positions stay on the device unless you tap Re-plan from here, which sends your position as a new starting point. A pin you drop on the map is sent the same way, as coordinates, only when you search.</p>
     <h2>Sent to Reroute</h2>
@@ -704,17 +715,25 @@ function privacyScreen() {
       <li><b>Google Maps JavaScript (the map):</b> your browser loads the map script and map tiles directly from Google using a browser map key that the Reroute server hands to every visitor. Google receives your IP address, browser details, this site's address and the area of the map you view, and may use its own cookies or similar technologies. When you tap a place in Choose on map, your browser also loads that place's category icon from Google (maps.gstatic.com). Opening a Google Maps or Uber link sends the relevant trip places or coordinates to that service.</li>
       <li><b>RainViewer (rain radar):</b> on the weather page your browser downloads radar images directly from RainViewer (api.rainviewer.com and tilecache.rainviewer.com). RainViewer receives your IP address, browser details and which map area you view. Reroute sends it nothing else.</li>
       <li><b>Lime and Neuron:</b> the hire buttons open the Apple App Store, Google Play or the operator's website. Reroute sends no trip details to Lime or Neuron; those sites and apps have their own privacy policies.</li>
+    <h2>Accounts (optional)</h2>
+    <p>You never need an account. If you choose Continue with Google or Sign in with Apple, Reroute stores your provider ID (an opaque identifier, never your password), your email address (Apple may give a private relay address instead), your name as the provider gives it, the time of each sign-in, and the settings, saved places and trip history you choose to sync. This is used to recognise you, keep you signed in and sync your data between your devices. It is not sold, used for advertising, or used for analytics.</p>
+    <p>A signed-in session lasts 30 days after you last used the app and ends when you sign out. It is kept by one HttpOnly cookie, which is the only cookie Reroute sets. For Sign in with Apple the server also keeps an encrypted Apple token, only so it can ask Apple to revoke Reroute's access if you delete your account.</p>
+    <p>Account data is kept until you delete the account. In Account, Delete my account removes your user record, provider IDs, sessions, Apple token and synced data from the server straight away, and Download my data gives you everything stored about you as a JSON file. The page <a href="/account/delete">/account/delete</a> explains this without needing to sign in. Copies in any host-level backup expire on the host's own schedule. Synced data is not end-to-end encrypted, so the server operator can access it.</p>
+    <p>Google and Apple process your sign-in: your browser goes to their site, they authenticate you and send Reroute your identifier, email address and name, under their own terms and privacy policies. Reroute sends them no trip details. The hosting provider stores the account database.</p>
       <li><b>Translink:</b> the server downloads public schedule and live alert, delay and vehicle feeds. It does not send your trip details to Translink.</li>
       <li><b>OpenStreetMap (Overpass API):</b> when you download an offline area, the Reroute server sends the area's corners to the Overpass API to fetch its map data. No trip details or location are sent.</li>
       <li><b>QLDTraffic:</b> the server requests public road-event data without sending your trip details.</li>
       <li><b>Open-Meteo:</b> the server sends the location used for weather (your device location if allowed, the trip start or Brisbane) rounded to three decimal places, or sampled walking-route coordinates for fallback elevation.</li>
       <li><b>Browser push provider:</b> when you opt in, an encrypted disruption notification is sent to the browser's subscription endpoint, which may be operated by Google, Mozilla, Apple or another provider.</li>
       <li><b>Google Fonts:</b> your browser requests the Inter typeface from Google, which receives your IP address and browser details. The app itself loads no third-party analytics.</li>
+      <li><b>Google and Apple (sign-in):</b> only if you choose to sign in. They receive the fact that you signed in to Reroute and tell Reroute who you are. They are processors of your sign-in under their own privacy policies.</li>
     </ul>
     <h2>Cookies, analytics and logs</h2>
-    <p>The app code does not create analytics profiles or set its own tracking cookies. It uses browser local storage and a service worker for saved preferences, offline app files and push notifications. Google Maps and other third parties may use their own technologies and receive technical data under their own privacy terms. Reroute's server uses IP addresses transiently for rate limiting; hosting and infrastructure logs depend on where the app is run.</p>
+    <p>The app code does not create analytics profiles or set its own tracking cookies; if you sign in it sets one strictly necessary session cookie, removed when you sign out. It uses browser local storage and a service worker for saved preferences, offline app files and push notifications. Google Maps and other third parties may use their own technologies and receive technical data under their own privacy terms. Reroute's server uses IP addresses transiently for rate limiting; hosting and infrastructure logs depend on where the app is run.</p>
     <h2>Questions and review</h2>
-    <p>This is a student prototype with no in-app account or privacy request workflow. Before public release, the team must add a monitored contact, confirm hosting-provider retention, review third-party terms and verify the disclosures against the actual deployment.</p>
+    <p>To see, export or delete your account data use Account in the app, or write to privacy@reroute.invalid. Before public release, the team must add a monitored contact, confirm hosting-provider retention, review third-party terms and verify the disclosures against the actual deployment.</p>
+    <p class="fine">TODO before public release: replace the placeholder address privacy@reroute.invalid with a monitored one.</p>
+    <button class="btn btn-secondary" data-action="go" data-screen="account">Account</button>
     <button class="btn btn-secondary" data-action="go" data-screen="sources">About and data sources</button>
   </div>`;
 }
@@ -2417,7 +2436,7 @@ function applyTheme() {
 
 
 
-const SCREENS = { "offline-area": offlineAreaScreen, home: homeScreen, journey: journeyScreen, results: resultsScreen, next: nextScreen, panic: panicScreen, nav: navScreen, dashboard: dashboardScreen, rides: ridesScreen, weather: weatherScreen, terms: termsScreen, privacy: privacyScreen, sources: sourcesScreen };
+const SCREENS = { "offline-area": offlineAreaScreen, home: homeScreen, journey: journeyScreen, results: resultsScreen, next: nextScreen, panic: panicScreen, nav: navScreen, dashboard: dashboardScreen, rides: ridesScreen, weather: weatherScreen, terms: termsScreen, privacy: privacyScreen, sources: sourcesScreen, account: accountScreen };
 const pageClass = (screen) => `page${screen === "panic" || screen === "nav" ? ` ${screen}` : ""}`;
 const viewport = document.getElementById("viewport");
 const app = document.getElementById("app");
@@ -2473,7 +2492,7 @@ function makePage(screen) {
 
 function navigate(screen, direction = "forward", syncUrl = true) {
   if (transitioning || screen === state.screen) return;
-  const legalPath = { terms: "/terms", privacy: "/privacy", sources: "/about" }[screen];
+  const legalPath = { terms: "/terms", privacy: "/privacy", sources: "/about", community: "/community", licences: "/licences", support: "/support", account: "/account" }[screen];
   // Legal pages get their own address and history entry; leaving one adds an entry for "/" so the browser Back button returns to it.
   // (In the React shell the router does this, see bridge.navigate below.)
   if (!bridge && syncUrl && legalPath) history.pushState({ screen }, "", legalPath);
@@ -2565,14 +2584,14 @@ function startPanicLocate() {
 
 function goBack() {
   // A legal page this app opened has its own history entry: use the browser's Back so Back and Forward stay in step.
-  if (({ terms: 1, privacy: 1, sources: 1 })[state.screen] && (history.state?.usr || history.state)?.screen === state.screen) return history.back();
+  if (({ terms: 1, privacy: 1, sources: 1, community: 1, licences: 1, support: 1, account: 1 })[state.screen] && (history.state?.usr || history.state)?.screen === state.screen) return history.back();
   if (state.stack.length < 2) return navigate("home", "back");
   const target = state.stack[state.stack.length - 2];
   navigate(target, state.screen === "panic" || state.screen === "nav" ? "down" : "back");
 }
 
 window.addEventListener("popstate", () => {
-  const target = ({ "/terms": "terms", "/privacy": "privacy", "/about": "sources" })[location.pathname] || "home";
+  const target = ({ "/terms": "terms", "/privacy": "privacy", "/about": "sources", "/community": "community", "/licences": "licences", "/support": "support", "/account": "account" })[location.pathname] || "home";
   // Back/Forward pressed while a page is still changing: wait for it to settle, then catch the legacy state up with the address.
   const go = () => (transitioning ? setTimeout(go, 60) : target !== state.screen && navigate(target, "back", false));
   go();
@@ -3241,7 +3260,7 @@ const actions = {
     closeMenu(open);
   },
   "toggle-profile": () => toggleProfileMenu(),
-  "account-feature": () => { toggleProfileMenu(false); showDialog("Feature not available", "Accounts aren't part of this prototype yet, so there are no account details or profile to edit.", currentPage?.querySelector(".avatar-btn")); },
+  "open-account": () => { toggleProfileMenu(false); navigate("account"); },
   "close-dialog": closeDialog,
   "dialog-backdrop": (el, event) => { if (event.target === el) closeDialog(); },
   "alert-more": (el) => { const a = findAlert(el.dataset.id); if (a) openPopup(alertPopup(a)); },
