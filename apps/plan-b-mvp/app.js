@@ -474,8 +474,9 @@ function syncCardInner() {
   const s = state.sync;
   const fb = s.feedback;
   const stamp = s.at || state.alerts?.fetched_at;
-  const text = s.loading ? "Refreshing…" : stamp ? `Updated ${timeOf(stamp)}` : "Not updated yet";
-  return `<div class="sync-mini"><span class="hint" role="status">${text}</span><button class="icon-btn${s.loading ? " is-spinning" : ""}" data-action="sync" aria-label="Refresh live data"${s.loading ? " aria-busy=\"true\"" : ""}>${I.refresh(18)}</button></div>`
+  const text = s.loading ? "Refreshing…" : stamp ? timeOf(stamp) : "Not updated";
+  const spoken = s.loading ? "Refreshing live data" : stamp ? `Live data updated ${timeOf(stamp)}` : "Live data not updated yet";
+  return `<div class="sync-mini"><span class="hint" role="status" aria-label="${spoken}">${text}</span><button class="icon-btn${s.loading ? " is-spinning" : ""}" data-action="sync" aria-label="Refresh live data"${s.loading ? " aria-busy=\"true\"" : ""}>${I.refresh(18)}</button></div>`
     + (fb ? notice(esc(fb.text), fb.kind) : "");
 }
 const syncCard = () => `<div class="sync-wrap" data-sync>${syncCardInner()}</div>`;
