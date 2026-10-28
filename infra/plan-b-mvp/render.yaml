@@ -28,6 +28,8 @@ services:
         sync: false
       - key: PLANB_TRUST_PROXY
         value: "1"
+      - key: PLANB_ADMIN_TOKEN
+        sync: false
       - key: PLANB_PLAN_LIMIT_PER_HOUR
         value: "40"
       - key: PLANB_DAILY_GOOGLE_CAP

@@ -39,4 +39,4 @@ USER planb
 EXPOSE 8000
 
 # One worker on purpose: the background push monitor, GTFS loader and feed caches live in the process.
-CMD ["sh", "-c", "exec gunicorn --workers 1 --threads 8 --timeout 60 --bind ${HOST}:${PORT} --access-logfile - server:app"]
+CMD ["sh", "-c", "exec gunicorn --workers 1 --threads 8 --timeout 60 --bind ${HOST}:${PORT} --access-logfile - --access-logformat '%(m)s %(U)s %(s)s %(b)s %(L)s' server:app"]

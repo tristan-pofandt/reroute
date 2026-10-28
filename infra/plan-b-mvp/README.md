@@ -26,6 +26,9 @@ Operational configuration for running the [Plan B MVP](../../apps/plan-b-mvp/REA
 | `VAPID_SUBJECT` | No | Contact for push services, default `mailto:planb-demo@example.invalid`. Use a team mailbox, never a personal address |
 | `HOST`, `PORT` | No | Bind address and port. The image sets `0.0.0.0` and `8000`; Render supplies `PORT` itself |
 | `PLANB_TRUST_PROXY` | On a host | Number of reverse proxies in front of the app (the image and `render.yaml` set `1`) so the real visitor address is used for rate limiting |
+| `PLANB_ADMIN_TOKEN` | For moderation | Secret (32+ random characters) that switches on the operator queue at `/admin/moderation` (404 while unset). Set it as a secret, never in the repo. See `docs/engineering/ride-board-moderation.md` |
+| `PLANB_CSP_ENFORCE` | No | `1` (the default) enforces the Content-Security-Policy; `0` sends it as report-only (violations are logged as `CSP violation` warnings via `/api/csp-report`) while you test a new third-party host |
+| `PLANB_CORS_ORIGINS` | Native app | Comma list of origins allowed to call the API cross-origin. Default none (same-origin only). For the Capacitor app use `capacitor://localhost,https://localhost,ionic://localhost` |
 | `PLANB_QUIET` | No | Set to `1` to stop the server printing a console line for every request. Those lines hold the visitor IP address and the URL, which includes typed address suggestions and weather or fuel coordinates, so the privacy page assumes you decide this on purpose |
 | `PLANB_PLAN_LIMIT_PER_HOUR` | No | Searches per visitor address per hour, default 40. Address suggestions (`PLANB_AUTOCOMPLETE_LIMIT_PER_HOUR`, 400) and fuel prices (`PLANB_FUEL_LIMIT_PER_HOUR`, 120) have their own limits |
 | `PLANB_DAILY_GOOGLE_CAP` | No | Searches per Brisbane day for everyone together, default 50; `render.yaml` uses 50 |
