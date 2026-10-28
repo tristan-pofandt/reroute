@@ -19,6 +19,7 @@ from urllib.parse import urlsplit
 from flask import Flask, Response, jsonify, request, send_from_directory
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+from accounts import init_accounts
 import google_api
 from google_api import RoutesError, ServiceError
 from gtfs_rt import FeedError, Monitor
@@ -578,6 +579,9 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
     @app.post("/api/push/test")
     def push_test():
         return push_guard() or post(lambda body: {"ok": True, **push.test(body.get("endpoint"), body.get("delay_s", 0))})
+
+    # Accounts (Google / Apple sign-in, synced data); off unless ACCOUNTS_SECRET_KEY is set. See accounts.py.
+    init_accounts(app, data, limiter=limiter, client=client, public_url=public_url, trusted_proxy=bool(trusted), clock=clock)
 
     @app.errorhandler(500)
     def server_error(error):
