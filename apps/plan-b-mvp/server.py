@@ -27,6 +27,7 @@ from gtfs_static import NotReady, Static
 from limits import DailyCap, RateLimiter, is_loopback
 from live_routes import BRISBANE, PLACE_ID, InputError, Services, live, plan
 import offline_area
+from ops import init_ops
 from offline_area import AreaError, Jobs, Pending, parse_bbox, parse_days
 from osm import OSM, OverpassBusy, OverpassError
 from push import Push, PushError
@@ -582,6 +583,9 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
 
     # Accounts (Google / Apple sign-in, synced data); off unless ACCOUNTS_SECRET_KEY is set. See accounts.py.
     init_accounts(app, data, limiter=limiter, client=client, public_url=public_url, trusted_proxy=bool(trusted), clock=clock)
+
+    app.config["PLANB_VERSION"] = VERSION
+    init_ops(app, app.extensions["planb"])  # /healthz, /readyz, /admin/usage, optional Sentry (ops.py)
 
     @app.errorhandler(500)
     def server_error(error):

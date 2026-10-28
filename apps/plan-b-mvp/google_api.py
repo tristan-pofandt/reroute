@@ -15,6 +15,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+import usage
+
 ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes"
 PLACES_NEARBY_URL = "https://places.googleapis.com/v1/places:searchNearby"
 PLACES_AUTOCOMPLETE_URL = "https://places.googleapis.com/v1/places:autocomplete"
@@ -76,6 +78,7 @@ def tracking():
 
 
 def record_request(api, sku):
+    usage.count(api, sku)  # the process-wide daily tally behind /admin/usage
     tracker = _tracker.get()
     if tracker:
         tracker.record(api, sku)
