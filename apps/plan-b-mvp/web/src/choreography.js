@@ -109,7 +109,7 @@ export function fx(els, frames, { duration, delay = 0, step = 0, cap = 1e9, easi
 //   in:  elements start displaced by the offset, invisible, and spring to rest;
 //   out: elements leave to the offset while fading (ease-out: the move starts at once).
 // Used for pages, panel lines, profile-menu items and the splash mark; delays and durations are multiplied by slow() (inspection builds).
-export function slide(els, offset, { out = false, delay = 0, step = out ? STAGGER_OUT : STAGGER_IN, cap = CAP, time = OUT_TIME, hold = false } = {}) {
+export function slide(els, offset, { out = false, delay = 0, step = out ? STAGGER_OUT : STAGGER_IN, cap = out ? CAP_OUT : CAP, time = OUT_TIME, hold = false } = {}) {
   const s = slow() * 1000;
   return fx(els, keyframes(out, offset), {
     duration: out ? time * s : IN_MS * slow(), delay: delay * s, step: step * s, cap, hold: out && hold,

@@ -1,7 +1,7 @@
 // Off-main-thread check + Impact-button path check for the Reroute shell. ONE async function `(page) => result` for the playwright MCP
 // (`browser_run_code_unsafe`), same conventions as motion-bench.js (serve it with `python -m http.server` and eval it; no fs).
 // Settings: globalThis.BENCH_CFG = { base, cpu, mode: "busy" | "impact", only: "weather", seed: true }
-//   busy:   (BENCH_CFG.busy = "freeze" blocks once for 300 ms instead and reports `inFreeze`, the changed pictures inside it) a synthetic 30 ms main-thread block every 100 ms (setInterval) runs while the transition plays. The picture is recorded with
+//   busy:   (BENCH_CFG.busy = "freeze" blocks once for 300 ms, `freezeAt` ms after the click (90; "mount" = 100 ms after the next page is in the DOM, i.e. mid-entrance), instead and reports `inFreeze`, the changed pictures inside it) a synthetic 30 ms main-thread block every 100 ms (setInterval) runs while the transition plays. The picture is recorded with
 //           CDP Page.startScreencast (frames come from the compositor, so they keep coming while the main thread is blocked), decoded in a
 //           second tab and diffed. Reported: number of frames whose picture changed, the longest time the picture stood still while the
 //           transition was in flight (`stall`), and the share of the 30 ms blocks during which it still moved. Compositor-driven motion keeps
@@ -9,7 +9,7 @@
 //   impact: samples the Impact button / dashboard lead figure (opacity, painted x and y) after every frame and reports whether the path is
 //           monotonic (one direction, no flash) for home <-> results / weather / menu / dashboard, with and without a seeded trip.
 async (page) => {
-  const CFG = { base: "http://127.0.0.1:9101/", cpu: 1, mode: "busy", only: "", seed: false };
+  const CFG = { base: "http://127.0.0.1:9101/", cpu: 1, mode: "busy", only: "", seed: false, fixture: "C:/Users/tpofa/OneDrive/UQ/Semester 2 2026/COMP1100/COMP1100-45_Kai/apps/plan-b-mvp/web/scripts/plan.fixture.json" };
   Object.assign(CFG, globalThis.BENCH_CFG || {});
   const ctx = page.context(), cdp = await ctx.newCDPSession(page);
   const sleep = (ms) => page.waitForTimeout(ms);
@@ -28,8 +28,15 @@ async (page) => {
   await page.waitForFunction(() => window.RerouteLegacy?.state && document.querySelector("#viewport .page"), null, { timeout: 15000 });
   await sleep(2500);
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: CFG.cpu });
+  // a plan in the state (through the real journey -> search flow, /api/plan answered from the fixture) so home <-> results exists
+  await page.route("**/api/plan", (r) => r.fulfill({ path: CFG.fixture, contentType: "application/json" }));
+  await page.route("**/api/status", async (r) => { const resp = await r.fetch(); const j = await resp.json(); j.live_available = true; await r.fulfill({ response: resp, json: j }); });
+  await page.evaluate(() => { document.querySelector('[data-action="start"]').click(); }); await idle();
+  await page.evaluate(() => { document.querySelector('[data-action="search"]').click(); }); await sleep(1200); await idle();
 
   const T = [
+    ["home->results", async () => {}, () => go("results", "forward")],
+    ["results->home", async () => { await go("results", "forward"); await idle(); }, () => go("home", "back")],
     ["home->weather", async () => {}, () => go("weather", "forward")],
     ["weather->home", async () => { await go("weather", "forward"); await idle(); }, () => go("home", "back")],
     ["home->journey", async () => {}, () => click('[data-action="start"]')],
@@ -64,7 +71,11 @@ async (page) => {
       await page.evaluate((on) => { window.__blocks = []; const run = (ms) => { const e = performance.now(); window.__blocks.push([performance.timeOrigin + e, ms]); while (performance.now() - e < ms); };
         window.__run = run; if (on && on !== "freeze") window.__busy = setInterval(() => run(30), 100); }, CFG.busy === false ? false : CFG.busy || true);
       await sleep(250); frames = [];
-      if (CFG.busy === "freeze") await page.evaluate(() => setTimeout(() => window.__run(300), 90));
+      if (CFG.busy === "freeze") await page.evaluate((at) => {
+        if (at !== "mount") return setTimeout(() => window.__run(300), at);
+        // block the main thread 30 ms after the next page has been put in the DOM: heavy work "at the moment of mount"
+        new MutationObserver((l, mo) => { if (l.some((m) => [...m.addedNodes].some((n) => n.classList?.contains("page")))) { mo.disconnect(); setTimeout(() => window.__run(300), 100); } }).observe(document.getElementById("viewport"), { childList: true });
+      }, CFG.freezeAt ?? 90);
       await act(); await sleep(1100);
       const blocks = await page.evaluate(() => { clearInterval(window.__busy); return window.__blocks; });
       const diffs = await dec.evaluate(async (fr) => {

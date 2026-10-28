@@ -9,7 +9,7 @@ import { AnimatePresence, LayoutGroup } from "framer-motion";
 import { attachRouter, bridge } from "./bridge.js";
 import { Page } from "./Page.jsx";
 import { setDirection } from "./choreography.js";
-import { setNav } from "./shared.jsx";
+import { setNav, warmShared } from "./shared.jsx";
 
 const LEGAL = { terms: "/terms", privacy: "/privacy", sources: "/about" };
 const PATH_SCREEN = { "/terms": "terms", "/privacy": "privacy", "/about": "sources" };
@@ -25,6 +25,7 @@ function Screens() {
   const dir = useRef("back");
   const shown = useRef(null); // the screen currently mounted or on its way in
 
+  useEffect(() => { const t = setTimeout(() => (window.requestIdleCallback || setTimeout)(() => warmShared(NAMES)), 1500); return () => clearTimeout(t); }, []);
   useEffect(() => attachRouter((screen, direction, syncUrl) => {
     dir.current = direction;
     setDirection(direction); // before React renders: the leaving page's elements read it when their exit starts

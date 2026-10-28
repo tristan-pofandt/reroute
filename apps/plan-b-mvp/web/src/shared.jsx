@@ -32,19 +32,28 @@ export const nav = { from: null, to: null, id: 0 };
 export const setNav = (from, to) => { nav.from = from; nav.to = to; nav.id++; };
 const CLASS = { impact: /class="[^"]*(?:impact-btn|kpi lead)/, "nav-back": /class="[^"]*nav-back/, "nav-home": /class="[^"]*home-btn/, title: /class="[^"]*large-title/ };
 const htmlOf = new Map(); // "navId:screen" -> markup, so a transition reads each screen's markup once
-// Does `screen` render a shared element `id`? Only native screens carry layoutId elements (legacy innerHTML screens cannot), and the
-// markup says whether the element exists right now (the dashboard has a lead figure only once a trip is logged).
-export function hasShared(screen, id) {
-  if (!screen || !window.RerouteBridge?.isNative(screen)) return false;
+const known = new Map(); // "screen:id" -> bool, for the elements whose presence is a property of the screen's layout and never of its data
+const markup = (screen) => {
   const key = `${nav.id}:${screen}`;
   let html = htmlOf.get(key);
   if (html === undefined) {
     if (htmlOf.size > 8) htmlOf.clear();
-    try { html = window.RerouteLegacy.SCREENS[screen]() || ""; } catch { html = ""; }
+    try { html = window.RerouteLegacy.SCREENS[screen]() || ""; } catch { return ""; } // a screen that cannot be built right now (no plan yet): nothing to morph, nothing cached
     htmlOf.set(key, html);
   }
-  return CLASS[id].test(html);
+  return html;
+};
+// Does `screen` render a shared element `id`? Only native screens carry layoutId elements (legacy innerHTML screens cannot), and the markup says
+// whether the element exists. Only the dashboard's lead figure depends on data (it exists once a trip is logged); the rest are read once per screen.
+export function hasShared(screen, id) {
+  if (!screen || !window.RerouteBridge?.isNative(screen)) return false;
+  if (id === "impact") return screen === "home" || (screen === "dashboard" && CLASS.impact.test(markup(screen)));
+  const key = `${screen}:${id}`;
+  if (!known.has(key)) { const html = markup(screen); if (!html) return false; known.set(key, CLASS[id].test(html)); }
+  return known.get(key);
 }
+// Reads every native screen's layout once, when the browser is idle after start, so no transition pays for it.
+export const warmShared = (names) => { for (const screen of names) for (const id of Object.keys(CLASS)) hasShared(screen, id); };
 
 // layoutId namespaces: a shared element reuses the previous screen's namespace only when that screen has the counterpart. Otherwise it
 // gets a fresh one, because framer keeps the last box of a removed layoutId node and would morph an unrelated new node out of it.
