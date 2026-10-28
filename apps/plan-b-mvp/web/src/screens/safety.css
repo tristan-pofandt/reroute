@@ -1,0 +1,8 @@
+/* Ride-board safety: the Report and Block links, the community-rules box and its acknowledgement. Everything else reuses app.css. */
+.ride-safety { display: flex; gap: 24px; margin-top: 4px; }
+.ride-safety .text-link { min-height: 44px; font-size: 13px; color: var(--text-muted); }
+.rules-box { border: 1px solid var(--border-subtle); border-radius: 14px; background: var(--bg-card); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.rules-box .fine { margin: 0; }
+.rules-box a, .ride-safety + .fine a { color: var(--accent-text); text-underline-offset: 3px; }
+.form-stack label.rules-ack { flex-direction: row; align-items: center; gap: 12px; min-height: 44px; font-size: 14px; color: var(--text-main); letter-spacing: 0; }
+.form-stack .rules-ack input { width: 22px; min-height: 22px; height: 22px; padding: 0; flex: none; accent-color: var(--accent); }
