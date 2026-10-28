@@ -107,3 +107,59 @@ Side menu close, measured (1x, frames sampled every second): the panel reaches 1
 ### Not verified
 
 A real phone (touch, 60 Hz, the browser's compositor on a mobile GPU). The harness runs headless on a fast display, so jitter that comes from the GPU or from a 60 Hz vsync is outside what these numbers show; the 4x CPU throttle is only a proxy for a slower CPU.
+
+## The Impact button, and page transitions on the compositor (measured)
+
+Credit: Claude Sonnet 5.5 via Claude Code at T.P's request. Reported: (1) the green leaf Impact button on the home screen "just appears and disappears" when the menu or screen changes; (2) transitions do not feel smooth on a phone over Tailscale (60 or 120 Hz). Branch `feature/webgl-overhaul` only; nothing pushed or merged. Headless Chrome at 390x844 on a 144 Hz machine flatters every number below (see "Not verified").
+
+### Root cause of (1)
+
+The Impact button is a framer-motion `layoutId` shared element (`impact`), and the rule in `shared.jsx` was "a shared element takes no part in its screen's stagger". That is only right when something on the next screen can take over the `layoutId`. The only partner is the dashboard's `.kpi.lead` figure, and that exists only once a trip is logged. Going from home to Weather, Results, Journey, Panic, Nav or an empty dashboard (demo mode has no trips), nothing morphed and nothing staggered: the button sat still at full opacity while its neighbours left, then the whole page was unmounted and it was simply gone, and on the way back it was simply there when the new page mounted. Measured before the change (home -> weather, per frame): opacity 1.0 and x 180 px until the page was removed, then absent for about 100 samples. The same rule left Back, Home and the title un-animated whenever the other screen was drawn by the legacy HTML (panic, nav, offline-area), which cannot carry a `layoutId`.
+
+Fix: a shared element is exempt only when the screen being navigated to / from has its counterpart (`hasShared`: native screen, and the element is in its markup; the dashboard lead figure is checked against the current data). Otherwise it is a normal item: it slides and fades with the travel direction, in DOM order (so in the header row it goes with the brand and the profile button), with the same easing and stagger. A shared element without a counterpart also gets its own `layoutId` namespace, because framer keeps the last box of a removed node and would otherwise morph an unrelated element out of a stale position. Measured after (home -> weather): opacity 1 -> 0.84 -> 0.31 -> 0.05 -> 0 and x 180 -> 148 -> 41 -> -13 -> -54 over about 100 ms, one direction, no reversal; weather -> home reverses it (arrives from the left, 0 -> 1 over about 250 ms). With a trip logged, home <-> dashboard still morphs (x 180 -> 49 px, opacity 1 throughout, no reversal), and with the dashboard empty it slides and fades like the rest. Checked for home <-> results, weather, journey, dashboard (with and without a trip) and panic: no opacity or position reversal on any path.
+
+### What was done for (2)
+
+Measured first (baseline, commit f8bf7ff): at 1x the worst frame of a page change was 66 ms (home -> weather: a 57 ms long task, `pageMounted` mounting maps and charts while the entrance ran) and 31 ms (Settings open); at 4x CPU throttle 18 of 24 transitions had one to three frames over 20 ms (worst 61 ms). The cause is structural: every page element and panel line was a framer-motion spring writing inline style on the main thread every frame, so any main-thread work in the first 100 ms of a transition showed up as a dropped frame.
+
+- Pages (exit and entrance), menu / Settings / sheet lines, the profile menu items, the splash, the skeleton cross-fade and press / hover feedback are now Web Animations on `translate`, `opacity` and `scale` (compositor thread). The spring is precomputed once into 21 keyframes from framer's own spring generator (same duration and bounce, so the look and timings are unchanged), the leaving ease-out into 13, cached per offset. Animations start in the layout effect of the commit that mounts or removes the page and fill backwards, so the first painted frame is already the start pose.
+- Work that sat in front of the entrance now runs after the first frame: the heavy half of legacy `pageMounted` (focus, maps, charts; `lateMount` in `app.js`, flushed earlier by `pageSettled` or `rerender`), Lenis, the motion layer's block sweep and ambient scan.
+- Elements outside the viewport are not animated (the scroll reveals own them); items nested in other items are skipped; the exit cap is 5 again (the default had drifted to 7 for the legacy path).
+- The profile menu lost its diagonal clip-path reveal (main-thread paint); it still grows out of the avatar with opacity, scale and translate.
+- Shared-element presence is read from each screen's markup once per screen and warmed when the browser is idle.
+- Not changed: scroll reveals (`scroll3d.js`), the `motion.css` flicker rule, haptics, the no-jitter fixes from 669470e (reveals wait for `reroute:settled`, coalesced re-renders), timings, easing, stagger, travel. The `layoutId` morphs remain on the main thread (one button, one figure).
+
+### Before and after
+
+Frames over 20 ms / worst frame, per transition window (about 1.3 s), `scripts/motion-bench.js`, before = f8bf7ff, after = HEAD. 4x = `Emulation.setCPUThrottlingRate` 4.
+
+| Transition | 1x before -> after | 4x before -> after |
+| --- | --- | --- |
+| home -> results | 0, 12 -> 0, 8 | 1, 23 -> 1, 23 |
+| results -> home | 0, 13 -> 0, 9 | 2, 48 -> 1, 23 |
+| home -> dashboard | 0, 12 -> 0, 15 | 1, 24 -> 1, 48 |
+| dashboard -> home | 0, 12 -> 0, 9 | 1, 24 -> 1, 24 |
+| home -> weather | 1, 66 -> 0, 16 | 3, 61 -> 1, 56 |
+| weather -> home | 0, 18 -> 0, 9 | 1, 36 -> 2, 23 |
+| home -> journey | 0, 19 -> 0, 9 | 2, 24 -> 1, 24 |
+| journey -> home | 0, 13 -> 0, 8 | 1, 25 -> 1, 23 |
+| journey -> results | 0, 7 -> 0, 10.6 | 0, 18 -> 1, 24 |
+| results -> next | 0, 12 -> 0, 9 | 1, 26 -> 1, 23 |
+| next -> results | 0, 12 -> 0, 9 | 0, 18 -> 0, 15 |
+| home -> panic | 0, 12 -> 0, 9 | 1, 31 -> 1, 24 |
+| panic -> home | 0, 13 -> 0, 9 | 0, 18 -> 0, 16 |
+| home -> nav / nav -> home | 0, 12 / 0, 13 -> 0, 9 / 0, 8 | 1, 23 / 0, 19 -> 0, 8 / 0, 16 |
+| menu open / close (button) / close (backdrop) | 0, 12 / 0, 13 / 0, 7 -> 0, 9 / 0, 9 / 0, 17 | 0, 18 / 0, 13 / 0, 19 -> 0, 16 / 0, 16 / 0, 8 |
+| settings open / close | 2, 31 / 0, 13 -> 0, 16 / 0, 9 | 2, 61 / 1, 24 -> 2, 61 / 1, 24 |
+| sheet open / close | 0, 7 / 0, 7 -> 0, 16 / 0, 9 | 0, 19 / 0, 18 -> 1, 24 / 0, 16 |
+| profile menu open / close | 0, 8 / 0, 13 -> 0, 8 / 0, 9 | 0, 13 / 0, 12 -> 0, 9 / 0, 9 |
+
+At 1x no transition has a frame over 20 ms any more (the 66 ms home -> weather frame and its long task are gone: `pageMounted` no longer sits in the entrance). At 4x the totals are about the same (18 frames over 20 ms before, 17 after): what remains is the one frame in which React mounts the next page, which is main-thread by nature (the leaving animation has ended and the entrance has not started, so the picture holds still for that frame; 23 to 24 ms, 56 ms for Weather, 61 ms for Settings which builds its panel HTML on open). Those frames are no longer inside a running animation, but they are still there.
+
+Off-main-thread check (`scripts/motion-perf.js`, `mode: "busy", busy: "freeze", freezeAt: "mount"`): the main thread is blocked for 300 ms starting 100 ms after the next page is in the DOM, and the screen is recorded from the compositor. "Pictures that still changed during the block": a CSS transform animation (control, compositor by construction) 6 to 8; before this change 1 to 4 (home -> weather 2, weather -> home 4, home -> journey 3, home -> dashboard 4, dashboard -> home 3, home -> panic 1); after 6 to 7 on every page change (7, 7, 6, 6, 6, 6), so the entrance keeps moving through a blocked main thread. With the block 90 ms after the click (during the exit) the exit also keeps running; only the hand-over to the next page waits for the main thread.
+
+Checked (headless): Reduce motion (`data-motion=reduced`) swaps pages in 12 ms with no animations left, and flipping it mid-entrance, mid-exit and mid-menu-open leaves no running animation, no inline opacity / translate, no `will-change`, nothing `inert`; `html.fm` comes back when set to full; browser Back during a page's exit, during its entrance, and a Back / Forward / Back spam all end on the right page, nothing inert, no running animation, no inline translate; press and release retarget from the current scale and end with no inline style; no console errors or warnings over the whole run; `python -m unittest -q` (346 tests) passes.
+
+### Not verified
+
+A real phone. Everything above is headless Chrome on a 144 Hz display (so frames are 7 ms and a 60 Hz vsync is not exercised), with a synthetic CPU throttle and a synthetic main-thread block; mobile GPU memory for the extra compositor layers (a layer per animated element for about 600 ms, at most the visible ones) and Safari's handling of animated `translate` and `scale` (the individual transform properties need Safari 14.1 or later; older browsers get no animation, the page still swaps) were not tested. The `journey -> results` bench row flags a 0.2 opacity reversal on one or two below-the-fold blocks about one run in three (borderline blocks behind the sticky footer, partly under the scroll reveals); it is not visible and was not present before. The screencast measure has a cadence of about 30 pictures per second, so it distinguishes "moving" from "frozen", not 60 from 120 fps.
