@@ -41,7 +41,22 @@ Contrast: axe's colour-contrast rule passed on all screens in both themes (live 
 1. VoiceOver (iOS) and TalkBack (Android): reading order of home, results cards, option sheet, map picker, panic flow; announcement of async status (the `#net-banner` live region exists; search results and download progress need checking).
 2. Dynamic Type / system font size on a real device in the Capacitor shell at the largest setting.
 3. Keyboard-only and switch access on desktop: focus order and visible focus in menus and sheets.
-4. Map picker and drag interactions: confirm a non-drag alternative exists (WCAG 2.5.7).
+4. Map picker and drag interactions on a real device (the code-level inventory for WCAG 2.5.7 is in the section below).
 5. Touch targets: axe `target-size` (WCAG 2.2) raised nothing; spot-check small icon buttons with real thumbs.
 6. Zoom: pinch zoom is allowed (no `user-scalable=no`); verify 400% browser zoom reflow.
 7. Reduced motion: confirm on iOS "Reduce Motion" that Lenis smooth scroll and the page transitions switch off.
+
+## Dragging alternatives (WCAG 2.5.7) and robustness, final fix pass 2026-10-29
+
+Every drag interaction in the code and its single-pointer alternative:
+
+| Drag | Where | Alternative without dragging |
+|---|---|---|
+| Sheet and popup drag-to-close (swipe down) | `dragToClose`/`sheetDrag` in `app.js` | Close button (`aria-label="Close"`), backdrop tap, Escape |
+| Menu swipe-to-close (swipe left) | `dragToClose(menuEl ...)` | Close button, backdrop tap, Escape |
+| Live-directions step list (drag to peek/half/full) | `.nav-grab` / `.nav-eta-main` pointer handler | A tap toggles peek and full; `.nav-grab` is a real `<button>` with `aria-expanded` |
+| Map-picker pin (drag to adjust) | `pickerOverlay` in `app.js` | **Added:** tapping the map moves a dropped pin (before, only press-and-hold or a drag did); the hint reads "drag the pin or tap the map to move it". Press-and-hold and right-click still drop a pin; tapping a place still chooses it |
+| Rain radar time slider | `<input type="range" class="radar-slider">` | Native control: click or tap the track, arrow keys; separate play/pause button |
+| Lists, carousels | Plain scrolling | Not a drag interaction |
+
+Robustness: opening `next`, `results` or `journey` with no plan or form (a direct call, a reload) threw `Cannot read properties of null (reading 'avoid')` and left the error screen. `navigate()` now redirects `results` and `next` to `journey` when there is no plan, and `journeyScreen()` creates an empty form if none exists (browser-verified: no console errors). `web/scripts/a11y-matrix.mjs` runs axe on every screen in dark and light at 100% and 200% text: all four runs 0 violations, no overflow, 0 console errors. `test_js_syntax.py` runs `node --check` on `app.js`, `motion.js`, `offline.js`, `sw.js` and `demo.js`; `screensSmoke.test.jsx` imports every screen module; `scripts/check.sh` runs both through the normal test commands. Still manual: VoiceOver/TalkBack and a pointer-device check of the tap-to-move pin on a phone.

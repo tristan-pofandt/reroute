@@ -825,7 +825,7 @@ const originRowClass = () => { const f = state.form; return f.origin === CURRENT
 const originNote = () => (state.form.originNote ? `<p class="field-note" data-origin-note>${esc(state.form.originNote)}</p>` : `<p class="field-note" data-origin-note hidden></p>`);
 
 function journeyScreen() {
-  const f = state.form;
+  const f = state.form ||= freshForm(); // opened directly with no trip in progress: an empty form
   const modes = [settings.modes.transit && "Public transport", settings.modes.drive && "My car", settings.modes.rideshare && "Uber", settings.modes.scooter && "E-scooter", settings.modes.ebike && "E-bike", settings.modes.bicycle && "Push bike"].filter(Boolean).join(", ") || "None";
   return `
     ${navbar(true)}
@@ -1063,6 +1063,7 @@ function sortedOptions() {
 const ridesTile = (title, text) => `<button class="tile-card" data-action="go" data-screen="rides"><div class="tile-head"><h3 role="heading" aria-level="2">${I.users(16)}${title}</h3>${I.chevronRight()}</div><p class="hint">${text}</p></button>`;
 
 function resultsScreen() {
+  if (!state.plan) return journeyScreen(); // no plan yet (direct visit, reload): the normal empty trip form
   const p = state.plan;
   const f = state.form;
   const avoiding = (f.avoid || "").trim();
@@ -2545,6 +2546,7 @@ function makePage(screen) {
 }
 
 function navigate(screen, direction = "forward", syncUrl = true) {
+  if ((screen === "results" || screen === "next") && !state.plan) screen = "journey"; // nothing to show yet
   if (transitioning || screen === state.screen) return;
   const legalPath = { terms: "/terms", privacy: "/privacy", sources: "/about", community: "/community", licences: "/licences", support: "/support", account: "/account" }[screen];
   // Legal pages get their own address and history entry; leaving one adds an entry for "/" so the browser Back button returns to it.
@@ -4628,7 +4630,7 @@ function pickerCardInner() {
   if (!c) return `<div class="picker-hint"><span class="row-icon" style="--tone:var(--accent)">${I.pin(18)}</span><p>${state.offline ? "<b>Press and hold</b> anywhere on the offline map to drop a pin." : "<b>Tap a place</b> on the map to choose it, or <b>press and hold</b> anywhere to drop a pin."}</p></div>`;
   if (c.kind === "loading") return skelLines("Looking up this place", 60, 80);
   if (c.kind === "place") return `<div class="picker-choice"><span class="row-icon" style="--tone:var(--error)">${I.pin(18)}</span><div><b>${esc(c.name)}</b><small>${esc(c.address)}</small><span class="picker-attr">${googleMapsAttribution()}</span></div></div>`;
-  return `<div class="picker-choice"><span class="row-icon" style="--tone:var(--error)">${I.pin(18)}</span><div><b>Dropped pin</b><small>${c.lat.toFixed(5)}, ${c.lng.toFixed(5)} · drag the pin to adjust it</small>${c.note ? `<small class="warn-text">${esc(c.note)}</small>` : ""}</div></div>`;
+  return `<div class="picker-choice"><span class="row-icon" style="--tone:var(--error)">${I.pin(18)}</span><div><b>Dropped pin</b><small>${c.lat.toFixed(5)}, ${c.lng.toFixed(5)} · drag the pin or tap the map to move it</small>${c.note ? `<small class="warn-text">${esc(c.note)}</small>` : ""}</div></div>`;
 }
 function pickerSheet(path) {
   return `<div class="grabber"><span></span></div>
@@ -4686,6 +4688,7 @@ function openMapPicker(path) {
     map.addListener("click", (event) => {
       const justPressed = picker.pressing || performance.now() - picker.lastPress < 800;
       if (event.placeId) { event.stop(); if (!justPressed) choosePoi(event.placeId, event.latLng); }
+      else if (!justPressed && picker.choice?.kind === "pin") dropPin(event.latLng); // WCAG 2.5.7: tapping the map moves a dropped pin, so dragging it is not the only way
     });
     // Right-click on a computer (and long-press on Android) drops a pin too; skip it when the press timer already did.
     map.addListener("contextmenu", (event) => { if (performance.now() - picker.lastPress > 800) dropPin(event.latLng); });
