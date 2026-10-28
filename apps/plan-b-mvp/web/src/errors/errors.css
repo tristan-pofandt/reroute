@@ -1,0 +1,2 @@
+.crash { position: absolute; inset: 0; z-index: 60; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding: 0 var(--gutter); background: var(--bg-base); }
+.crash .btn { min-width: 8rem; min-height: 48px; }

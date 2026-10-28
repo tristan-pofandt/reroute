@@ -2044,7 +2044,7 @@ function rideCard(r) {
   return `<div class="ride-card ${r.is_member ? "mine" : ""}">
     <div class="ride-head"><span class="mode-tile ${r.kind === "uber" ? "rideshare" : "car"}">${(r.kind === "uber" ? I.rideshare : I.car)(20)}</span>
       <div style="flex:1;min-width:0"><strong>${esc(r.nickname)} · ${esc(r.kind_label)}</strong><div class="card-sub">Leaves ${timeOf(r.depart_at)} · ${r.seats_left} of ${r.seats_total} seats free <span class="seat-dots">${seats}</span></div></div>
-      ${r.is_owner ? `<span class="badge info">Yours</span>` : r.is_member ? `<span class="badge success">Joined</span>` : ""}</div>
+      ${r.is_owner ? `<span class="badge ${r.under_review ? "warning" : "info"}">${r.under_review ? "Under review" : "Yours"}</span>` : r.is_member ? `<span class="badge success">Joined</span>` : ""}</div>
     <p class="ride-meta">${esc(r.origin_label)} ${I.arrowRight(14)} <b>${esc(r.destination_label)}</b><br>Meet at <b>${esc(r.meet_point)}</b>${r.note ? `<br>${esc(r.note)}` : ""}
       ${r.trip_cost ? (r.group_size > 1 ? `<br>About <b>${money(r.per_person)} each</b> (${money(r.trip_cost)} split ${r.group_size} ways)` : `<br>Trip cost <b>${money(r.trip_cost)}</b>, split between everyone who joins`) : ""}
       ${r.riders.length ? `<br>Riding: ${r.riders.map(esc).join(", ")}` : ""}
@@ -2052,12 +2052,37 @@ function rideCard(r) {
     ${r.is_member ? `<button class="btn btn-secondary" data-action="ride-leave" data-id="${esc(r.id)}">${r.is_owner ? "Cancel this ride" : "Leave this ride"}</button>`
       : state.rides.joining === r.id ? `<div class="form-stack"><label>Your first name or nickname<input data-ride-join="nickname" maxlength="24"></label><button class="btn btn-primary" data-action="ride-join" data-id="${esc(r.id)}" ${r.seats_left ? "" : "disabled"}>Join</button></div>`
       : `<button class="btn btn-primary" data-action="ride-join-start" data-id="${esc(r.id)}" ${r.seats_left ? "" : "disabled"}>${r.seats_left ? "Join this ride" : "Full"}</button>`}
+    ${r.is_owner ? "" : `<div class="ride-safety"><button class="text-link" data-action="ride-report" data-id="${esc(r.id)}" aria-label="Report this post by ${esc(r.nickname)}">Report</button><button class="text-link" data-action="ride-block" data-id="${esc(r.id)}" aria-label="Block ${esc(r.nickname)}">Block</button></div>`}
   </div>`;
+}
+
+// Safety on the shared board (App Store 1.2 / Google Play UGC): report, block, community rules, and a published way to reach us.
+const ABUSE_EMAIL = "abuse@reroute.invalid"; // TODO: replace with a monitored mailbox before launch (also in the community and support pages)
+const REPORT_REASONS = [["harassment", "Harassment or abuse"], ["scam", "Scam, spam or advertising"], ["unsafe", "Unsafe or threatening"], ["sexual", "Sexual or inappropriate"], ["personal", "Shares personal details"], ["fake", "Fake or misleading post"], ["other", "Something else"]];
+const blockedPosters = () => store.get("blockedPosters", []);
+const isBlocked = (r) => !r.is_member && blockedPosters().some((b) => b.poster === r.poster);
+function reportSheet(id) {
+  const ride = [...(state.plan?.rides || []), ...state.rides.mine].find((r) => r.id === id);
+  return `<div class="grabber"><span></span></div>
+    <div class="sheet-head"><h3 id="sheet-title">Report this post</h3>${sheetClose()}</div>
+    <div class="sheet-scroll"><div class="form-stack" id="report-form" data-id="${esc(id)}">
+      <label>Reason<select name="reason">${REPORT_REASONS.map(([v, label]) => `<option value="${v}">${esc(label)}</option>`).join("")}</select></label>
+      <label>Details (optional)<input name="note" maxlength="300" placeholder="Anything that helps us review it"></label>
+      ${ride ? `<label class="rules-ack"><input type="checkbox" name="block_too" checked> Also hide ${esc(ride.nickname)}'s posts from me</label>` : ""}
+      <p class="fine">Reports go to the Reroute team, who aim to review them within 24 hours and remove anything that breaks the rules. The person is not told who reported them. Email ${ABUSE_EMAIL} for anything urgent. In an emergency call 000.</p>
+    </div></div>
+    <div class="sheet-foot"><button class="btn btn-primary" data-action="ride-report-send">Send report</button></div>`;
+}
+async function blockPoster(id) {
+  const data = await postJSON("/api/rides/block", { id });
+  if (!blockedPosters().some((b) => b.poster === data.poster)) store.set("blockedPosters", [...blockedPosters(), { poster: data.poster, nickname: data.nickname }]);
+  return data;
 }
 
 function ridesScreen() {
   const p = state.plan;
-  const matches = (p?.rides || []).filter((r) => !state.rides.mine.some((m) => m.id === r.id));
+  const matches = (p?.rides || []).filter((r) => !state.rides.mine.some((m) => m.id === r.id) && !isBlocked(r));
+  const blocked = blockedPosters();
   return `
     ${navbar(true)}
     <div class="scroll">
@@ -2072,7 +2097,9 @@ function ridesScreen() {
         : matches.length ? matches.map(rideCard).join("")
         : `<div class="empty-card"><div class="empty-icon" style="--tone:var(--accent)">${I.users(24)}</div><h3>No shared rides yet</h3><p>Be the first. Anyone searching a similar trip on this Reroute server will see your post.</p></div>`}
       ${p?.start && p?.end ? `<button class="btn btn-primary" data-action="open-ride-form" style="margin:8px 0 24px">Offer seats or start a split Uber</button>` : ""}
+      ${blocked.length ? `<p class="section-header">Blocked</p><div class="group"><div class="group-card">${blocked.map((b) => `<div class="row"><span class="row-label">${esc(b.nickname || "Blocked person")}</span><button class="text-link" data-action="ride-unblock" data-poster="${esc(b.poster)}" aria-label="Unblock ${esc(b.nickname || "this person")}">Unblock</button></div>`).join("")}</div></div>` : ""}
       ${notice("Prototype: posts are visible to everyone using this Reroute server and expire 30 minutes after departure. Don't post phone numbers or exact addresses. Meet somewhere public and trust your judgement.")}
+      <p class="fine">Every post has Report and Block. We aim to review reports within 24 hours. Abuse or safety concerns: ${ABUSE_EMAIL}. <button class="text-link" data-action="go" data-screen="community">Community Guidelines</button></p>
     </div>`;
 }
 
@@ -2090,6 +2117,8 @@ function rideFormSheet() {
         <label>${(state.rideKind || "car") === "car" ? "Trip cost to share ($)" : "Uber estimate ($)"}<input name="trip_cost" type="number" min="0" max="500" step="0.5" value="${(state.rideKind || "car") === "car" && driveCost ? driveCost.toFixed(2) : ""}" placeholder="${(state.rideKind || "car") === "uber" ? "From the Uber app" : "Optional"}"></label></div>
       <label>Note (optional)<input name="note" maxlength="140" placeholder="e.g. Heading to the Great Court"></label>
       <p class="fine">Shared from your search: ${esc(p.origin)} ${I.arrowRight(12)} ${esc(p.destination)}. Only rounded start and end points (about 100 m) are stored.</p>
+      <div class="rules-box"><p class="fine"><b>Community rules.</b> Be kind and honest. No phone numbers, links or social handles. Meet in a public place. Posts that break the rules are removed and repeat offenders are banned. <a href="/community" target="_blank" rel="noopener">Read the Community Guidelines</a></p>
+        <label class="rules-ack"><input type="checkbox" name="rules_ack"> I agree to follow the community rules</label></div>
     </div></div>
     <div class="sheet-foot"><button class="btn btn-primary" data-action="ride-create">Post to the ride board</button></div>`;
 }
@@ -2233,7 +2262,7 @@ function settingsContent() {
       <div class="group"><div class="group-card">
         <div class="row"><span class="row-icon" style="--tone:var(--violet)">${I.moon(18)}</span><span class="row-label">Theme</span>${segmented("theme", s.theme, [["system", "Auto"], ["light", "Light"], ["dark", "Dark"]])}</div>
         <div class="row"><span class="row-icon" style="--tone:var(--teal)">${I.activity(18)}</span><span class="row-label">Reduce motion</span>${toggle("motion_reduced", s.motion === "reduced", "Reduce motion")}</div>
-      </div></div>
+      </div></div>${window.RerouteAnalytics?.settingsGroup() ?? ""}
 
       <p class="section-header">Ways to travel</p>
       <div class="group"><div class="group-card">
@@ -2972,8 +3001,19 @@ function payload(extra = {}) {
   };
 }
 
+// A random id kept on this device so the server can tell posters apart (and keep a block list) without accounts. Only sent to the ride and plan routes.
+function deviceId() {
+  let id = store.get("deviceId", "");
+  if (!/^[\w-]{16,64}$/.test(id)) {
+    id = crypto.randomUUID ? crypto.randomUUID() : [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, "0")).join("");
+    store.set("deviceId", id);
+  }
+  return id;
+}
 async function postJSON(url, body) {
-  const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const headers = { "Content-Type": "application/json" };
+  if (/^\/api\/(rides|plan)/.test(url)) headers["X-Reroute-Device"] = deviceId();
+  const response = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
   const data = await response.json().catch(() => ({ error: "The server returned an unreadable response." }));
   if (!response.ok) {
     let message = data.error || `Request failed (${response.status})`;
@@ -3453,8 +3493,13 @@ const actions = {
   "ride-create": async () => {
     const form = rideFormValues();
     const p = state.plan;
+    if (form.rules_ack !== true) {
+      sheetEl?.querySelector(".sheet-foot .feedback-banner")?.remove();
+      return sheetEl?.querySelector(".sheet-foot")?.insertAdjacentHTML("afterbegin", notice("Please agree to the community rules to post.", "error"));
+    }
     try {
       const data = await postJSON("/api/rides", {
+        rules_ack: true,
         kind: state.rideKind || "car", nickname: form.nickname, seats: form.seats, meet_point: form.meet_point,
         depart_at: form.depart_at, trip_cost: form.trip_cost, note: form.note,
         origin: p.start, destination: p.end, origin_label: p.origin.slice(0, 80), destination_label: p.destination.slice(0, 80),
@@ -3482,6 +3527,38 @@ const actions = {
     } catch (error) { state.rides.error = error.message; }
     rerender();
   },
+  "ride-report": (el) => openSheet(reportSheet(el.dataset.id)),
+  "ride-report-send": async (el) => {
+    const root = sheetEl?.querySelector("#report-form");
+    if (!root || el.disabled) return;
+    const values = Object.fromEntries([...root.querySelectorAll("input, select")].map((i) => [i.name, i.type === "checkbox" ? i.checked : i.value]));
+    el.disabled = true;
+    try {
+      await postJSON("/api/rides/report", { id: root.dataset.id, reason: values.reason, note: values.note });
+      if (values.block_too) await blockPoster(root.dataset.id).catch(() => {});
+      closeSheet();
+      toast("Thanks. We review reports within 24 hours.");
+      rerender();
+    } catch (error) {
+      el.disabled = false;
+      sheetEl?.querySelector(".sheet-foot .feedback-banner")?.remove();
+      sheetEl?.querySelector(".sheet-foot")?.insertAdjacentHTML("afterbegin", notice(esc(error.message), "error"));
+    }
+  },
+  "ride-block": async (el) => {
+    try {
+      const data = await blockPoster(el.dataset.id);
+      state.rides.error = null;
+      toast(`Blocked ${data.nickname}. You can undo this at the bottom of the board.`);
+    } catch (error) { state.rides.error = error.message; }
+    rerender();
+  },
+  "ride-unblock": async (el) => {
+    await postJSON("/api/rides/unblock", { poster: el.dataset.poster }).catch(() => {});
+    store.set("blockedPosters", blockedPosters().filter((b) => b.poster !== el.dataset.poster));
+    toast("Unblocked.");
+    rerender();
+  },
   "ride-leave": async (el) => {
     const tokens = store.get("rideTokens", []);
     const entry = tokens.find((t) => t.id === el.dataset.id);
@@ -3497,12 +3574,12 @@ const actions = {
 function rideFormValues() {
   const root = sheetEl?.querySelector("#ride-form");
   if (!root) return {};
-  return Object.fromEntries([...root.querySelectorAll("input, select")].map((i) => [i.name, i.value]));
+  return Object.fromEntries([...root.querySelectorAll("input, select")].map((i) => [i.name, i.type === "checkbox" ? i.checked : i.value]));
 }
 function restoreRideForm(values) {
   const root = sheetEl?.querySelector("#ride-form");
   if (!root) return;
-  Object.entries(values).forEach(([name, value]) => { const i = root.querySelector(`[name="${name}"]`); if (i && name !== "trip_cost" && value) i.value = value; });
+  Object.entries(values).forEach(([name, value]) => { const i = root.querySelector(`[name="${name}"]`); if (!i || name === "trip_cost") return; if (i.type === "checkbox") i.checked = value === true; else if (value) i.value = value; });
 }
 
 document.addEventListener("click", (event) => {

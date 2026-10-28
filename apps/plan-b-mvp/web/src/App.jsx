@@ -3,6 +3,8 @@ import AppRoutes from "./Routes.jsx";
 import { loadLegacy } from "./legacyLoader.js";
 import MotionLayer from "./motion/MotionLayer.jsx";
 import { runLaunch } from "./motion/launch.js";
+import ConsentSheet from "./analytics/ConsentSheet.jsx";
+import { installAnalytics } from "./analytics/hooks.js";
 
 const Splash = () => (
   <div className="splash" id="splash" aria-hidden="true"><svg width="88" height="88" viewBox="0 0 64 64"><defs><linearGradient id="splg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#6D70F5" /><stop offset="1" stopColor="#4F46E5" /></linearGradient></defs><rect width="64" height="64" rx="15" fill="url(#splg)" /><path d="M16 48 L48 16" fill="none" stroke="#fff" strokeOpacity=".38" strokeWidth="4" strokeLinecap="round" strokeDasharray="1 7" /><path d="M28.5 31.5l7 7M35.5 31.5l-7 7" stroke="#FCA5A5" strokeWidth="3.6" strokeLinecap="round" /><path className="rt" d="M16 48 C16 30 27 18 45 18" fill="none" stroke="#fff" strokeWidth="5.2" strokeLinecap="round" /><circle cx="16" cy="48" r="5" fill="#34D399" stroke="#fff" strokeWidth="2.6" /><g className="dot"><circle cx="47" cy="17" r="6" fill="#fff" /><circle cx="47" cy="17" r="2.6" fill="#4F46E5" /></g></svg></div>
@@ -13,6 +15,7 @@ export default function App() {
   const [state, setState] = useState("loading"); // loading -> ready | failed
   const [splash, setSplash] = useState("on"); // on -> gone
   useEffect(() => { loadLegacy().then(() => setState("ready"), (e) => { console.error(e); setState("failed"); setSplash("gone"); }); }, []);
+  useEffect(() => installAnalytics(), []); // no-op unless the build is configured for analytics
   useEffect(() => {
     if (state !== "ready") return;
     runLaunch({ remove: () => setSplash("gone") });
@@ -20,6 +23,7 @@ export default function App() {
   return (
     <>
       <MotionLayer />
+      <ConsentSheet ready={state === "ready"} />
       <div className="app" id="app" data-screen="home">
         <div className="net-banner" id="net-banner" role="status" aria-live="polite" hidden />
         {splash !== "gone" && <Splash />}
