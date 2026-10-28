@@ -3,3 +3,6 @@ pywebpush>=2.0,<3
 cryptography>=42
 segno>=1.6,<2
 gunicorn>=23.0
+Authlib>=1.6,<2
+joserfc>=1.2,<2
+requests>=2.32,<3

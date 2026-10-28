@@ -135,7 +135,7 @@ class Provider:
         self.http, self.clock, self.extra = http, clock, extra or {}
         self._meta = self._keys = None
         self._meta_at = self._keys_at = 0.0
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()  # keys() calls meta() while holding it
 
     @property
     def web_enabled(self):

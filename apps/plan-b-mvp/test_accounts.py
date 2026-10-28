@@ -157,7 +157,7 @@ class WebFlow(unittest.TestCase):
         self.assertTrue(cookies and "HttpOnly" in cookies[0] and "Secure" in cookies[0] and "SameSite=Lax" in cookies[0] and "Max-Age=2592000" in cookies[0])
         me = client.get("/api/me", base_url=PUBLIC).get_json()
         self.assertEqual((me["signed_in"], me["user"]["display_name"], me["user"]["email"], me["user"]["provider"]), (True, "Ann Lee", "ann@example.com", "google"))
-        raw = client.get_cookie("__Host-planb_session").value
+        raw = client.get_cookie("__Host-planb_session", domain="reroute.example").value
         with closing(sqlite3.connect(acct.path)) as conn:  # the token itself is never stored
             self.assertNotIn(raw, "".join(str(v) for row in conn.execute("SELECT * FROM sessions") for v in row))
         self.assertNotIn(raw, done.headers["Location"])
@@ -181,7 +181,7 @@ class WebFlow(unittest.TestCase):
         client = app.test_client()
         login = client.get("/auth/google/login", base_url=PUBLIC)
         state = parse_qs(urlsplit(login.headers["Location"]).query)["state"][0]
-        self.assertEqual(client.get("/auth/google/callback", query_string={"state": state, "error": "access_denied"}).headers["Location"], "/?auth_error=cancelled")
+        self.assertEqual(client.get("/auth/google/callback", query_string={"state": state, "error": "access_denied"}, base_url=PUBLIC).headers["Location"], "/?auth_error=cancelled")
         for claims in ({"nonce": "wrong" * 8}, {"aud": "someone-else"}, {"iss": "https://evil.example"}, {"exp": 1_700_000_000}, {"sub": None}):
             with self.assertLogs("planb.accounts", "WARNING"):
                 _, done, _ = flow(client, http, claims=claims)
@@ -189,7 +189,7 @@ class WebFlow(unittest.TestCase):
         login = client.get("/auth/google/login", base_url=PUBLIC)
         state = parse_qs(urlsplit(login.headers["Location"]).query)["state"][0]
         with self.assertLogs("planb.accounts", "WARNING") as logs:
-            self.assertEqual(client.get("/auth/google/callback", query_string={"state": state, "code": "bad"}).headers["Location"], "/?auth_error=failed")
+            self.assertEqual(client.get("/auth/google/callback", query_string={"state": state, "code": "bad"}, base_url=PUBLIC).headers["Location"], "/?auth_error=failed")
         self.assertNotIn("secret-code-text", "".join(logs.output))
         self.assertFalse(client.get("/api/me", base_url=PUBLIC).get_json()["signed_in"])
 
@@ -351,6 +351,7 @@ class AccountApi(unittest.TestCase):
         client.put("/api/account/data/settings", json={"version": 0, "value": {"from": "server"}}, headers=h, base_url=PUBLIC)
         client.put("/api/account/data/trips", json={"version": 0, "value": ["server"]}, headers=h, base_url=PUBLIC)
         old, new = (clock.now - 86400) * 1000, (clock.now + 5) * 1000
+        clock.now += 10  # a device stamp cannot be in the future, so time has to pass for it to be newer than the server copy
         merged = client.post("/api/account/merge", json={"local": {"settings": {"value": {"from": "device"}, "updated_at": old}, "trips": {"value": ["device"], "updated_at": new},
                                                               "places": {"value": ["p"], "updated_at": old}}}, headers=h, base_url=PUBLIC).get_json()["merged"]
         self.assertEqual({k: v["action"] for k, v in merged.items()}, {"settings": "kept_server", "trips": "replaced_server", "places": "uploaded"})
@@ -365,7 +366,7 @@ class AccountApi(unittest.TestCase):
         self.assertIn("attachment", reply.headers["Content-Disposition"])
         data = reply.get_json()
         self.assertEqual((data["user"]["email"], data["identities"][0]["provider"], data["synced_data"]["settings"]["value"]), ("ann@example.com", "google", {"a": 1}))
-        self.assertNotIn(client.get_cookie("__Host-planb_session").value, reply.get_data(as_text=True))
+        self.assertNotIn(client.get_cookie("__Host-planb_session", domain="reroute.example").value, reply.get_data(as_text=True))
 
     def test_delete_needs_confirmation_and_a_recent_sign_in_then_removes_everything(self):
         app, acct, http, clock, client, h = signed_in()
@@ -402,7 +403,7 @@ class AccountApi(unittest.TestCase):
 
     def test_logout_ends_the_session_on_the_server(self):
         app, acct, _, _, client, h = signed_in()
-        token = client.get_cookie("__Host-planb_session").value
+        token = client.get_cookie("__Host-planb_session", domain="reroute.example").value
         self.assertEqual(client.post("/auth/logout", headers=h, base_url=PUBLIC).status_code, 200)
         self.assertFalse(client.get("/api/me", base_url=PUBLIC).get_json()["signed_in"])
         self.assertFalse(app.test_client().get("/api/me", headers={"Authorization": "Bearer " + token}).get_json()["signed_in"])  # revoked, not just forgotten
