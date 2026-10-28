@@ -15,7 +15,7 @@ Prepared by Claude Sonnet 5.5 via Claude Code at T.P's request. **Human review r
 | Website | TODO |
 | Privacy policy URL | TODO (public URL of `/privacy`) |
 | Default language | English (Australia) |
-| App icon 512x512, feature graphic 1024x500 | `icons/` has 512 and maskable; TODO create feature graphic from the logo and the home screenshot |
+| App icon 512x512, feature graphic 1024x500 | Generated from the logo by `web/scripts/gen-store-assets.mjs` into `assets/`: `play-icon-512.png` (512x512) and `play-feature-graphic-1024x500.png` (24-bit, no alpha). Review the feature graphic wording before upload |
 | Phone screenshots | 2 to 8, min 320 px, 16:9 to 9:16: `screenshots/360x800` and `390x844` (upscale at DPR 2 or 3 for sharpness); tablet 7" and 10" if tablets are supported: `screenshots/820x1180` |
 | Promo video | TODO YouTube URL (optional), storyboard in the App Store file |
 
@@ -41,7 +41,8 @@ Collected and shared data (confirm against the final build; all in transit is en
 | Other user-generated content | Yes (ride-board posts, public; reports, blocks and a 90-day moderation log are kept privately) | Posts are visible to other users | Yes | App functionality, fraud prevention and security |
 | App interactions | Only if opted in | Processed by PostHog as a service provider | Yes (off by default) | Analytics |
 | Crash logs, diagnostics | Only if opted in | Processed by Sentry as a service provider | Yes | App functionality, analytics |
-| Device or other IDs | Yes: the random ride-board device id (a header on ride and plan calls; only its HMAC is stored) always; the push token if alerts are on | No (push token goes to Google/Apple delivery services as a processor) | Push token: yes; device id: no (needed for ride-board limits, blocks and bans) | App functionality, fraud prevention and security |
+| Device or other IDs | Yes: the random ride-board device id (a header on ride and plan calls; only its HMAC is stored, and that pseudonymous poster id scopes rate limits, blocks and bans) always; the push token if alerts are on | No (push token goes to Google/Apple delivery services as a processor) | Push token: yes; device id: no (needed for ride-board limits, blocks and bans) | App functionality, fraud prevention and security |
+| Device or other IDs (IP address) | Yes, conservatively: the IP address is held in memory for hourly rate limits and may appear in the host or reverse-proxy access logs (retention is a TODO in `privacy-data-map.md`) | No | No (needed for abuse limits) | Fraud prevention and security |
 
 Not collected: contacts, photos, files, calendar, financial info, health, messages, audio, web browsing history, search history (the text typed into place search is sent to Google to return suggestions but is not stored by Reroute; access logs strip query strings, so typed text and coordinates are not logged). No data sold. No data used for advertising or tracking. Data is encrypted in transit. Deletion request mechanism: yes. Every row of this table must match `docs/engineering/privacy-data-map.md`; change that file first.
 

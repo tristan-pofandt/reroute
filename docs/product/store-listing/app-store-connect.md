@@ -78,6 +78,10 @@ Uses encryption only through standard HTTPS/TLS provided by the OS: answer "Yes,
 
 > Reroute plans public-transport trips in South East Queensland, Australia, and compares them with driving and the CO2 avoided. Live data covers Brisbane only, so a reviewer outside Queensland should use Demo mode (logo > Demo mode), which simulates disruptions, weather and traffic and labels every simulated value "Simulated". Location is requested only when you tap "Current location" or "Use my location" and only while the app is open; it is used to find nearby services and is not stored with your identity. Notifications are opt-in from the alerts screen. The ride board is the only user-generated content: posts are at most 140 characters, are filtered, can be reported or blocked from each post (Report / Block), and are reviewed within 24 hours (TODO monitored contact: support email). Account deletion: Settings > Account > Delete account removes the account and its data immediately (ASSUMES; verify in the build). Native features beyond a website: offline map and timetable areas stored on device, local and push notifications, haptics, share sheet, native sign-in (ASSUMES). The app is independent and states it is not an official Translink service. Third-party data is credited in About.
 
+## Marketing icon
+
+The 1024x1024 App Store icon without an alpha channel is `assets/ios-marketing-icon-1024.png` (generated from the logo by `web/scripts/gen-store-assets.mjs`; the app's own AppIcon set is made by `make-native-assets.mjs`). Upload it only if Xcode's asset catalogue does not already supply it; Apple rejects icons with transparency.
+
 ## Screenshot shot list
 
 Required sizes (check current): iPhone 6.9" (1320x2868 or 1290x2796), 6.5" (1284x2778 or 1242x2688) and iPad 13" (2064x2752) if iPad is supported. Capture the demo-mode screens below at the device viewport with device scale factor 3 (the reference captures at 390x844, 430x932, 360x800 and 820x1180 in `screenshots/` come from `web/scripts/a11y-audit.mjs --size WxH`; re-run with scale 3 for store pixels). Demo data only: Taringa Station and UQ St Lucia are public places; nothing personal.
