@@ -502,7 +502,7 @@ function toggleProfileMenu(force) {
   if (!wrap) return;
   const menu = wrap.querySelector(".profile-menu"), open = force ?? menu.hidden;
   if (open) { menu.hidden = false; requestAnimationFrame(() => menu.classList.add("open")); }
-  else { menu.classList.remove("open"); setTimeout(() => { if (!menu.classList.contains("open")) menu.hidden = true; }, 180); }
+  else { menu.classList.remove("open"); setTimeout(() => { if (!menu.classList.contains("open")) menu.hidden = true; }, 260); }
   wrap.querySelector(".avatar-btn").setAttribute("aria-expanded", String(open));
   if (open) menu.querySelector("button")?.focus({ preventScroll: true });
 }
@@ -541,9 +541,20 @@ function menuContent() {
       <p class="fine">Reroute is a student prototype. Estimates only, always check before you travel.</p>
     </div>`;
 }
+let menuLeaving = null; // { el, timer } while a closed menu is still sliding out
 function openMenu() {
   if (menuEl) return;
   toggleProfileMenu(false);
+  if (menuLeaving?.el.isConnected) { // pressed again mid-close: the same panel turns round from where it is (CSS transitions retarget)
+    clearTimeout(menuLeaving.timer);
+    menuEl = menuLeaving.el;
+    menuLeaving = null;
+    syncInert();
+    menuEl.classList.add("open");
+    currentPage?.querySelector('[data-action="open-menu"]')?.setAttribute("aria-expanded", "true");
+    menuEl.querySelector('[data-action="close-menu"]').focus({ preventScroll: true });
+    return;
+  }
   menuEl = document.createElement("div");
   menuEl.className = "menu-backdrop";
   menuEl.dataset.action = "menu-backdrop";
@@ -563,11 +574,11 @@ function closeMenu(then, restoreFocus = true) {
   menuEl = null;
   syncInert();
   el.classList.remove("open");
-  setTimeout(() => el.remove(), 360);
+  menuLeaving = { el, timer: setTimeout(() => { el.remove(); if (menuLeaving?.el === el) menuLeaving = null; }, 400) };
   const brand = currentPage?.querySelector('[data-action="open-menu"]');
   brand?.setAttribute("aria-expanded", "false");
   if (restoreFocus) brand?.focus({ preventScroll: true });
-  if (then) setTimeout(then, 240);
+  if (then) setTimeout(then, 260);
 }
 
 // A small centred message box (used for template features that are not built yet).
@@ -2358,7 +2369,7 @@ function closeSettings() {
   settingsEl = null;
   syncInert();
   el.classList.remove("open");
-  setTimeout(() => el.remove(), 360);
+  setTimeout(() => el.remove(), 400);
   rerender();
   restoreFocus(settingsFocus);
 }
@@ -2913,7 +2924,7 @@ function closePopup(immediate = false) {
   if (el.classList.contains("picker")) disposePicker();
   if (immediate) return el.remove();
   el.classList.remove("open");
-  setTimeout(() => el.remove(), 320);
+  setTimeout(() => el.remove(), 360);
   restoreFocus(popupFocus);
 }
 
@@ -2927,7 +2938,7 @@ function closeSheet(immediate = false) {
   syncInert();
   if (immediate) { el.remove(); cleanMaps(); return; }
   el.classList.remove("open");
-  setTimeout(() => { el.remove(); cleanMaps(); }, 320);
+  setTimeout(() => { el.remove(); cleanMaps(); }, 360);
   restoreFocus(lastFocus);
 }
 

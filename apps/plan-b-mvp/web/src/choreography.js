@@ -21,12 +21,13 @@ export const slow = () => (SLOWMO ? Number(window.__slowmo) || 1 : 1);
 export const EASE = [0.22, 1, 0.36, 1]; // the one ease-out (quint): entering, leaving, fades, press and release. Never an ease-in.
 export const STAGGER_IN = 0.03;
 export const STAGGER_OUT = 0.02;
-export const STAGGER_CLOSE = 0.012; // lines of a closing panel (the panel itself is leaving in the same breath)
+export const STAGGER_CLOSE = 0.014; // lines of a closing panel: top first, the last starts at 112 ms and is gone by 272 ms, just before the panel (300 ms)
+export const LINE_OUT = 0.16; // one line of a closing panel
 export const CAP = 7; // elements beyond this share the last element's delay and "fade with the group" (last one starts at 180 ms)
 export const CAP_OUT = 5; // leaving is capped sooner so a long page clears in about 200 ms
 export const OUT_TIME = 0.12; // one element leaving
 // One duration vocabulary (s) for everything that is not a page element: callers use these instead of numbers.
-export const DUR = { press: 0.14, release: 0.16, hover: 0.15, fade: 0.2, panel: 0.22, menu: 0.36, menuOut: 0.12, crossfade: 0.24, rise: 0.3, morph: 0.45 };
+export const DUR = { press: 0.14, release: 0.16, hover: 0.15, fade: 0.2, panel: 0.22, menu: 0.36, menuOut: 0.2, panelOut: 0.3, crossfade: 0.24, rise: 0.3, morph: 0.45 };
 export const spring = (s = slow()) => ({ type: "spring", duration: 0.4 * s, bounce: 0.12 }); // slide-and-settle: a hair of overshoot, no wobble
 export const MORPH = (s = slow()) => ({ type: "spring", duration: DUR.morph * s, bounce: 0.08 }); // layoutId morphs: calmer than a slide
 export const LAYOUT = { type: "spring", stiffness: 420, damping: 40 }; // lists reordering in place: critically damped, no overshoot
@@ -89,7 +90,7 @@ const clamp = (v, a = 0, b = 1) => (v < a ? a : v > b ? b : v);
 // slide(els, { x, y }, { out, delay, step, cap }) -> { stop(), finished: Promise }
 //   in:  elements start displaced by the offset, invisible, and spring to rest (the first frame is written synchronously: no flash);
 //   out: elements leave to the offset while fading (ease-out: the move starts at once).
-export function slide(els, offset, { out = false, delay = 0, step = out ? STAGGER_OUT : STAGGER_IN, cap = CAP } = {}) {
+export function slide(els, offset, { out = false, delay = 0, step = out ? STAGGER_OUT : STAGGER_IN, cap = CAP, time = OUT_TIME } = {}) {
   const list = [...els].filter(Boolean);
   if (!list.length || reducedMotion()) return { stop() {}, finished: Promise.resolve() };
   const s = slow();
@@ -101,7 +102,7 @@ export function slide(els, offset, { out = false, delay = 0, step = out ? STAGGE
   const stopAt = [];
   const runs = list.map((el, i) => new Promise((resolve) => {
     const c = track(animate(0, 1, {
-      ...(out ? { duration: OUT_TIME * s, ease: EASE } : spring(s)),
+      ...(out ? { duration: time * s, ease: EASE } : spring(s)),
       delay: delay * s + Math.min(i, cap - 1) * step * s,
       onUpdate: (v) => put(el, out ? v : 1 - v, v),
       onComplete: () => { untrack(c); if (!out) { el.style.removeProperty("translate"); el.style.removeProperty("opacity"); } resolve(); },
