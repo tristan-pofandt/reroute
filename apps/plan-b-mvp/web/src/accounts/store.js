@@ -9,7 +9,7 @@ import { useSyncExternalStore } from "react";
 import { KEYS, readLocal, same, writeLocal } from "./adapter.js";
 import { isNative, platform } from "../native/platform.js";
 
-const SYNC_KEY = "planb.acct.sync", TOKEN_KEY = "planb.nativeToken"; // native only: the bearer token (a cookie may not survive in a WebView on another origin)
+const SYNC_KEY = "planb.acct.sync"; // the native bearer token (a cookie may not survive in a WebView on another origin) is in native/tokenStore.js
 const DEBOUNCE_MS = 2000, TICK_MS = 5000, PULL_MS = 60000;
 
 // What the page was opened with: the redirect back from a provider adds ?signed_in=1 or ?auth_error=<code>. Read once, then removed.
@@ -47,7 +47,7 @@ function publish() {
 // ── Talking to the server ───────────────────────────────────────────────────
 
 async function call(path, { method = "GET", body } = {}) {
-  const headers = {}, token = nativeToken();
+  const headers = {}, token = await nativeToken();
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (method !== "GET" && state.csrf) headers["X-CSRF-Token"] = state.csrf;
@@ -82,8 +82,10 @@ export async function refresh() {
 
 // ── Actions ─────────────────────────────────────────────────────────────────
 
-const nativeToken = () => { try { return isNative() ? localStorage.getItem(TOKEN_KEY) : null; } catch { return null; } };
-const setNativeToken = (token) => { try { token ? localStorage.setItem(TOKEN_KEY, token) : localStorage.removeItem(TOKEN_KEY); } catch { /* blocked: the person signs in again next time */ } };
+// Native only: the bearer token is kept in secure storage (native/tokenStore.js, lazy); `cachedToken` avoids a bridge call per request.
+let cachedToken;
+const nativeToken = async () => { if (!isNative()) return null; if (cachedToken === undefined) cachedToken = await (await import("../native/tokenStore.js")).getToken(); return cachedToken; };
+const setNativeToken = async (token) => { cachedToken = token || null; if (isNative()) await (await import("../native/tokenStore.js")).setToken(token); };
 
 // Whether a button should show: on web the redirect flow must be configured; in the store apps the platform SDK flow must be (no Apple on Android).
 export const canSignIn = (s, name) => (isNative() ? !!s.native?.[name] && !(name === "apple" && platform() === "android") : !!s.providers?.[name]);
@@ -96,7 +98,7 @@ async function nativeSignIn(provider) {
     if (!got.idToken) throw new Error("cancelled");
     const reply = await call(`/auth/native/${provider}`, { method: "POST", body: { id_token: got.idToken, nonce: got.nonce, ...(got.authorizationCode ? { authorization_code: got.authorizationCode } : {}) } });
     if (!reply.ok || !reply.json.token) throw new Error(reply.json.error || "failed");
-    setNativeToken(reply.json.token);
+    await setNativeToken(reply.json.token);
     await refresh();
     set({ busy: false });
   } catch (error) {
@@ -113,14 +115,14 @@ export function signIn(provider, next = location.pathname + location.search) {
 export async function signOut() {
   set({ busy: true });
   const reply = await call("/auth/logout", { method: "POST", body: {} }).catch(() => null);
-  if (reply?.ok) { setNativeToken(null); stopSync(); forget(); set({ user: null, csrf: null, busy: false, conflicts: {}, notice: null, sync: { state: "off", at: null } }); }
+  if (reply?.ok) { await setNativeToken(null); stopSync(); forget(); set({ user: null, csrf: null, busy: false, conflicts: {}, notice: null, sync: { state: "off", at: null } }); }
   else set({ busy: false, error: "Could not sign out. Try again." });
 }
 
 export async function deleteAccount() {
   set({ busy: true, error: null });
   const reply = await call("/api/account/delete", { method: "POST", body: { confirm: "delete" } }).catch(() => null);
-  if (reply?.ok) { setNativeToken(null); stopSync(); forget(); set({ user: null, csrf: null, busy: false, conflicts: {}, notice: "deleted", sync: { state: "off", at: null } }); return true; }
+  if (reply?.ok) { await setNativeToken(null); stopSync(); forget(); set({ user: null, csrf: null, busy: false, conflicts: {}, notice: "deleted", sync: { state: "off", at: null } }); return true; }
   if (reply?.json?.reauth) { set({ busy: false, reauth: true }); return false; }
   set({ busy: false, error: reply?.json?.error || "Could not delete the account. Nothing was deleted; try again." });
   return false;
