@@ -6,6 +6,8 @@ import { isNative } from "./native/platform.js";
 import ErrorBoundary from "./errors/ErrorBoundary.jsx";
 import { installGlobalHandlers } from "./errors/report.js";
 
+import "./textScale.js";
+
 installGlobalHandlers();
 
 if (isNative()) import("./native/index.js").then((m) => m.initNative()); // Capacitor shell only; the web never loads it

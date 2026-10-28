@@ -8,12 +8,12 @@
 .card-row .card-body { display: grid; grid-template-columns: auto 1fr auto; grid-template-rows: auto auto; column-gap: 12px; row-gap: 2px; align-items: center; padding: 12px 14px; }
 .card-row .row-tile { grid-row: 1 / span 2; display: flex; }
 .card-row .mode-tile { width: 36px; height: 36px; border-radius: 11px; }
-.card-row .row-name { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.25; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-row .row-name { font-size: 0.9375rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1.25; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-row .row-end { display: flex; align-items: center; gap: 8px; justify-self: end; }
-.card-row .arrival-time { font-size: 17px; }
-.card-row .row-meta { grid-column: 2 / span 2; display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.card-row .arrival-time { font-size: 1.0625rem; }
+.card-row .row-meta { grid-column: 2 / span 2; display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; }
 .card-row .row-meta > span { overflow: hidden; text-overflow: ellipsis; }
 .card-row .row-meta svg, .card-row .row-meta .row-tile svg { flex-shrink: 0; color: var(--success-text); }
 .card-row .row-meta .over { color: var(--error-text); }
-.card-row .badge { padding: 2px 8px; font-size: 11px; }
+.card-row .badge { padding: 2px 8px; font-size: 0.6875rem; }
 .card-row .badge svg { width: 11px; height: 11px; }
