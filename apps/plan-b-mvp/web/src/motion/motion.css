@@ -10,6 +10,10 @@ html.fm :is(.btn, .icon-btn, .nav-back, .nav-action, .home-btn, button.row, a.ro
 /* Scroll-driven blocks get their transform / opacity written every frame: CSS must not ease or replay them on top of that. */
 html.fm [data-fm] { animation: none; transition-property: background-color, border-color, color, box-shadow, filter; }
 html.fm .chart-card .bar { transition-property: none; }
+/* app.css's own `rise` / `fbIn` entrances on the blocks of a page: the page choreography moves the same blocks, and a CSS animation overrides the
+   inline transform / opacity it writes (the card jumped to its resting place for 260 ms, then the choreography caught up). The blocks used to
+   get data-fm at birth; registration now waits for the entrance to finish (scroll3d.js), so the rule must not depend on it. */
+html.fm .page :is(.scroll, header, footer) > :is(.hero, .card, .empty-card, .none-fit, .explain, .confirm, .watch-banner, .panic-answer, .ride-card, .wx, .impact-card, .goal-card, .equiv-card, .streak-card, .wxp-now, .feedback-banner, .wx-warn, .cost-detail) { animation: none; }
 
 /* The layer staggers the menu lines itself (panels.js). */
 html.fm .menu-backdrop.open .menu-scroll .group { animation: none; }

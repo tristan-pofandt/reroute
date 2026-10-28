@@ -61,6 +61,7 @@ export const Page = forwardRef(function Page({ name, first }, ref) {
     if (!seated.current && !isFirst) snap();
     seated.current = true;
     if (!isFirst) bridge.legacy?.pageSettled();
+    document.dispatchEvent(new Event("reroute:settled")); // the scroll reveals wait for this before touching the page's blocks
   }, [isFirst]);
 
   useEffect(() => {

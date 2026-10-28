@@ -19,6 +19,12 @@ import { prune, touch, track, untrack } from "./fm.js";
 const ALL = `${REVEAL}, .scroll .kpi.lead, .scroll .hero-art, .scroll .kpi b`;
 const clamp = (v, a = 0, b = 1) => (v < a ? a : v > b ? b : v);
 
+// A block is never touched while its page is changing (an entrance or exit writes the same transform / opacity: clearing or re-asserting ours
+// mid-flight snapped blocks back to rest for a frame or two). Registration, re-measure and re-assert are deferred and run once on
+// `reroute:settled` (Page.jsx), when the entrance has finished.
+let settledOnce = false, deferred = false;
+const busy = () => (!settledOnce && performance.now() < 6000) || !!window.RerouteLegacy?.isTransitioning?.();
+
 let scrollers = new Map(), known = new WeakSet(), io = null, blockRO = null, side = 1, lastThud = 0, queued = false;
 
 const state = (sc) => {
@@ -35,6 +41,7 @@ function request() {
 
 // ── Registration ────────────────────────────────────────────────────────────
 export function sweep(root) {
+  if (busy()) { deferred = true; return; }
   prune();
   const fresh = [];
   for (const el of root.querySelectorAll(ALL)) {
@@ -85,8 +92,9 @@ function measure(fresh) {
 
 // Re-measure after a resize: clear what we wrote, read once, write again on the next flush.
 function remeasure() {
+  if (busy()) { deferred = true; return; }
   const lists = [...scrollers.values()];
-  for (const S of lists) for (const it of S.list) if (it.kind === "block") { it.el.style.removeProperty("transform"); it.el.style.removeProperty("opacity"); }
+  for (const S of lists) for (const it of S.list) if (it.kind === "block" && it.scrub) { it.el.style.removeProperty("transform"); it.el.style.removeProperty("opacity"); }
   for (const S of lists) {
     if (!S.el.isConnected) continue;
     const sr = S.el.getBoundingClientRect();
@@ -94,9 +102,10 @@ function remeasure() {
     for (const it of S.list) {
       if (!it.el.isConnected) continue;
       const r = it.el.getBoundingClientRect();
-      it.top = r.top - sr.top + S.s; it.h = r.height; it.sig = ""; it.clean = false;
+      it.top = r.top - sr.top + S.s; it.h = r.height; it.sig = "";
       // Measured while its neighbours were still skeletons, a block can end up below the fold only now: give it its reveal.
       if (it.kind === "block" && !it.scrub && it.top - S.s >= S.H) { it.scrub = true; it.seated = false; touch(it.el, "transform", "opacity"); }
+      if (it.kind === "block") it.clean = !it.scrub; // only blocks that start hidden are ours to clear; the rest belong to the page choreography
       if (it.kind === "block" && it.scrub) { it.s1 = Math.min(it.top - S.H * 0.7, S.max); it.s0 = Math.min(it.top - S.H * 0.98, it.s1 - 40); }
       if (it.kind === "depth") { it.s0 = it.top - 80; it.s1 = it.top + it.h; }
       if (it.kind === "bars") { it.s0 = it.top - S.H * 0.9; it.s1 = Math.min(it.top + it.h / 2 - S.H * 0.6, S.max); }
@@ -199,6 +208,8 @@ export function installScroll3d(viewport) {
   // A native screen re-renders when live data arrives and framer writes its resting opacity / transform back onto the blocks: re-assert ours.
   const onRerender = () => { setTimeout(invalidate, 60); setTimeout(invalidate, 450); };
   document.addEventListener("reroute:rerender", onRerender);
+  const onSettled = () => requestAnimationFrame(() => { settledOnce = true; if (deferred) { deferred = false; sweep(viewport); remeasure(); } invalidate(); });
+  document.addEventListener("reroute:settled", onSettled);
   const onVisible = () => { if (!document.hidden) request(); };
   document.addEventListener("visibilitychange", onVisible);
   sweep(viewport);
@@ -206,10 +217,11 @@ export function installScroll3d(viewport) {
     document.removeEventListener("scroll", onScroll, { capture: true });
     document.removeEventListener("visibilitychange", onVisible);
     document.removeEventListener("reroute:rerender", onRerender);
+    document.removeEventListener("reroute:settled", onSettled);
     off(); ro.disconnect(); blockRO.disconnect(); blockRO = null; clearTimeout(timer); io.disconnect();
     scrollers.clear();
   };
 }
 
 // Content shifted without a DOM add (a skeleton cross-fade finished): rewrite every block's state on the next frame.
-export const invalidate = () => { scrollers.forEach((S) => S.list.forEach((it) => { it.sig = ""; })); request(); };
+export const invalidate = () => { if (busy()) { deferred = true; return; } scrollers.forEach((S) => S.list.forEach((it) => { it.sig = ""; })); request(); };

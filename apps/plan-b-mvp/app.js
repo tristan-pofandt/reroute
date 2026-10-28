@@ -2460,7 +2460,7 @@ function navigate(screen, direction = "forward", syncUrl = true) {
   closeSheet(true);
   closeDialog();
   if (menuEl) closeMenu(null, false);
-  app.dataset.screen = screen;
+  if (!bridge) app.dataset.screen = screen; // the shell sets it in pageMounted; setting it now shifted the leaving page (the demo pill padding) at the start of the exit
   transitioning = true;
   if (direction === "forward" || direction === "up") state.stack.push(screen);
   else { while (state.stack.length > 1 && state.stack[state.stack.length - 1] !== screen) state.stack.pop(); if (state.stack[state.stack.length - 1] !== screen) state.stack = [screen]; }
