@@ -1290,3 +1290,14 @@ html[data-text="large"] .segmented button { padding: 0 6px; }
 html[data-text="large"] .big-arrival { flex-wrap: wrap; gap: 8px 16px; }
 html[data-text="large"] .wx-now { flex: 1 1 8rem; }
 html[data-text="large"] .wx-main, html[data-text="large"] .wx-head { flex-wrap: wrap; }
+
+/* ── Contrast and forced-colours preferences (no effect unless the system asks) ── */
+@media (prefers-contrast: more) {
+  :root { --text-muted: #CBD5E1; --text-faint: #A8B3C5; --border-subtle: rgba(255, 255, 255, 0.28); --border-strong: rgba(255, 255, 255, 0.5); }
+  :root[data-theme="light"] { --text-muted: #3F485B; --text-faint: #566075; --border-subtle: rgba(15, 18, 34, 0.4); --border-strong: rgba(15, 18, 34, 0.65); }
+}
+@media (forced-colors: active) {
+  :focus-visible { outline: 2px solid Highlight; }
+  .btn, .chip, .icon-btn, .home-btn, .switch .track, .segmented .thumb { border: 1px solid ButtonText; }
+  .switch input:checked + .track { background: Highlight; }
+}
