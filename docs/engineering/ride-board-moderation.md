@@ -56,6 +56,10 @@ curl -H "Authorization: Bearer $PLANB_ADMIN_TOKEN" -H "Content-Type: application
      -d '{"action":"remove","id":"5439456f"}' https://HOST/admin/moderation/action
 ```
 
+## Auto-hide alert
+
+When the third distinct report hides a post, `rides.py` writes `ride board post <id> auto-hidden after 3 reports (harassment x2, scam x1); review it at /admin/moderation` at WARNING level (logger `planb.rides`). If the environment variable `PLANB_ALERT_WEBHOOK` is an `http(s)` URL, a daemon thread also POSTs JSON `{"text", "content", "post_id", "reports", "reasons"}` to it with a 5 second timeout (`text` is read by Slack, `content` by Discord; an ntfy topic URL shows the body). Only the post id, the count and the reason codes are sent: no nickname, note, poster id or reporter id. Failures are logged and ignored. Treat the webhook URL as a secret (set it as a host secret, never in the repo). Test: `python -m unittest test_moderation`.
+
 ## Operator runbook
 
 1. **Set up once:** generate a 32+ character random token (`python -c "import secrets;print(secrets.token_urlsafe(32))"`), store it as the host secret `PLANB_ADMIN_TOKEN`, redeploy. Put a persistent disk on `PLANB_DATA_DIR`, otherwise the ride database (including bans) is lost on redeploy. Replace the placeholder `abuse@reroute.invalid` / `support@reroute.invalid` (in `web/src/screens/legal/contact.js` and `ABUSE_EMAIL` in `app.js`) with a monitored mailbox and forward it to at least two people.
@@ -68,4 +72,4 @@ curl -H "Authorization: Bearer $PLANB_ADMIN_TOKEN" -H "Content-Type: application
 
 ## Not done
 
-No image or profile content exists, so no image moderation. No email notification to the operator when a post is auto-hidden (the queue must be checked). No signed-in requirement to post. No translation of the filter beyond English. The 24 hour response time depends on people, not code.
+No image or profile content exists, so no image moderation. The operator is told when a post auto-hides only by a WARNING log line and the optional `PLANB_ALERT_WEBHOOK` message (below); there is no email, so check the queue daily anyway. No signed-in requirement to post. No translation of the filter beyond English. The 24 hour response time depends on people, not code.

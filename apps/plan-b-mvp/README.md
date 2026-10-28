@@ -62,6 +62,7 @@ The deployment settings are documented in [`infra/plan-b-mvp/README.md`](../../i
 | `PLANB_OFFLINE_LIMIT_PER_HOUR` | Offline area downloads per visitor address per hour, counted separately for the map (`/api/offline/map`) and the timetable (`/api/offline/transit`), default 6 each. Applies with or without a Google key; the developer's own machine is not limited |
 | `PLANB_DATA_DIR` | Where the ride board, push subscriptions, VAPID keys, the GTFS index and zip (about 37 MB in all) and the offline map cache (`offline/`, up to 20 areas of about 3 MB each) are written, default `data/` here |
 | `PLANB_ADMIN_TOKEN` | Secret that turns on the ride-board moderation queue at `/admin/moderation` (404 while unset). 32+ random characters, host secret only |
+| `PLANB_ALERT_WEBHOOK` | Optional `https://` webhook (Slack, Discord or ntfy). Called with a small JSON body when a ride-board post auto-hides after 3 reports; see `infra/plan-b-mvp/README.md`. Host secret |
 | `PLANB_CSP_ENFORCE` | `1` (default) enforces the Content-Security-Policy; `0` makes it report-only (violations are logged as warnings) |
 | `PLANB_CORS_ORIGINS` | Comma list of origins allowed to call the API cross-origin, default none. Native app: `capacitor://localhost,https://localhost,ionic://localhost` |
 | `ACCOUNTS_SECRET_KEY` | Turns accounts on (32+ random characters; signs CSRF tokens, encrypts the Apple token). Unset: accounts are off and Reroute is guest-only |

@@ -4,7 +4,7 @@ Operational configuration for running the [Plan B MVP](../../apps/plan-b-mvp/REA
 
 | File | Purpose |
 | --- | --- |
-| `Dockerfile` | `python:3.13-slim` image that installs `apps/plan-b-mvp/requirements.txt` and runs `gunicorn -w 1 --threads 8 server:app`, listening on `HOST` (0.0.0.0) and `PORT` (8000) |
+| `Dockerfile` | Two stages: Node builds the React shell, then a `python:3.13-slim` image (build arg `GIT_SHA`, shown by `/healthz`) that installs `apps/plan-b-mvp/requirements.txt` and runs `gunicorn -w 1 --threads 8 server:app`, listening on `HOST` (0.0.0.0) and `PORT` (8000) |
 | `Dockerfile.dockerignore` | Keeps `.env` files, local `data/`, caches and tests out of the image (BuildKit reads it automatically) |
 | `render.yaml` | Render Blueprint for one Docker web service; secrets are `sync: false` so they are typed into the dashboard |
 
@@ -28,6 +28,7 @@ Operational configuration for running the [Plan B MVP](../../apps/plan-b-mvp/REA
 | `HOST`, `PORT` | No | Bind address and port. The image sets `0.0.0.0` and `8000`; Render supplies `PORT` itself |
 | `PLANB_TRUST_PROXY` | On a host | Number of reverse proxies in front of the app (the image and `render.yaml` set `1`) so the real visitor address is used for rate limiting |
 | `PLANB_ADMIN_TOKEN` | For moderation | Secret (32+ random characters) that switches on the operator queue at `/admin/moderation` (404 while unset). Set it as a secret, never in the repo. See `docs/engineering/ride-board-moderation.md` |
+| `PLANB_ALERT_WEBHOOK` | No | An `https://` URL (Slack incoming webhook, Discord webhook, or an ntfy topic URL). When a ride-board post hides itself after 3 reports the server logs a WARNING and POSTs a small JSON body (`text`, `content`, `post_id`, `reports`, `reasons`; no nicknames, notes or poster ids) with a 5 second timeout, in the background. A failing webhook is logged and ignored. Treat the URL as a secret. See `docs/engineering/ride-board-moderation.md` |
 | `PLANB_CSP_ENFORCE` | No | `1` (the default) enforces the Content-Security-Policy; `0` sends it as report-only (violations are logged as `CSP violation` warnings via `/api/csp-report`) while you test a new third-party host |
 | `PLANB_CORS_ORIGINS` | Native app | Comma list of origins allowed to call the API cross-origin. Default none (same-origin only). For the Capacitor app use `capacitor://localhost,https://localhost,ionic://localhost` |
 | `PLANB_QUIET` | No | Set to `1` to stop the server printing a console line for every request. Those lines hold the visitor IP address (Flask) and the request path. Query strings, which carry typed address suggestions and weather or fuel coordinates, are removed from the Flask and gunicorn access logs by `security.py` and the Dockerfile log format, but the hosting platform's own logs may still record them, so the privacy page assumes you decide this on purpose |
@@ -99,8 +100,20 @@ The tunnel is only up while the laptop is awake and online, and anyone with the 
 Docker was not available while this was written, so this has not been run:
 
 ```bash
-docker build -f infra/plan-b-mvp/Dockerfile -t plan-b-mvp .
+docker build --build-arg GIT_SHA=$(git rev-parse --short HEAD) -f infra/plan-b-mvp/Dockerfile -t plan-b-mvp .
 docker run --rm -p 8000:8000 -e MAPS_API_KEY=your_server_key -e MAPS_BROWSER_API_KEY=your_referrer_restricted_browser_key plan-b-mvp
 ```
 
 Then open `http://localhost:8000`. Pass both keys with `-e` or `--env-file`; restrict the browser key to the local origin and Maps JavaScript API, and never bake either key into the image.
+
+### Build argument `GIT_SHA` and the update script
+
+`--build-arg GIT_SHA=<short commit>` sets the `GIT_SHA` environment variable in the image, which `/healthz` reports as `version` so you can see which commit is running. Without it the value is `dev`. It does not change anything else.
+
+The Proxmox host's `/opt/reroute/update.sh` builds with `docker build -q -f ... -t reroute:latest .` and therefore always reports `dev`. **Proposed change (not applied; that script is not in this repository):** add the argument, using the commit of the checkout the script builds from:
+
+```bash
+docker build -q --build-arg GIT_SHA=$(git rev-parse --short HEAD) -f infra/plan-b-mvp/Dockerfile -t reroute:latest .
+```
+
+Run `git rev-parse` in the checkout directory (not inside the `docker build` context archive, which has no `.git`). If the script builds from a `git archive` stream instead, export the value first (`GIT_SHA=$(git rev-parse --short HEAD)`) and pass `--build-arg GIT_SHA=$GIT_SHA`.

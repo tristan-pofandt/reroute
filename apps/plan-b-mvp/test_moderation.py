@@ -98,6 +98,36 @@ class ReportTests(SafetyCase):
             self.board.report(ride["id"], "other", "", who)
         self.assertEqual(len(self.listing()), 1)  # approved posts are not auto-hidden again
 
+    def test_auto_hide_logs_a_warning_and_posts_to_the_webhook_without_personal_data(self):
+        ride = self.post()["ride"]
+        sent = []
+        with patch.dict(os.environ, {"PLANB_ALERT_WEBHOOK": "https://hooks.example/alert"}), patch("rides.deliver_alert", lambda url, payload: sent.append((url, payload))):
+            with self.assertLogs("planb.rides", "WARNING") as logged:
+                for who, reason in zip((B, C, D), ("harassment", "harassment", "scam")):
+                    self.board.report(ride["id"], reason, "a private note", who)
+                    if self.board.last_alert:
+                        self.board.last_alert.join(2)
+        self.assertEqual(len(sent), 1)  # only when the post hides, not on every report
+        url, payload = sent[0]
+        self.assertEqual((url, payload["post_id"], payload["reports"], payload["reasons"]), ("https://hooks.example/alert", ride["id"], 3, {"harassment": 2, "scam": 1}))
+        blob = json.dumps(payload) + "".join(logged.output)
+        for private in ("a private note", B, C, D, A, ride["nickname"]):
+            self.assertNotIn(private, blob)
+        self.assertIn("auto-hidden", logged.output[0])
+
+    def test_auto_hide_without_a_webhook_only_logs_and_a_dead_webhook_is_harmless(self):
+        ride = self.post()["ride"]
+        with patch.dict(os.environ, {}, clear=False), patch.dict(os.environ, {"PLANB_ALERT_WEBHOOK": ""}):
+            with self.assertLogs("planb.rides", "WARNING"):
+                for who in (B, C, D):
+                    self.board.report(ride["id"], "other", "", who)
+            self.assertIsNone(self.board.last_alert)
+        from rides import deliver_alert
+        with patch("rides.urllib.request.urlopen", side_effect=OSError("down")), self.assertLogs("planb.rides", "WARNING"):
+            deliver_alert("https://hooks.example/x", {"text": "t"})  # must not raise
+        with self.assertLogs("planb.rides", "WARNING"):
+            deliver_alert("file:///etc/passwd", {})
+
     def test_report_rate_limit(self):
         ride = self.post()["ride"]
         reasons = []

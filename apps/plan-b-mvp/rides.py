@@ -11,11 +11,14 @@ from datetime import datetime, timedelta
 import hashlib
 import hmac
 import json
+import logging
+import os
 import re
 import secrets
 import sqlite3
 import threading
 from pathlib import Path
+import urllib.request
 
 from contentfilter import ContentFilter
 from google_api import metres
@@ -32,6 +35,19 @@ AUTO_FLAG_REPORTS = 3  # distinct reporters that hide a post until an operator h
 LOG_DAYS = 90  # how long the moderation log (the evidence for an appeal) is kept
 LIMITS = {"create": (3, 3600), "create-day": (8, 86400), "join": (10, 3600), "report": (10, 3600), "block": (30, 3600)}
 POSTER = re.compile(r"^[0-9a-f]{12}$")
+log = logging.getLogger("planb.rides")
+
+
+def deliver_alert(url, payload):
+    """POST a small JSON body to the operator's webhook (5 s timeout). Never raises: an alert must not break a report."""
+    try:
+        if not url.startswith(("https://", "http://")):
+            raise ValueError("PLANB_ALERT_WEBHOOK must be an http(s) URL")
+        request = urllib.request.Request(url, json.dumps(payload).encode(), {"Content-Type": "application/json", "User-Agent": "reroute-alert"})
+        with urllib.request.urlopen(request, timeout=5):  # nosec: the URL is operator configuration
+            pass
+    except Exception as error:  # a slow or wrong webhook only costs the notification
+        log.warning("moderation alert webhook failed: %s", type(error).__name__)
 
 
 class RideError(ValueError):
@@ -85,6 +101,7 @@ class Board:
         self._tz = tz
         self.content = content or ContentFilter()
         self._lock = threading.RLock()
+        self.last_alert = None  # the thread delivering the newest auto-hide webhook (tests join it)
         self._limits = RateLimiter(lambda: self._now().timestamp())
         if self._path:
             self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -365,7 +382,22 @@ class Board:
                 ride["status"] = "flagged"
                 self._save(db, ride)
                 self._log(db, "auto-hide", ride, detail=f"{count} reports")
+                reasons = dict(db.execute("SELECT reason, COUNT(*) FROM reports WHERE ride_id = ? GROUP BY reason", (ride["id"],)).fetchall())
+        if flagged:
+            self._alert(ride["id"], count, reasons)
         return {"ok": True, "hidden": flagged}
+
+    def _alert(self, ride_id, count, reasons):
+        """Tell the operator a post just hid itself: a WARNING in the log and, if PLANB_ALERT_WEBHOOK is set, a small JSON POST (post id and reasons only)."""
+        summary = ", ".join(f"{reason} x{n}" for reason, n in sorted(reasons.items()))
+        log.warning("ride board post %s auto-hidden after %d reports (%s); review it at /admin/moderation", ride_id, count, summary)
+        url = os.environ.get("PLANB_ALERT_WEBHOOK", "").strip()
+        if url:
+            text = f"Reroute: ride board post {ride_id} was hidden after {count} reports ({summary}). Review it in the moderation queue (/admin/moderation)."
+            # "text" is read by Slack, "content" by Discord; ntfy shows the body as the message.
+            payload = {"text": text, "content": text, "post_id": ride_id, "reports": count, "reasons": reasons}
+            self.last_alert = threading.Thread(target=deliver_alert, args=(url, payload), daemon=True)
+            self.last_alert.start()
 
     def block(self, blocker, ride_id=None, poster=None, nickname=""):
         """Hide a poster's posts from this blocker (an account when signed in, else a device). Give a ride id, or a poster id seen before."""
