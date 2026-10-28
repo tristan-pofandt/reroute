@@ -29,12 +29,22 @@ Operational configuration for running the [Plan B MVP](../../apps/plan-b-mvp/REA
 | `PLANB_ADMIN_TOKEN` | For moderation | Secret (32+ random characters) that switches on the operator queue at `/admin/moderation` (404 while unset). Set it as a secret, never in the repo. See `docs/engineering/ride-board-moderation.md` |
 | `PLANB_CSP_ENFORCE` | No | `1` (the default) enforces the Content-Security-Policy; `0` sends it as report-only (violations are logged as `CSP violation` warnings via `/api/csp-report`) while you test a new third-party host |
 | `PLANB_CORS_ORIGINS` | Native app | Comma list of origins allowed to call the API cross-origin. Default none (same-origin only). For the Capacitor app use `capacitor://localhost,https://localhost,ionic://localhost` |
-| `PLANB_QUIET` | No | Set to `1` to stop the server printing a console line for every request. Those lines hold the visitor IP address and the URL, which includes typed address suggestions and weather or fuel coordinates, so the privacy page assumes you decide this on purpose |
+| `PLANB_QUIET` | No | Set to `1` to stop the server printing a console line for every request. Those lines hold the visitor IP address (Flask) and the request path. Query strings, which carry typed address suggestions and weather or fuel coordinates, are removed from the Flask and gunicorn access logs by `security.py` and the Dockerfile log format, but the hosting platform's own logs may still record them, so the privacy page assumes you decide this on purpose |
 | `PLANB_PLAN_LIMIT_PER_HOUR` | No | Searches per visitor address per hour, default 40. Address suggestions (`PLANB_AUTOCOMPLETE_LIMIT_PER_HOUR`, 400) and fuel prices (`PLANB_FUEL_LIMIT_PER_HOUR`, 120) have their own limits |
 | `PLANB_DAILY_GOOGLE_CAP` | No | Searches per Brisbane day for everyone together, default 50; `render.yaml` uses 50 |
 | `PLANB_DAILY_AUTOCOMPLETE_CAP` | No | Address suggestion requests per Brisbane day for everyone together, default 500; `render.yaml` uses 500 |
 | `QLDTRAFFIC_API_KEY` | No | Your own QLDTraffic key; without it the public key published on the Queensland Government open data portal is used |
 | `PLANB_DATA_DIR` | No | Where the ride board, push subscriptions, VAPID keys and the cached GTFS index are written, default `apps/plan-b-mvp/data` (`/app/data` in the image) |
+| `ACCOUNTS_SECRET_KEY` | For accounts | Random string of at least 32 characters (for example `python -c "import secrets; print(secrets.token_urlsafe(48))"`). Signs CSRF tokens and encrypts the stored Apple token. Without it accounts are switched off and every account route answers 503 (guest mode is unaffected). Changing it signs nobody out but makes stored Apple tokens unreadable |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | For Google sign-in | The OAuth web client from Google Cloud. The button shows only when both are set and `PUBLIC_URL` is set |
+| `GOOGLE_IOS_CLIENT_ID`, `GOOGLE_ANDROID_CLIENT_ID` | Native only | Comma-separated client IDs whose ID tokens `/auth/native/google` accepts (the web client ID is accepted too) |
+| `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_CLIENT_ID` | For Apple sign-in | Team ID, the Sign in with Apple key ID and the Services ID (web). The server signs its ES256 client secret itself |
+| `APPLE_PRIVATE_KEY` or `APPLE_PRIVATE_KEY_FILE` | For Apple sign-in | The `.p8` key as text (`
+` allowed for newlines) or the path of a file on the server. Never commit it |
+| `APPLE_BUNDLE_ID` | Native only | Comma-separated app bundle IDs accepted by `/auth/native/apple` |
+| `APPLE_DOMAIN_ASSOCIATION` (or `..._FILE`) | For Apple web sign-in | Content served at `/.well-known/apple-developer-domain-association.txt` (download it from the Apple Developer site) |
+| `APPLE_APP_SITE_ASSOCIATION_JSON`, `ANDROID_ASSETLINKS_JSON` | Native only | Content served at `/.well-known/apple-app-site-association` and `/.well-known/assetlinks.json` (each also accepts a `_FILE` path) |
+| `PLANB_DEV`, `ACCOUNTS_FAKE_PROVIDER` | Never in production | `PLANB_DEV=1` lets accounts start without a secret key (a random one per run) and, with `ACCOUNTS_FAKE_PROVIDER=1`, shows a test sign-in that needs no provider |
 
 Generate a VAPID key pair on your own machine from `apps/plan-b-mvp/`, then paste the two lines into the host's settings:
 
