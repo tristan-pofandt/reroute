@@ -45,7 +45,7 @@ Prepared by Claude Sonnet 5.5 via Claude Code at T.P's request. **Human review r
 
 ## Age rating questionnaire (answer honestly; check the current form)
 
-Cartoon/fantasy violence none; realistic violence none; sexual content none; profanity none; horror none; medical none; alcohol/tobacco/drugs none; gambling none; contests none. **Unrestricted web access: no** (no general browser; links open the system browser). **User-generated content: yes** (ride board notes of up to 140 characters, public, with report and block, filtering and moderation). Expected rating: probably 12+ or 13+ because of UGC (the form decides). Account sign-in is optional.
+Cartoon/fantasy violence none; realistic violence none; sexual content none; profanity none; horror none; medical none; alcohol/tobacco/drugs none; gambling none; contests none. **Unrestricted web access: no** (no general browser; links open the system browser). **User-generated content: yes** (ride board notes of up to 140 characters, public, with report and block, filtering and moderation). Decision: do not choose 4+ (the ride board is user-generated content and the app asks for a nickname and meeting place); expect 12+ on the old scale or 13+ on the current one, and set it no lower than the form returns. The Privacy Policy says the app is not directed at under-13s. See `docs/engineering/privacy-data-map.md`. Account sign-in is optional.
 
 ## App Privacy ("nutrition label") answers
 
@@ -58,13 +58,13 @@ Data types and how they flow (confirm against the final build):
 | Name | Yes, only with account sign-in (and a ride-board display name if used) | Yes | No | App functionality, account |
 | Email address | Yes, only with account sign-in | Yes | No | App functionality, account |
 | User ID | Yes, with account | Yes | No | App functionality |
-| Other user content (ride-board posts) | Yes | Yes (ASSUMES posts are tied to the account) | No | App functionality |
+| Other user content (ride-board posts, reports) | Yes | Yes (tied to the account when signed in, otherwise to the device id) | No | App functionality |
 | Product interaction (usage events) | Only if the person opts in | No (random per-install code) | No | Analytics |
 | Crash data / performance data | Only if the person opts in | No | No | App functionality, analytics |
-| Device ID (push token) | Yes if alerts are enabled | Not linked | No | App functionality (notifications) |
+| Device ID (push token; random ride-board device id) | Push token only if alerts are enabled; the device id always (its HMAC is stored with posts, reports and blocks) | Yes (it scopes blocks and bans to a device) | No | App functionality |
 | Search history, contacts, photos, health, financial info, browsing history | No | | | |
 
-Tracking: **No** (no ads, no data broker, no cross-app tracking, so no App Tracking Transparency prompt). Third parties that receive data: Google (Maps Platform), Translink/QLDTraffic (no personal data sent), Open-Meteo and RainViewer (coordinates for weather), PostHog and Sentry (opt-in only). Also supply `PrivacyInfo.xcprivacy` (declares the same plus required-reason APIs).
+Tracking: **No** (no ads, no data broker, no cross-app tracking, so no App Tracking Transparency prompt). Third parties that receive data: Google (Maps Platform), Translink/QLDTraffic (no personal data sent), Open-Meteo and RainViewer (coordinates for weather), PostHog and Sentry (opt-in only). Also supply `PrivacyInfo.xcprivacy` (declares the same plus required-reason APIs). This table must match `docs/engineering/privacy-data-map.md`; change that file first.
 
 ## Export compliance
 

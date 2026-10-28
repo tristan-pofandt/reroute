@@ -19,7 +19,7 @@ export default function CommunityBody() {
     <h2>Staying safe</h2>
     <p>Reroute does not check drivers, vehicles, insurance or riders, and does not take payment. Meet somewhere public and well lit, tell a friend where you are going, check the car and driver match the post, and trust your judgement: you can always decline a ride. Splitting an Uber is arranged in the Uber app. In an emergency call 000.</p>
     <h2>Reporting</h2>
-    <p>Every post on the ride board has a <b>Report</b> button. Choose a reason and, if you like, add a note. You can also tap <b>Block</b> to hide everything from that person straight away; you can unblock them at the bottom of the ride board. The person is not told who reported or blocked them. If several people report a post it is hidden automatically until a person at Reroute has reviewed it.</p>
+    <p>Every post on the ride board has a <b>Report</b> button. Choose a reason and, if you like, add a note. You can also tap <b>Block</b> to hide everything from that person straight away; you can unblock them at the bottom of the ride board. The person is not told who reported or blocked them. Reports and blocks are stored with a random poster code, not your name (see the Privacy Policy). If several people report a post it is hidden automatically until a person at Reroute has reviewed it.</p>
     <p>To report something that is not on a post, or to reach us urgently, email <a href={`mailto:${ABUSE_EMAIL}`}>{ABUSE_EMAIL}</a> (placeholder address: not yet monitored). We aim to review every report within {RESPONSE_HOURS} hours. This is a target for a student prototype, not a guarantee.</p>
     <h2>What we do about it</h2>
     <p>Depending on how serious it is, we approve the post, remove it, or remove it and ban the person who posted it from the ride board. Serious or repeated breaches mean a ban; illegal content and credible threats may be passed to the police. Bans are tied to the account or device the post came from, and we keep a short log of moderation actions (the post text, the reason and the date) for up to 90 days so a decision can be reviewed.</p>
@@ -27,6 +27,7 @@ export default function CommunityBody() {
     <p>If you think a post of yours was removed or you were banned by mistake, email <a href={`mailto:${ABUSE_EMAIL}`}>{ABUSE_EMAIL}</a> with the nickname you used, the time of the post and the trip, and we will have a second person look at it. We aim to reply within {RESPONSE_HOURS} hours on weekdays.</p>
     <p className="fine">Review before public release: replace the placeholder contact addresses, confirm who answers them, and have the rules checked against the Terms of Use. This page is plain-language product information, not legal advice.</p>
     <button className="btn btn-secondary" data-action="go" data-screen="terms">Read the Terms of Use</button>
+    <button className="btn btn-secondary" data-action="go" data-screen="privacy">Read the Privacy Policy</button>
     <button className="btn btn-secondary" data-action="go" data-screen="support">Support and contact</button>
   </>);
 }

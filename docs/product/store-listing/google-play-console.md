@@ -25,7 +25,7 @@ Prepared by Claude Sonnet 5.5 via Claude Code at T.P's request. **Human review r
 - **Target audience**: 18+ recommended (or 13+); not designed for children; no Families programme.
 - **Content rating (IARC questionnaire)**: category "Utility, productivity, communication or other"; violence, sexual content, profanity, controlled substances, gambling: none; **user-generated content / users can interact or exchange content: yes** (ride board, with report, block and moderation); shares location with other users: no (a ride's start point is rounded to about 100 m and shown on the board; ASSUMES that is acceptable, answer "yes" if in doubt); digital purchases: no. Expect a Teen or 12+/PEGI 12 style result.
 - **Government apps**: no. **Financial features**: none. **Health**: none. **News**: no.
-- **Account deletion**: in-app (Settings > Account > Delete account, ASSUMES) and a public web URL for deletion requests: TODO (required when accounts exist).
+- **Account deletion**: in-app (Settings > Account > Delete account, ASSUMES) and a public web URL for deletion requests: `{PUBLIC_URL}/account/delete` (public, no script, no sign-in; served by the app, required when accounts exist). TODO enter the real URL.
 
 ## Data safety form
 
@@ -38,12 +38,12 @@ Collected and shared data (confirm against the final build; all in transit is en
 | Name | Yes (account sign-in; ride-board display name) | No | Yes | Account management, app functionality |
 | Email address | Yes (account) | No | Yes | Account management |
 | User IDs | Yes (account id) | No | Yes | Account management |
-| Other user-generated content | Yes (ride-board posts, public) | Visible to other users | Yes | App functionality |
+| Other user-generated content | Yes (ride-board posts, public; reports, blocks and a 90-day moderation log are kept privately) | Posts are visible to other users | Yes | App functionality, fraud prevention and security |
 | App interactions | Only if opted in | Processed by PostHog as a service provider | Yes (off by default) | Analytics |
 | Crash logs, diagnostics | Only if opted in | Processed by Sentry as a service provider | Yes | App functionality, analytics |
-| Device or other IDs (push token) | If alerts are on | No | Yes | App functionality |
+| Device or other IDs | Yes: the random ride-board device id (a header on ride and plan calls; only its HMAC is stored) always; the push token if alerts are on | No (push token goes to Google/Apple delivery services as a processor) | Push token: yes; device id: no (needed for ride-board limits, blocks and bans) | App functionality, fraud prevention and security |
 
-Not collected: contacts, photos, files, calendar, financial info, health, messages, audio, web browsing history, search history (the text typed into place search is sent to Google to return suggestions but is not stored by Reroute; the server console log keeps request URLs unless `PLANB_QUIET=1`: disclose or disable). No data sold. No data used for advertising or tracking. Data is encrypted in transit. Deletion request mechanism: yes.
+Not collected: contacts, photos, files, calendar, financial info, health, messages, audio, web browsing history, search history (the text typed into place search is sent to Google to return suggestions but is not stored by Reroute; access logs strip query strings, so typed text and coordinates are not logged). No data sold. No data used for advertising or tracking. Data is encrypted in transit. Deletion request mechanism: yes. Every row of this table must match `docs/engineering/privacy-data-map.md`; change that file first.
 
 ## Permissions and technical
 
