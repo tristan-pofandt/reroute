@@ -30,13 +30,6 @@
    "url": "https://github.com/ionic-team/capacitor"
   },
   {
-   "name": "@capacitor/device",
-   "version": "8.0.3",
-   "license": "MIT",
-   "copyright": "Copyright 2020-present Ionic",
-   "url": "https://github.com/ionic-team/capacitor-plugins"
-  },
-  {
    "name": "@capacitor/geolocation",
    "version": "8.2.4",
    "license": "MIT",
@@ -65,21 +58,7 @@
    "url": "https://github.com/ionic-team/capacitor-keyboard"
   },
   {
-   "name": "@capacitor/local-notifications",
-   "version": "8.3.1",
-   "license": "MIT",
-   "copyright": "Copyright 2020-present Ionic",
-   "url": "https://github.com/ionic-team/capacitor-local-notifications"
-  },
-  {
    "name": "@capacitor/network",
-   "version": "8.0.1",
-   "license": "MIT",
-   "copyright": "Copyright 2020-present Ionic",
-   "url": "https://github.com/ionic-team/capacitor-plugins"
-  },
-  {
-   "name": "@capacitor/preferences",
    "version": "8.0.1",
    "license": "MIT",
    "copyright": "Copyright 2020-present Ionic",
@@ -129,7 +108,7 @@
   },
   {
    "name": "@remix-run/router",
-   "version": "1.23.0",
+   "version": "1.23.4",
    "license": "MIT",
    "copyright": "Copyright (c) React Training LLC 2015-2019",
    "url": "https://github.com/remix-run/react-router"
@@ -241,14 +220,14 @@
   },
   {
    "name": "react-router",
-   "version": "6.30.1",
+   "version": "6.30.6",
    "license": "MIT",
    "copyright": "Copyright (c) React Training LLC 2015-2019",
    "url": "https://github.com/remix-run/react-router"
   },
   {
    "name": "react-router-dom",
-   "version": "6.30.1",
+   "version": "6.30.6",
    "license": "MIT",
    "copyright": "Copyright (c) React Training LLC 2015-2019",
    "url": "https://github.com/remix-run/react-router"
