@@ -55,6 +55,17 @@ Unknown `/api` paths and wrong methods answer JSON (`Not found.`, `That method i
 * `pip-audit -r requirements.txt` (installed with `pip install pip-audit` in the user Python, not a scratch environment): **no known vulnerabilities**. Run it in CI.
 * No new Python dependency was added (SQLite is in the standard library, `markupsafe` ships with Flask).
 
+### Dependency decision, final fix pass (2026-10-29)
+
+Read with `npm audit --json`: the two production advisories are both on `react-router` (and `react-router-dom`), fixed only in 7.18.0+.
+
+| Advisory | Affects | Evidence for this app | Decision |
+|---|---|---|---|
+| GHSA-wrjc-x8rr-h8h6, open redirect via a backslash in `<Link>` / `useNavigate` (CVE-2025-68470 bypass) | A path chosen by an attacker reaching `navigate()` or `<Link to>` | `grep` over `web/src`: no `<Link>`, `<NavLink>` or `<Navigate>`; the only `navigate()` call is `Routes.jsx:37` and its argument is a fixed internal path from the `LEGAL` table, `"/"` or the current pathname, never a query value or user text. `deeplinks.js` uses `history.pushState` after mapping to known screens. Server-side `?next=` goes through `safe_next` (`accounts.py`), unrelated to react-router. | **Not applicable as used.** Not upgraded: 7.x is a major bump that changes the router package layout for no gain. Revisit with the next planned dependency round. |
+| GHSA-337j-9hxr-rhxg, arbitrary constructor injection via `deserializeErrors()` in SSR hydration | Server rendering with a data router (`createStaticRouter` hydration data) | No SSR, no data router (`createBrowserRouter`, `RouterProvider`, loaders and `__staticRouterHydrationData` are absent); only `<BrowserRouter>` renders in the browser from the static `dist`. | **Not applicable.** |
+
+Other findings in the full `npm audit` (development and native tooling only, none in `dist`, found now because the advisory database moved on since the earlier pass): `vite` 5.4.x and `esbuild` (dev-server request and `server.fs` issues; the project only runs `vite build`, never the dev server on a shared network; bumped 5.4.11 to 5.4.21, the last non-breaking 5.x, the remaining advisories need vite 7), `vitest`, `@vitest/mocker`, `tinypool` (test runner and its UI/mock features, run only locally and in CI on repository code; vitest 5 is a major upgrade, schedule it), `tar`, `@capacitor/cli`, `@capacitor/assets`, `@trapezedev/project`, `xcode`, `uuid` (Capacitor CLI and asset tooling, run by the developer on trusted project files, never on untrusted archives) and `sharp` (used by `make-native-assets.mjs` and `gen-store-assets.mjs` on our own SVG only). None is reachable from the deployed app. CI keeps `npm audit --omit=dev` (production dependencies) as the gate: `ci.yml` at `--audit-level=high`, `release.yml` at `--audit-level=moderate`, so the release job will fail until the react-router item is upgraded or this "not applicable" decision is accepted by the reviewer and the level raised. `pip-audit -r requirements.txt` re-run 2026-10-29: no known vulnerabilities; it runs in `ci.yml` and `release.yml`.
+
 ## Residual risks
 
 1. CSP not verified against live Google Maps and Fonts hosts (see above); `style-src 'unsafe-inline'` remains.
