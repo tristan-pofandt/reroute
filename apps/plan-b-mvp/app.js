@@ -537,6 +537,9 @@ function menuContent() {
         ${item(go("sources"), I.info(18), "var(--accent)", "About / Data Sources")}
         ${item(go("terms"), I.file(18), "var(--text-muted)", "Terms of Use")}
         ${item(go("privacy"), I.shield(18), "var(--text-muted)", "Privacy Policy")}
+        ${item(go("community"), I.users(18), "var(--text-muted)", "Community Guidelines")}
+        ${item(go("licences"), I.file(18), "var(--text-muted)", "Licences")}
+        ${item(go("support"), I.info(18), "var(--text-muted)", "Support and contact")}
       </div></div>
       <p class="fine">Reroute is a student prototype. Estimates only, always check before you travel.</p>
     </div>`;
@@ -663,6 +666,9 @@ function homeScreen() {
         <button class="text-link" data-action="go" data-screen="terms">Terms of Use</button>
         <button class="text-link" data-action="go" data-screen="privacy">Privacy Policy</button>
         <button class="text-link" data-action="go" data-screen="sources">About / Data Sources</button>
+        <button class="text-link" data-action="go" data-screen="community">Community Guidelines</button>
+        <button class="text-link" data-action="go" data-screen="licences">Licences</button>
+        <button class="text-link" data-action="go" data-screen="support">Support</button>
       </nav>
     </div>`;
 }
