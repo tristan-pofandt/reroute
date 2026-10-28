@@ -71,7 +71,7 @@ function Rest({ d, demo }) {
   return (
     <>
       <Item tag="p" index={6} className="section-header">Next 24 hours</Item>
-      <Item className="wxp-hours" role="list" aria-label="Next 24 hours" index={7}>
+      <Item className="wxp-hours" tabIndex={0} role="list" aria-label="Next 24 hours" index={7}>
         {(d.hourly || []).map((h, i) => (
           <div className="wxp-hour" role="listitem" key={h.time || i}>
             <span>{i ? hourOf(h.time) : "Now"}</span><WxIcon name={h.icon} size={22} /><b>{Math.round(h.temp_c)}°</b><i>{h.precip_prob >= 20 ? `${h.precip_prob}%` : ""}</i><small>{Math.round(h.wind_kmh)} km/h</small>

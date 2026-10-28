@@ -1160,7 +1160,7 @@ function sheetContent(o) {
   return `
     <div class="grabber"><span></span></div>
     <div class="sheet-head"><h3 id="sheet-title">${esc(o.title)}</h3>${sheetClose()}</div>
-    <div class="sheet-scroll">
+    <div class="sheet-scroll" tabindex="0">
       <div class="big-arrival">
         <div><div class="t">${timeOf(o.arrival)}</div><div class="buffer ${b.cls}">${b.text}</div></div>
         <div class="d">${leaveLabel(o)}${state.plan.deadline ? `<br>Deadline ${timeOf(state.plan.deadline)}` : ""}${o.scheduled_arrival ? `<br>Timetable ${timeOf(o.scheduled_arrival)}` : ""}</div>
@@ -1896,7 +1896,7 @@ function weatherRestInner() {
       <div class="wxp-day-sub" aria-hidden="true">${esc(x.label)}${x.precip_mm ? ` · ${x.precip_mm} mm` : ""} · wind ${Math.round(x.wind_kmh)} km/h${x.wind_from ? ` ${esc(x.wind_from)}` : ""}${x.gust_kmh >= GUST_WARN_KMH ? `, gusts ${Math.round(x.gust_kmh)}` : ""}</div>
       <span class="visually-hidden">${dayName(x.date, i)}: ${esc(x.label)}, low ${Math.round(x.min_c)}, high ${Math.round(x.max_c)} degrees${x.precip_prob ? `, ${x.precip_prob}% chance of rain` : ""}, wind up to ${Math.round(x.wind_kmh)} km/h${x.wind_from ? ` from the ${x.wind_from}` : ""}.</span></div>`).join("");
   return `<p class="section-header">Next 24 hours</p>
-    <div class="wxp-hours" role="list" aria-label="Next 24 hours">${hours}</div>
+    <div class="wxp-hours" tabindex="0" role="list" aria-label="Next 24 hours">${hours}</div>
     <p class="section-header">Next 7 days</p>
     <div class="group"><div class="group-card">${dayRows}</div></div>
     <p class="fine">Forecast and next-hour rain by <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a> (CC BY 4.0)${d.simulated ? " · Simulated for demo mode" : ` · updated ${timeOf(d.fetched_at)}`}. Rain radar (the past two hours only) by <a href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a>${demoOn() && d.simulated ? ", which stays live in demo mode" : ""}.</p>`;
@@ -2292,7 +2292,7 @@ function alertPopup(a) {
   const link = /^https:\/\/[^\s"'<>]+$/i.test(a.url || "") ? a.url : "";
   return `<div class="grabber"><span></span></div>
     <div class="sheet-head"><h3 id="popup-title">${esc(a.effect)}</h3><button class="icon-btn" data-action="close-popup" aria-label="Close">${I.x(18)}</button></div>
-    <div class="sheet-scroll alert-full">
+    <div class="sheet-scroll alert-full" tabindex="0">
       ${a.lines.length ? `<div class="alert-tags">${a.lines.map((l) => `<span class="line-tag">${esc(l)}</span>`).join("")}</div>` : ""}
       <h4>${esc(a.header)}${a.simulated ? `<span class="sim-tag">Simulated</span>` : ""}</h4>
       ${a.cause ? `<p class="fine">Cause: ${esc(a.cause)}</p>` : ""}
@@ -2714,7 +2714,7 @@ function loadGoogleMaps() {
 function showMapFail(el, message) {
   el.closest(".map-wrap")?.classList.add("map-failed");
   el.classList.remove("google-map");
-  el.innerHTML = `<div class="map-fail">${notice(`<b>The map is unavailable.</b> ${esc(message)} The route steps are still shown as text.`, "warning")}</div>`;
+  el.innerHTML = `<div class="map-fail" tabindex="0">${notice(`<b>The map is unavailable.</b> ${esc(message)} The route steps are still shown as text.`, "warning")}</div>`;
 }
 function failMaps(message, permanent = false) {
   mapsFailure = { message, at: Date.now(), permanent };
@@ -4227,7 +4227,7 @@ function offlineSettings() {
 // Choosing the area: a Google map (online only) under a fixed rounded box; everything outside the box is dimmed.
 const area = { map: null, overlay: null, bbox: null, sizeKm: null };
 function offlineAreaScreen() {
-  return `${navbar(true)}<div class="area-page">
+  return `${navbar(true)}<h1 class="visually-hidden">Download an area for offline use</h1><div class="area-page">
     <div class="area-map" data-area-map><div class="skeleton map-skeleton" role="status" aria-label="Loading map"></div></div>
     <div class="area-mask" aria-hidden="true"><div class="area-box" data-area-box><span class="area-size" data-area-size></span></div></div>
     <div class="area-hint">${I.map(16)}<span>Move and zoom the map so the box covers the area you need.</span></div>

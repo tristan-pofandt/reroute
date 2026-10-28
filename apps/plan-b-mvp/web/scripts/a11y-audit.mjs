@@ -24,7 +24,7 @@ page.on("console", (m) => { if (m.type() === "error") errors.push(`console: ${m.
 page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
 const sleep = (ms) => page.waitForTimeout(ms);
 const idle = async () => { for (let i = 0; i < 60; i++) { if (await page.evaluate(() => !RerouteLegacy.isTransitioning())) break; await sleep(50); } await sleep(300); };
-const go = async (s, d = "forward") => { await page.evaluate(([s, d]) => RerouteLegacy.navigate(s, d), [s, d]); await idle(); };
+const go = async (s, d = "forward") => { await idle(); await page.evaluate(([s, d]) => RerouteLegacy.navigate(s, d), [s, d]); await idle(); };
 const click = async (sel) => { await page.evaluate((sel) => { const e = document.querySelector(sel); if (!e) throw new Error("missing " + sel); e.click(); }, sel); await sleep(700); };
 const trip = { ref: "t1", date: new Date().toISOString(), mode: "transit", kind: "transit", title: "Bus 412", co2_kg: 1, co2_saved: 2.4, cost: 3, cost_saved: 4 };
 
@@ -71,7 +71,7 @@ await click('[data-action="start"]'); await idle(); await shoot("journey");
 await click('[data-action="search"]'); await sleep(1500); await idle(); await shoot("results");
 await page.evaluate(() => { const c = document.querySelector('[data-action="open-sheet"]'); c?.click(); }); await sleep(900); await shoot("results-sheet");
 await page.evaluate(() => document.querySelector('[data-action="close-sheet"]')?.click()); await sleep(700);
-for (const s of ["next", "dashboard", "rides", "weather", "offline-area", "terms", "privacy", "sources"]) { await go(s); await sleep(500); await shoot(s); }
+for (const s of ["next", "dashboard", "rides", "weather", "offline-area", "terms", "privacy", "sources"]) { await go(s); await sleep(500); await shoot(s); if (s === "offline-area") { await go("home", "back"); await sleep(500); } }
 await go("panic", "up"); await sleep(500); await shoot("panic");
 await go("home", "back"); await sleep(400);
 await click('[data-action="open-demo"]').catch(() => {}); await shoot("demo-sheet");
