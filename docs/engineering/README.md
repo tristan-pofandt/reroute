@@ -12,3 +12,4 @@ This area can include:
 - security and privacy considerations.
 
 Application-specific setup commands belong with the relevant application under `apps/`.
+- [Store-readiness audit (2026-10-28)](store-readiness-audit-2026-10-28.md): Apple/Google store gaps, form comparison and roadmap.
