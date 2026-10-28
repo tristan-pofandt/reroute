@@ -31,7 +31,9 @@ from ops import init_ops
 from offline_area import AreaError, Jobs, Pending, parse_bbox, parse_days
 from osm import OSM, OverpassBusy, OverpassError
 from push import Push, PushError
-from rides import Board, RideError
+from moderation import actor_id, init_moderation
+from rides import Board, RateLimited, RideError
+from security import init_security
 from traffic import Traffic
 import weather as weather_mod
 from weather import Weather
@@ -243,7 +245,7 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
                 allowed |= {h.strip().lower() for h in request.headers.get("X-Forwarded-Host", "").split(",") if h.strip()}
             if public_url:
                 allowed.add(urlsplit(public_url).netloc.lower())
-            if urlsplit(origin).netloc.lower() not in allowed:
+            if urlsplit(origin).netloc.lower() not in allowed and origin.rstrip("/") not in app.config["PLANB_CORS_ORIGINS"]:
                 raise PermissionError(403, "Requests must come from this app.")
         if empty:
             return {}
@@ -258,6 +260,10 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
             return failure(error.args[1], error.args[0])
         except PushError as error:
             return failure(str(error), error.status)
+        except RateLimited as error:
+            response = failure(str(error), 429)
+            response.headers["Retry-After"] = str(error.wait)
+            return response
         except (InputError, RideError) as error:
             return failure(str(error), 400)
         except RoutesError as error:
@@ -506,7 +512,7 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
     @app.post("/api/plan")
     def plan_api():
         blocked = guard("plan", plan_limit, "plan")
-        return blocked or post(lambda body: plan(body, key, services))
+        return blocked or post(lambda body: hide_blocked(plan(body, key, services)))
 
     @app.post("/api/live")
     def live_api():
@@ -539,13 +545,23 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
                              response.status_code)
         return response
 
+    def who():
+        return actor_id(board, app.extensions.get("accounts"), client()[0])
+
+    def hide_blocked(result):
+        """Drop rides posted by anyone this visitor has blocked from a plan answer."""
+        if isinstance(result, dict) and result.get("rides"):
+            blocked = {entry["poster"] for entry in board.blocks(who())}
+            result["rides"] = [ride for ride in result["rides"] if ride["poster"] not in blocked or ride["is_member"]]
+        return result
+
     @app.post("/api/rides")
     def rides_create():
-        return post(board.create)
+        return post(lambda body: board.create(body, who()))
 
     @app.post("/api/rides/join")
     def rides_join():
-        return post(lambda body: board.join(str(body.get("id", "")), body.get("nickname")))
+        return post(lambda body: board.join(str(body.get("id", "")), body.get("nickname"), who()))
 
     @app.post("/api/rides/leave")
     def rides_leave():
@@ -554,6 +570,24 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
     @app.post("/api/rides/mine")
     def rides_mine():
         return post(lambda body: {"rides": board.mine([t for t in body.get("tokens", [])[:20] if isinstance(t, str)])})
+
+    @app.post("/api/rides/report")
+    def rides_report():
+        return post(lambda body: board.report(str(body.get("id", "")), body.get("reason"), body.get("note"), who()))
+
+    @app.post("/api/rides/block")
+    def rides_block():
+        return post(lambda body: board.block(who(), ride_id=str(body["id"]) if body.get("id") else None, poster=body.get("poster"), nickname=body.get("nickname")))
+
+    @app.post("/api/rides/unblock")
+    def rides_unblock():
+        return post(lambda body: board.unblock(who(), str(body.get("poster", ""))))
+
+    @app.get("/api/rides/blocks")
+    def rides_blocks():
+        return reply({"blocked": board.blocks(who())})
+
+    init_moderation(app, board, limiter=limiter, client=client)
 
     # ── Push ───────────────────────────────────────────────────────────────
 
@@ -582,6 +616,7 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
         return push_guard() or post(lambda body: {"ok": True, **push.test(body.get("endpoint"), body.get("delay_s", 0))})
 
     # Accounts (Google / Apple sign-in, synced data); off unless ACCOUNTS_SECRET_KEY is set. See accounts.py.
+    init_security(app)
     init_accounts(app, data, limiter=limiter, client=client, public_url=public_url, trusted_proxy=bool(trusted), clock=clock)
 
     app.config["PLANB_VERSION"] = VERSION

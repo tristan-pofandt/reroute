@@ -185,7 +185,7 @@ class PersistenceTests(unittest.TestCase):
             first = Board(path=path, clock=lambda: NOW, tz=BRISBANE)
             created = first.create(PAYLOAD)
             joined = first.join(created["ride"]["id"], "Alex")
-            self.assertTrue(path.exists())
+            self.assertTrue(path.with_suffix(".sqlite3").exists())
             second = Board(path=path, clock=lambda: NOW, tz=BRISBANE)
             (ride,) = second.mine([created["token"]])
             self.assertEqual(ride["id"], created["ride"]["id"])

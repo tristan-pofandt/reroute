@@ -1,0 +1,78 @@
+# Reroute ride-board word list. One entry per line (a phrase may contain spaces). Lines starting with # are comments.
+# Matching is on whole words after lower-casing, removing accents, undoing look-alike characters (0->o, 1->i, 3->e, 4->a, 5->s, @->a, $->s)
+# and collapsing repeated letters, so "f.u.c.k" and "fuuuck" match "fuck". Common endings (s, ed, er, ing, y) also match.
+# This is a starter list, not a complete one: operators add words in data/wordlist.extra.txt (same format, not committed) without a code change.
+[abuse]
+fuck
+shit
+bitch
+bastard
+asshole
+dickhead
+cunt
+wanker
+prick
+slut
+whore
+nigger
+nigga
+faggot
+fag
+retard
+spastic
+kike
+chink
+gook
+paki
+tranny
+rape
+rapist
+kill yourself
+kys
+i will kill you
+i will find you
+sex
+sexy
+nudes
+nude
+porn
+horny
+hookup
+escort
+blowjob
+handjob
+dick
+cock
+pussy
+boobs
+tits
+nazi
+heil hitler
+[scam-contact]
+whatsapp
+telegram
+snapchat
+snap me
+instagram
+insta
+wechat
+kik
+viber
+discord
+facebook
+tiktok
+onlyfans
+paypal
+venmo
+cashapp
+bitcoin
+crypto
+western union
+gift card
+dm me
+text me
+call me
+ring me
+message me
+email me
+phone me
