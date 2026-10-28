@@ -1,8 +1,10 @@
 // The one source of timing and travel for every element transition: page routes, the side menu, Settings, sheets and the launch splash
 // all read the constants and helpers here, so they share one feel (an ease-out quint on opacity, a short springy settle on position,
-// a 30-40 ms stagger capped at CAP elements). Nothing in here touches WebGL: elements slide, fade and settle.
+// a 30 ms stagger capped at CAP elements). Nothing in here touches WebGL: elements slide, fade and settle.
+// Rules (README "Motion principles and timings"): ease-out only (never ease-in) on anything the user waits for; leaving is faster than arriving;
+// feedback under ~160 ms; stagger 20-30 ms and capped; the spring has a hair of overshoot, no wobble. Magic numbers live here, not in callers.
 //
-//   * variants (ITEM, LATE, PAGE) and `staggerProps(i)` are for React elements inside a native screen (framer-motion variants, propagated
+//   * variants (ITEM, MID, LATE, PAGE) and `staggerProps(i)` are for React elements inside a native screen (framer-motion variants, propagated
 //     from the page root with `staggerChildren`);
 //   * `slide(elements, offset, opts)` is the same motion done imperatively, for legacy HTML (panic, nav, offline-area, menu rows ...);
 //   * `useDirection()` / `getDirection()` say which way the current navigation travels: forward, back, up or down.
@@ -16,14 +18,18 @@ import { touch, track, untrack } from "./motion/fm.js";
 const SLOWMO = import.meta.env.DEV || import.meta.env.VITE_SLOWMO === "1";
 export const slow = () => (SLOWMO ? Number(window.__slowmo) || 1 : 1);
 
-export const EASE = [0.22, 1, 0.36, 1]; // ease-out quint: opacity and anything that must not overshoot
-export const EASE_IN = [0.4, 0, 1, 1]; // leaving: accelerate away
-export const STAGGER_IN = 0.035;
-export const STAGGER_OUT = 0.03;
-export const CAP = 10; // elements beyond this share the last element's delay and "fade with the group"
-export const CAP_OUT = 7; // leaving is capped sooner so a long page still clears in about 300 ms
-export const OUT_TIME = 0.14; // one element leaving
-export const spring = (s = slow()) => ({ type: "spring", duration: 0.5 * s, bounce: 0.24 }); // slide-and-settle: a little overshoot, no wobble
+export const EASE = [0.22, 1, 0.36, 1]; // the one ease-out (quint): entering, leaving, fades, press and release. Never an ease-in.
+export const STAGGER_IN = 0.03;
+export const STAGGER_OUT = 0.02;
+export const STAGGER_CLOSE = 0.012; // lines of a closing panel (the panel itself is leaving in the same breath)
+export const CAP = 7; // elements beyond this share the last element's delay and "fade with the group" (last one starts at 180 ms)
+export const CAP_OUT = 5; // leaving is capped sooner so a long page clears in about 200 ms
+export const OUT_TIME = 0.12; // one element leaving
+// One duration vocabulary (s) for everything that is not a page element: callers use these instead of numbers.
+export const DUR = { press: 0.14, release: 0.16, hover: 0.15, fade: 0.2, panel: 0.22, menu: 0.36, menuOut: 0.12, crossfade: 0.24, rise: 0.3, morph: 0.45 };
+export const spring = (s = slow()) => ({ type: "spring", duration: 0.4 * s, bounce: 0.12 }); // slide-and-settle: a hair of overshoot, no wobble
+export const MORPH = (s = slow()) => ({ type: "spring", duration: DUR.morph * s, bounce: 0.08 }); // layoutId morphs: calmer than a slide
+export const LAYOUT = { type: "spring", stiffness: 420, damping: 40 }; // lists reordering in place: critically damped, no overshoot
 export const watchdog = () => 600 * slow(); // an exit that has not reported in by now is force-completed
 
 // The same spring as a pure function of scroll progress, for the scrubbed scroll reveals (motion/scroll3d.js): damping ratio 1 - bounce,
@@ -55,9 +61,9 @@ const off = (phase) => (reducedMotion() ? rest : { ...travel(dir, phase), opacit
 // ── Variants for React elements ──────────────────────────────────────────────
 // Functions, so direction, reduced motion and slow motion are read when an animation starts, not when the module loads.
 const enter = (delay = 0) => () => reducedMotion() ? { ...rest, transition: { duration: 0 } }
-  : { ...rest, transition: { default: { ...spring(), delay }, opacity: { duration: 0.2 * slow(), ease: EASE, delay } } };
+  : { ...rest, transition: { default: { ...spring(), delay }, opacity: { duration: DUR.fade * slow(), ease: EASE, delay } } };
 const leave = (delay = 0) => () => reducedMotion() ? { ...rest, transition: { duration: 0 } }
-  : { ...off("out"), transition: { duration: OUT_TIME * slow(), ease: EASE_IN, delay } };
+  : { ...off("out"), transition: { duration: OUT_TIME * slow(), ease: EASE, delay } };
 const hidden = () => ({ ...off("in"), transition: { duration: 0 } });
 
 export const ITEM = { hidden, show: enter(), exit: leave() };
@@ -82,7 +88,7 @@ const clamp = (v, a = 0, b = 1) => (v < a ? a : v > b ? b : v);
 
 // slide(els, { x, y }, { out, delay, step, cap }) -> { stop(), finished: Promise }
 //   in:  elements start displaced by the offset, invisible, and spring to rest (the first frame is written synchronously: no flash);
-//   out: elements accelerate to the offset while fading.
+//   out: elements leave to the offset while fading (ease-out: the move starts at once).
 export function slide(els, offset, { out = false, delay = 0, step = out ? STAGGER_OUT : STAGGER_IN, cap = CAP } = {}) {
   const list = [...els].filter(Boolean);
   if (!list.length || reducedMotion()) return { stop() {}, finished: Promise.resolve() };
@@ -95,7 +101,7 @@ export function slide(els, offset, { out = false, delay = 0, step = out ? STAGGE
   const stopAt = [];
   const runs = list.map((el, i) => new Promise((resolve) => {
     const c = track(animate(0, 1, {
-      ...(out ? { duration: OUT_TIME * s, ease: EASE_IN } : spring(s)),
+      ...(out ? { duration: OUT_TIME * s, ease: EASE } : spring(s)),
       delay: delay * s + Math.min(i, cap - 1) * step * s,
       onUpdate: (v) => put(el, out ? v : 1 - v, v),
       onComplete: () => { untrack(c); if (!out) { el.style.removeProperty("translate"); el.style.removeProperty("opacity"); } resolve(); },

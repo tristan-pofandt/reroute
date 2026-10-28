@@ -12,7 +12,7 @@
 // legacy HTML is turned into React, and by hand in the hand-written screens (Navbar, weather, legal).
 import { createElement } from "react";
 import { motion } from "framer-motion";
-import { slow, staggerProps } from "./choreography.js";
+import { MORPH, staggerProps } from "./choreography.js";
 
 const SHARED = [
   [".impact-btn, .kpi.lead", "impact"],
@@ -29,7 +29,7 @@ export function Shared({ tag = "div", id, ...props }) {
     ...props,
     layoutId: id,
     layout: id === "title" ? "position" : true,
-    transition: { layout: { type: "spring", duration: 0.55 * slow(), bounce: 0.14 } },
+    transition: { layout: MORPH() },
   });
 }
 

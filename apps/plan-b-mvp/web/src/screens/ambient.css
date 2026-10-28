@@ -1,8 +1,9 @@
-/* Ambient loops: transform / opacity only. app.css already collapses every animation to 1 ms / one iteration under prefers-reduced-motion
+/* Ambient loops: transform / opacity only (the dash flow is the one exception: one small stroke). Calm: <= 4 deg, <= 3 %, >= 3.6 s per cycle.
+   Blocks scrolled out of view get .amb-off from motion/ambient.js and pause (below). app.css already collapses every animation to 1 ms / one iteration under prefers-reduced-motion
    and html[data-motion="reduced"] (also when toggled mid-session), so these loops stop and rest in their normal pose there. */
-@keyframes amb-sway { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(6deg); } }
-@keyframes amb-glow { 0%, 100% { opacity: 0; } 50% { opacity: 0.75; } }
-@keyframes amb-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+@keyframes amb-sway { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
+@keyframes amb-glow { 0%, 100% { opacity: 0; } 50% { opacity: 0.6; } }
+@keyframes amb-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.03); } }
 @keyframes amb-spin { to { transform: rotate(360deg); } }
 @keyframes amb-float { 0%, 100% { transform: translateY(1.5px); } 50% { transform: translateY(-2px); } }
 @keyframes amb-drift { 0%, 100% { transform: translateX(-2.5px); } 50% { transform: translateX(2.5px); } }
@@ -40,3 +41,6 @@
 .icon-btn.is-spinning svg { animation: amb-spin 0.8s linear infinite; }
 .sync-wrap .feedback-banner { margin: 0 0 16px; }
 @media (max-width: 360px) { .sync-mini .hint { display: none; } }
+
+/* Off-screen blocks do not tick (motion/ambient.js adds the class; hidden tabs already stop painting). */
+.amb-off, .amb-off *, .amb-off *::before, .amb-off *::after { animation-play-state: paused !important; }

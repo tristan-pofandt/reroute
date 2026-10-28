@@ -1,7 +1,6 @@
 // The same selectors motion.js used, so legacy markup and native screens that reuse the classes behave identically.
 export const PRESSABLE = ".btn, .icon-btn, .nav-back, .nav-action, .home-btn, button.row, a.row, .panic-btn, .panic-go, .panic-chip, .panic-exit, .segmented button, .stepper button, .card-body, .impact-btn, .cost-toggle";
 export const HOVERABLE = ".btn, .icon-btn, .panic-go, .panic-chip, .card, .impact-btn";
-export const FIELD = "input:not([type=checkbox]):not([type=radio]):not([type=range]), textarea, select";
 // Blocks that fly in on the Z axis as they enter a scroll area: every direct child of a scroll area that is a real block (at least 40 px
 // tall, not a heading / caption), plus chart cards. `[data-fm-off]` on the block or an ancestor opts out.
 export const REVEAL = ".scroll > *, .sheet-scroll > *, .scroll .chart-card";

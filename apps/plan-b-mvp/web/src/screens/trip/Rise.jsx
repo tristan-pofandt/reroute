@@ -4,15 +4,15 @@
 // `enter`: the element was mounted by a view switch mid-page (no page stagger runs then), so it fades and rises in by itself.
 import { createElement } from "react";
 import { motion } from "framer-motion";
-import { EASE, slow, staggerProps } from "../../choreography.js";
+import { DUR, EASE, LAYOUT, STAGGER_IN, slow, staggerProps } from "../../choreography.js";
 import { useReducedMotion } from "../../reduced.js";
 
 export function Rise({ tag = "div", props, kids, index = 0, layout = false, tap = false, enter = false }) {
   const reduced = useReducedMotion();
   const { style, ...rest } = props;
   const own = enter && !reduced
-    ? { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.34 * slow(), ease: EASE, delay: Math.min(index, 8) * 0.03 * slow() } }
-    : { transition: reduced ? { duration: 0 } : { layout: { type: "spring", stiffness: 420, damping: 36 } } };
+    ? { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, transition: { duration: DUR.rise * slow(), ease: EASE, delay: Math.min(index, 6) * STAGGER_IN * slow() } }
+    : { transition: reduced ? { duration: 0 } : { layout: LAYOUT } };
   return createElement(motion[tag], {
     ...rest,
     ...staggerProps(index),

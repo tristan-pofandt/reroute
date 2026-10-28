@@ -8,17 +8,16 @@
 //   * a soft haptic marks a menu / Settings opening, a snap a sheet.
 // A panel that is being dragged shut is left alone: it is already moving under the finger.
 import { animate, stagger } from "framer-motion";
-import { EASE, EASE_IN, slide, slow, spring } from "../choreography.js";
+import { DUR, EASE, STAGGER_CLOSE, STAGGER_IN, slide, slow, spring } from "../choreography.js";
 import { snap, soft } from "../haptics.js";
 import { track, touch, untrack } from "./fm.js";
 
-const E = [0.22, 1, 0.36, 1];
 const lerp = (a, b, t) => a + (b - a) * t;
 // [backdrop, panel, lines (slid one by one), offset the lines travel from, line cap, haptic]
 const PANELS = [
-  [".menu-backdrop", ".menu-panel", ".menu-head > *, .menu-scroll .section-header, .menu-scroll .row, .menu-scroll .fine", { x: -28, y: 0 }, 14, soft],
-  [".settings-backdrop", ".settings-panel", ".settings-panel .navbar .side > *, .settings-scroll > *", { x: 28, y: 0 }, 10, soft],
-  [".sheet-backdrop", ".sheet", ".sheet-head, .sheet-scroll > *", { x: 0, y: 24 }, 8, snap],
+  [".menu-backdrop", ".menu-panel", ".menu-head > *, .menu-scroll .section-header, .menu-scroll .row, .menu-scroll .fine", { x: -28, y: 0 }, 9, soft],
+  [".settings-backdrop", ".settings-panel", ".settings-panel .navbar .side > *, .settings-scroll > *", { x: 28, y: 0 }, 7, soft],
+  [".sheet-backdrop", ".sheet", ".sheet-head, .sheet-scroll > *", { x: 0, y: 24 }, 6, snap],
 ];
 const live = new WeakMap(); // panel -> the running line animation and the pending panel release
 
@@ -32,12 +31,12 @@ function panelChange(backdrop, opened) {
   const lines = [...backdrop.querySelectorAll(lineSel)];
   if (opened) {
     haptic();
-    live.set(panel, { run: slide(lines, offset, { delay: 0.05, cap }) });
+    live.set(panel, { run: slide(lines, offset, { delay: 0.04, cap }) });
     return;
   }
   if (!backdrop.isConnected || panel.classList.contains("dragging") || panel.style.transform) return;
   // The panel slides away at once (CSS); the lines leave top-first with a short stagger in the same breath.
-  live.set(panel, { run: slide(lines, offset, { out: true, step: 0.012, cap }) });
+  live.set(panel, { run: slide(lines, offset, { out: true, step: STAGGER_CLOSE, cap }) });
 }
 
 // Profile menu: grows out of the avatar (top right) diagonally down and left; the items stagger in, closing reverses quickly.
@@ -50,17 +49,17 @@ function profileChange(menu, opened) {
   touch(menu, "opacity", "transform", "clip-path");
   // First frame written synchronously, before paint: closed look (opening) or open look (closing; CSS has already dropped .open).
   menu.style.opacity = opened ? "0" : "1";
-  menu.style.transform = opened ? "translate(18px,-18px) scale(0.7)" : "none";
+  menu.style.transform = opened ? "translate(12px,-12px) scale(0.9)" : "none";
   menu.style.clipPath = opened ? CLIP_IN : CLIP_OUT;
   if (opened) soft();
   const done = () => { untrack(c); clean(); };
   const c = track(animate(menu,
-    opened ? { opacity: [0, 1], x: [18, 0], y: [-18, 0], scale: [0.7, 1], clipPath: [CLIP_IN, CLIP_OUT] }
-      : { opacity: [1, 0], x: [0, 10], y: [0, -10], scale: [1, 0.85] },
-    opened ? { default: { ...spring(), duration: 0.42 * slow() }, opacity: { duration: 0.18 * slow(), ease: EASE }, onComplete: done } : { duration: 0.14 * slow(), ease: EASE_IN, onComplete: done },
+    opened ? { opacity: [0, 1], x: [12, 0], y: [-12, 0], scale: [0.9, 1], clipPath: [CLIP_IN, CLIP_OUT] }
+      : { opacity: [1, 0], x: [0, 6], y: [0, -6], scale: [1, 0.95] },
+    opened ? { default: { ...spring(), duration: DUR.menu * slow() }, opacity: { duration: DUR.fade * slow(), ease: EASE }, onComplete: done } : { duration: DUR.menuOut * slow(), ease: EASE, onComplete: done },
   ));
   const timer = setTimeout(done, (opened ? 700 : 260) * slow()); // framer may not report completion for the mixed spring: never leave inline styles behind
-  const run = slide(opened ? items : items.reverse(), { x: 14, y: -10 }, { out: !opened, delay: opened ? 0.05 : 0, step: opened ? 0.035 : 0.012, cap: 6 });
+  const run = slide(opened ? items : items.reverse(), { x: 14, y: -10 }, { out: !opened, delay: opened ? 0.04 : 0, step: opened ? STAGGER_IN : STAGGER_CLOSE, cap: 5 });
   profile = { c, run, clean: () => { clearTimeout(timer); clean(); } };
 }
 
@@ -80,7 +79,7 @@ function addLoader(button) {
   }));
 }
 
-// When a skeleton is replaced by real content in the same container, the content cross-fades and rises in over 240 ms.
+// When a skeleton is replaced by real content in the same container, the content cross-fades and rises in (DUR.crossfade).
 function crossFade(m, done) {
   const wasSkeleton = [...m.removedNodes].some((n) => n.nodeType === 1 && (n.matches(".skeleton, [role=status]") || n.querySelector?.(".skeleton")));
   if (!wasSkeleton) return;
@@ -88,7 +87,7 @@ function crossFade(m, done) {
   if (!added.length) return;
   added.forEach((n) => { n.style.opacity = "0"; touch(n, "opacity", "translate"); });
   const c = track(animate(added, { opacity: [0, 1], translate: ["0 6px", "0 0"] }, {
-    duration: 0.24, ease: E, delay: stagger(0.03),
+    duration: DUR.crossfade, ease: EASE, delay: stagger(STAGGER_IN),
     onComplete: () => { untrack(c); added.forEach((n) => { n.style.removeProperty("opacity"); n.style.removeProperty("translate"); }); done(); },
   }));
 }

@@ -4,6 +4,7 @@
 // tears the whole layer down and restores the DOM; turning it back off installs it again.
 import { useEffect } from "react";
 import { useReducedMotion } from "../reduced.js";
+import { installAmbient } from "./ambient.js";
 import { resetAll } from "./fm.js";
 import { installMicro } from "./micro.js";
 import { handleMutations } from "./panels.js";
@@ -15,13 +16,14 @@ function install() {
   document.documentElement.classList.add("fm");
   const offMicro = installMicro();
   const offScroll = installScroll3d(viewport);
+  const amb = installAmbient(viewport);
   const mo = new MutationObserver((list) => {
     handleMutations(list, invalidate);
-    if (list.some((m) => m.type === "childList" && m.addedNodes.length)) sweep(viewport);
+    if (list.some((m) => m.type === "childList" && m.addedNodes.length)) { sweep(viewport); amb.scan(); }
   });
   mo.observe(viewport, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"], attributeOldValue: true });
   return () => {
-    mo.disconnect(); offMicro(); offScroll();
+    mo.disconnect(); offMicro(); offScroll(); amb.stop();
     resetAll();
     document.documentElement.classList.remove("fm");
   };

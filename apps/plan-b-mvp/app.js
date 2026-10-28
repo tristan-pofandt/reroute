@@ -4279,7 +4279,7 @@ const autocomplete = (() => {
     }
     const hasGoogle = !state.offline && items.some((i) => !["saved", "recent", "location", "map"].includes(i.kind));
     list.innerHTML = `${items.map((item, i) => `
-      <div class="ac-item${i === active ? " active" : ""}" id="ac-opt-${i}" role="option" aria-selected="${i === active}" data-ac-index="${i}" style="animation-delay:${i * 28}ms">
+      <div class="ac-item${i === active ? " active" : ""}" id="ac-opt-${i}" role="option" aria-selected="${i === active}" data-ac-index="${i}">
         <span class="ac-icon ${item.kind === "map" ? "pick" : item.kind}">${item.kind === "saved" ? I[item.glyph || "star"](16) : (ICON[item.kind] || ICON.place)()}</span>
         <span class="ac-text"><span class="ac-main">${bolded(item)}</span>${item.secondary ? `<span class="ac-sub">${esc(item.secondary)}</span>` : ""}</span>
       </div>`).join("")}

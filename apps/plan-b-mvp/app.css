@@ -18,7 +18,7 @@
   --chart: #6366F1; --chart-past: rgba(99, 102, 241, 0.42);
   --font: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --transition-smooth: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  --push: cubic-bezier(0.72, 0, 0.28, 1); --ease-out: cubic-bezier(0.23, 1, 0.32, 1); --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1); --spring: cubic-bezier(0.34, 1.32, 0.64, 1);
+  --push: cubic-bezier(0.72, 0, 0.28, 1); --ease-out: cubic-bezier(0.23, 1, 0.32, 1); --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1); --spring: var(--ease-spring);
   --gutter: 24px;
   color-scheme: dark;
 }
@@ -351,7 +351,7 @@ button.banner-chip:active { transform: scale(0.97); background: var(--accent-sof
 .ac-list.closing { animation: acOut 150ms ease both; }
 @keyframes acIn { from { opacity: 0; transform: translateY(-6px) scale(0.98); } to { opacity: 1; transform: none; } }
 @keyframes acOut { to { opacity: 0; transform: translateY(-4px) scale(0.98); } }
-.ac-item { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 16px; cursor: pointer; animation: rise 200ms var(--ease-out) backwards; transition: var(--transition-smooth); }
+.ac-item { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 16px; cursor: pointer; transition: var(--transition-smooth); }
 .ac-item:hover, .ac-item.active { background: var(--fill-strong); }
 .ac-item:active { transform: scale(0.97); }
 .ac-icon { width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--fill-strong); color: var(--text-muted); }
@@ -605,7 +605,7 @@ button.tile-card:active { transform: scale(0.97); background: var(--bg-card); }
 .chart-card h3 { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; }
 .chart-card p { font-size: 12px; color: var(--text-muted); margin: 2px 0 16px; }
 .chart-card svg { display: block; width: 100%; height: auto; overflow: visible; }
-.chart-card .bar { fill: var(--chart-past); transform-box: fill-box; transform-origin: 50% 100%; animation: grow 220ms calc(var(--i, 0) * 30ms) var(--ease-out) backwards; transition: opacity 0.2s; }
+.chart-card .bar { fill: var(--chart-past); transform-box: fill-box; transform-origin: 50% 100%; animation: grow 220ms calc(min(var(--i, 0), 8) * 30ms) var(--ease-out) backwards; transition: opacity 0.2s; }
 .chart-card .bar.now { fill: var(--chart); }
 @keyframes grow { from { clip-path: inset(100% 0 0 0); } to { clip-path: inset(0); } }
 .chart-card .bar-hit { fill: transparent; cursor: default; }
@@ -1008,8 +1008,8 @@ button.row:disabled { opacity: 0.45; cursor: default; }
 .dialog-backdrop { position: absolute; inset: 0; z-index: 96; display: flex; align-items: center; justify-content: center; padding: 24px; }
 .dialog-backdrop::before { content: ""; position: absolute; inset: 0; background: var(--scrim); opacity: 0; transition: opacity 200ms ease; }
 .dialog-backdrop.open::before { opacity: 1; }
-.dialog { position: relative; width: 100%; max-width: 320px; padding: 24px; border-radius: 24px; background: var(--bg-pop); border: 1px solid var(--border-strong); box-shadow: var(--shadow-pop); text-align: center; opacity: 0; transform: scale(0.94); transition: opacity 0.2s ease, transform 0.2s var(--spring); }
-.dialog-backdrop.open .dialog { opacity: 1; transform: none; }
+.dialog { position: relative; width: 100%; max-width: 320px; padding: 24px; border-radius: 24px; background: var(--bg-pop); border: 1px solid var(--border-strong); box-shadow: var(--shadow-pop); text-align: center; opacity: 0; transform: scale(0.95); transition: opacity 140ms var(--ease-out), transform 140ms var(--ease-out); }
+.dialog-backdrop.open .dialog { opacity: 1; transform: none; transition: opacity 200ms var(--ease-out), transform 220ms var(--ease-spring); }
 .dialog-icon { width: 48px; height: 48px; margin: 0 auto 14px; border-radius: 16px; display: flex; align-items: center; justify-content: center; color: var(--accent-text); background: var(--accent-soft); }
 .dialog h3 { font-size: 18px; margin-bottom: 8px; }
 .dialog p { font-size: 14px; color: var(--text-muted); line-height: 1.55; margin-bottom: 20px; }
