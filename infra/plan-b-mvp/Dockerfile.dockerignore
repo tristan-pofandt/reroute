@@ -6,3 +6,6 @@ apps/plan-b-mvp/.env.*
 apps/plan-b-mvp/data
 apps/plan-b-mvp/**/__pycache__
 apps/plan-b-mvp/test_*.py
+apps/plan-b-mvp/web/node_modules
+apps/plan-b-mvp/web/dist
+apps/plan-b-mvp/web/scripts

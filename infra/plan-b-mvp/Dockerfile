@@ -2,6 +2,15 @@
 # Build from the repository root so the app folder is in the build context:
 #   docker build -f infra/plan-b-mvp/Dockerfile -t plan-b-mvp .
 #   docker run --rm -p 8000:8000 -e MAPS_API_KEY=... plan-b-mvp
+# Stage 1: build the React shell (apps/plan-b-mvp/web) into static files. Only web/dist ships from this stage.
+FROM node:22-slim AS web
+WORKDIR /web
+COPY apps/plan-b-mvp/web/package.json apps/plan-b-mvp/web/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY apps/plan-b-mvp/web/ ./
+RUN npm run build
+
+# Stage 2: the Flask app. server.py serves web/dist, and falls back to the plain index.html if it is missing.
 FROM python:3.13-slim
 
 ENV PYTHONUNBUFFERED=1 \
@@ -18,6 +27,7 @@ COPY apps/plan-b-mvp/requirements.txt ./
 RUN pip install -r requirements.txt
 
 COPY apps/plan-b-mvp/ ./
+COPY --from=web /web/dist ./web/dist
 
 # The app writes the ride board, push subscriptions, VAPID keys and the cached GTFS index to PLANB_DATA_DIR.
 RUN useradd --create-home --uid 10001 planb && mkdir -p /app/data && chown -R planb:planb /app/data
