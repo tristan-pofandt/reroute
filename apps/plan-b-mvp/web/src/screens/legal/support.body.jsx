@@ -9,7 +9,7 @@ export default function SupportBody() {
     <p className="subtitle">Something wrong, something confusing, or something you want removed? Start here.</p>
     <h2>Contact us</h2>
     <div className="group"><div className="group-card">
-      {/* TODO before launch: replace support@reroute.invalid with a monitored mailbox (the .invalid domain never resolves). */}
+      {/* TODO before launch: set VITE_SUPPORT_EMAIL to a monitored mailbox (the default .invalid domain never resolves). */}
       <div className="row"><span className="row-label"><b>General support</b><small>Questions, bugs and privacy requests. Placeholder address: not yet monitored.</small><a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a></span></div>
       <div className="row"><span className="row-label"><b>Report abuse on the ride board</b><small>Use the Report button on a post, or email us. We aim to review reports within {RESPONSE_HOURS} hours.</small><a href={`mailto:${ABUSE_EMAIL}`}>{ABUSE_EMAIL}</a></span></div>
       <div className="row"><span className="row-label"><b>This version</b><small>Reroute {pkg.version}, build {build}. Include this when you contact us.</small></span></div>

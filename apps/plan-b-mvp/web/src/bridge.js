@@ -5,6 +5,9 @@
 //                     bridge.register({ rerender, pageMounted, pageSettled })   legacy hands over its page hooks (called once)
 //   React -> legacy:  bridge.legacy.pageMounted(el, screen) / pageSettled() / rerender()
 import { screens } from "./screens/index.js";
+import { ABUSE_EMAIL, PRIVACY_EMAIL, SITE_DOMAIN, SUPPORT_EMAIL } from "./config/site.js";
+
+window.__SITE__ = { domain: SITE_DOMAIN, support: SUPPORT_EMAIL, abuse: ABUSE_EMAIL, privacy: PRIVACY_EMAIL }; // read by the legacy app.js (config/site.js is the one source)
 
 let impl = null;
 let pending = null;

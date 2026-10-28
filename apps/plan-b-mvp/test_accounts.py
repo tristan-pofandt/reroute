@@ -2,9 +2,11 @@
 
 from contextlib import closing
 import json
+import os
 import sqlite3
 import tempfile
 import unittest
+from unittest import mock
 from urllib.parse import parse_qs, urlsplit
 
 from flask import Flask
@@ -491,6 +493,13 @@ class AccountApi(unittest.TestCase):
         self.assertEqual((reply.status_code, reply.mimetype), (200, "text/html"))
         self.assertIn("Delete my account", text)
         self.assertNotIn("<script", text)
+
+    def test_deletion_page_contact_comes_from_env(self):
+        app, *_ = build({"ACCOUNTS_SECRET_KEY": SECRET})
+        with mock.patch.dict(os.environ, {"PLANB_PRIVACY_EMAIL": "privacy@example.org"}):
+            text = app.test_client().get("/account/delete").get_data(as_text=True)
+        self.assertIn("mailto:privacy@example.org", text)
+        self.assertNotIn("reroute.invalid", text)
 
     def test_security_headers_and_no_store(self):
         app, *_ = build()

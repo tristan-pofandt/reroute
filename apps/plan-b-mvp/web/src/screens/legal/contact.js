@@ -1,5 +1,3 @@
-// Published contacts. TODO before launch: replace these placeholders (the .invalid domain never resolves) with monitored mailboxes.
-// Keep in step with ABUSE_EMAIL in app.js and the docs (docs/engineering/ride-board-moderation.md).
-export const SUPPORT_EMAIL = "support@reroute.invalid";
-export const ABUSE_EMAIL = "abuse@reroute.invalid";
+// Published contacts come from src/config/site.js (build-time VITE_* variables); this file keeps the old import path.
+export { SUPPORT_EMAIL, ABUSE_EMAIL, PRIVACY_EMAIL } from "../../config/site.js";
 export const RESPONSE_HOURS = 24;

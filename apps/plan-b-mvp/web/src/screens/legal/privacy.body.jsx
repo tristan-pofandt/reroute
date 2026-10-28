@@ -1,3 +1,5 @@
+import { PRIVACY_EMAIL } from "./contact.js";
+
 export default function PrivacyBody() {
   return (<>
     <p className="eyebrow">Your information</p><h1 className="large-title">Privacy Policy</h1>
@@ -73,8 +75,8 @@ export default function PrivacyBody() {
     <h2>Changes to this policy</h2>
     <p>If we change what we collect or why, we will update this page and the version and date at the top, and for anything significant tell you in the app before it takes effect. Earlier versions are kept in the project history.</p>
     <h2>Contact</h2>
-    <p>To see, correct, export or delete your data, or to make a privacy complaint, use Account in the app, or write to privacy@reroute.invalid.</p>
-    <p className="fine">TODO before public release: replace the placeholder address privacy@reroute.invalid with a monitored one, fill in every bracketed TODO above, and have this page reviewed against the actual deployment.</p>
+    <p>To see, correct, export or delete your data, or to make a privacy complaint, use Account in the app, or write to {PRIVACY_EMAIL}.</p>
+    <p className="fine">TODO before public release: replace the placeholder privacy address (VITE_PRIVACY_EMAIL) with a monitored one, fill in every bracketed TODO above, and have this page reviewed against the actual deployment.</p>
     <button className="btn btn-secondary" data-action="go" data-screen="account">Account</button>
     <button className="btn btn-secondary" data-action="go" data-screen="sources">About and data sources</button>
   </>);

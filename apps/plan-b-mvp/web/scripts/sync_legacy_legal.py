@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 def body(name):
     jsx = (ROOT / f"web/src/screens/legal/{name}.body.jsx").read_text(encoding="utf-8")
     text = jsx[jsx.index("(<>") + 4: jsx.index("  </>);")]
-    text = text.replace("className=", "class=").replace("{PUSH_BIKE_MAX_KM}", "${PUSH_BIKE_MAX_KM}")
+    text = text.replace("className=", "class=").replace("{PUSH_BIKE_MAX_KM}", "${PUSH_BIKE_MAX_KM}").replace("{PRIVACY_EMAIL}", "${PRIVACY_EMAIL}")
     assert "`" not in text
     return text
 

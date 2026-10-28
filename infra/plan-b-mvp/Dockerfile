@@ -10,6 +10,12 @@ RUN npm ci --no-audit --no-fund
 # Same value as stage 2, so the front-end release tag (crash reports, analytics) matches /healthz.
 ARG GIT_SHA=dev
 ENV GIT_SHA=$GIT_SHA
+# Public domain and contact mailboxes baked into the pages (web/src/config/site.js); empty = the placeholder defaults.
+ARG VITE_SITE_DOMAIN=
+ARG VITE_SUPPORT_EMAIL=
+ARG VITE_ABUSE_EMAIL=
+ARG VITE_PRIVACY_EMAIL=
+ENV VITE_SITE_DOMAIN=$VITE_SITE_DOMAIN VITE_SUPPORT_EMAIL=$VITE_SUPPORT_EMAIL VITE_ABUSE_EMAIL=$VITE_ABUSE_EMAIL VITE_PRIVACY_EMAIL=$VITE_PRIVACY_EMAIL
 COPY apps/plan-b-mvp/web/ ./
 RUN npm run build
 

@@ -143,6 +143,8 @@ const DEFAULT_SETTINGS = {
 // The storage keys stay "planb.*" so existing saved data keeps working.
 const FIXED_PLACES = [["home", "Home"], ["work", "Work/Uni"]];
 const DEFAULT_WORK = "The University of Queensland, St Lucia QLD 4072";
+const SITE = window.__SITE__ || {}; // set by the React shell from web/src/config/site.js (build-time VITE_* values); the literals are the placeholder defaults
+const PRIVACY_EMAIL = SITE.privacy || "privacy@reroute.invalid";
 const PUSH_BIKE_MAX_KM = 5; // keep in step with PUSH_BIKE_MAX_KM in live_routes.py; used in the legal text only
 const MAX_CUSTOM_PLACES = 10;
 const PLACE_NAME_MAX = 30;
@@ -783,8 +785,8 @@ function privacyScreen() {
     <h2>Changes to this policy</h2>
     <p>If we change what we collect or why, we will update this page and the version and date at the top, and for anything significant tell you in the app before it takes effect. Earlier versions are kept in the project history.</p>
     <h2>Contact</h2>
-    <p>To see, correct, export or delete your data, or to make a privacy complaint, use Account in the app, or write to privacy@reroute.invalid.</p>
-    <p class="fine">TODO before public release: replace the placeholder address privacy@reroute.invalid with a monitored one, fill in every bracketed TODO above, and have this page reviewed against the actual deployment.</p>
+    <p>To see, correct, export or delete your data, or to make a privacy complaint, use Account in the app, or write to ${PRIVACY_EMAIL}.</p>
+    <p class="fine">TODO before public release: replace the placeholder privacy address (VITE_PRIVACY_EMAIL) with a monitored one, fill in every bracketed TODO above, and have this page reviewed against the actual deployment.</p>
     <button class="btn btn-secondary" data-action="go" data-screen="account">Account</button>
     <button class="btn btn-secondary" data-action="go" data-screen="sources">About and data sources</button>
   </div>`;
@@ -2128,7 +2130,7 @@ function rideCard(r) {
 }
 
 // Safety on the shared board (App Store 1.2 / Google Play UGC): report, block, community rules, and a published way to reach us.
-const ABUSE_EMAIL = "abuse@reroute.invalid"; // TODO: replace with a monitored mailbox before launch (also in the community and support pages)
+const ABUSE_EMAIL = SITE.abuse || "abuse@reroute.invalid"; // placeholder default; the real one comes from VITE_ABUSE_EMAIL via window.__SITE__
 const REPORT_REASONS = [["harassment", "Harassment or abuse"], ["scam", "Scam, spam or advertising"], ["unsafe", "Unsafe or threatening"], ["sexual", "Sexual or inappropriate"], ["personal", "Shares personal details"], ["fake", "Fake or misleading post"], ["other", "Something else"]];
 const blockedPosters = () => store.get("blockedPosters", []);
 const isBlocked = (r) => !r.is_member && blockedPosters().some((b) => b.poster === r.poster);

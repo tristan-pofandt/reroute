@@ -35,7 +35,7 @@ All of these are in `.gitignore`. Use Play App Signing so Google holds the app s
 ## Identifiers (placeholders, confirm before the first upload)
 
 - Bundle ID / applicationId `au.reroute.app` (in `capacitor.config.ts`, `android/app/build.gradle`, Xcode). It cannot change after publishing.
-- Domain `reroute.example` appears in `AndroidManifest.xml` (App Links) and `ios/App/App/App.entitlements`. Replace it with the real domain.
+- The domain `reroute.example` appears in `AndroidManifest.xml` (App Links), `ios/App/App/App.entitlements` and `capacitor.config.ts`: run `node scripts/set-domain.mjs --domain <host> [--dry-run]` from the repo root. Contacts and the domain for the web build live in `src/config/site.js` (`VITE_*`); `python placeholders.py` lists what is left.
 
 ## Versioning
 

@@ -26,11 +26,14 @@ from authlib.oauth2.rfc7636 import create_s256_code_challenge
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+from markupsafe import escape
 from flask import Blueprint, Response, g, jsonify, request
 from joserfc import jwt
 from joserfc.errors import JoseError
 from joserfc.jwk import ECKey, KeySet
 import requests
+
+import site_config
 
 log = logging.getLogger("planb.accounts")
 
@@ -87,7 +90,7 @@ h1{font-size:1.6rem;line-height:1.2}h2{font-size:1.15rem;margin-top:2rem}a{color
 <h2>What stays</h2>
 <p>Data kept only on your own device (in the browser or app) is not on our server; clear it in your browser or by uninstalling the app. Rides you posted to the community ride board are not linked to your account. Server logs that do not name you are rotated out by the host.</p>
 <h2>Cannot sign in?</h2>
-<p>Email <a href="mailto:privacy@reroute.invalid">privacy@reroute.invalid</a> from the address on the account and ask for it to be deleted. We will delete it within 30 days. <!-- TODO: replace privacy@reroute.invalid with the real contact address before launch. --></p>
+<p>Email <a href="mailto:@PRIVACY_EMAIL@">@PRIVACY_EMAIL@</a> from the address on the account and ask for it to be deleted. We will delete it within 30 days.</p>
 <p><a href="/privacy">Privacy</a> &middot; <a href="/terms">Terms</a> &middot; <a href="/">Back to Reroute</a></p>
 </main></body></html>"""
 
@@ -602,7 +605,7 @@ def blueprint(acct, limits=None):
 
     @bp.get("/account/delete")
     def delete_page():  # public and script-free: Google Play needs a web address that explains account deletion
-        return Response(DELETE_PAGE, mimetype="text/html", headers={"Cache-Control": "public, max-age=3600"})
+        return Response(DELETE_PAGE.replace("@PRIVACY_EMAIL@", escape(site_config.privacy_email())), mimetype="text/html", headers={"Cache-Control": "public, max-age=3600"})
 
     @bp.get("/.well-known/<name>")
     def well_known(name):
