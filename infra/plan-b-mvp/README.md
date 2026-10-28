@@ -23,6 +23,7 @@ Operational configuration for running the [Plan B MVP](../../apps/plan-b-mvp/REA
 | `MAPS_BROWSER_API_KEY` | Yes, for maps | Separate key for Maps JavaScript API, restricted by HTTP referrer and API. It is served by `/api/config` and is public to visitors; do not reuse the server key |
 | `PUBLIC_URL` | Recommended | The address people use, for example `https://plan-b-mvp.onrender.com`. It is encoded by `/qr.svg`, shown in `/api/status`, and accepted by the Origin check |
 | `VAPID_PRIVATE_KEY`, `VAPID_PUBLIC_KEY` | For push | Base64url VAPID key pair. If both are unset the server generates a pair once into `data/vapid.json`, which is lost on redeploy and would invalidate every browser subscription, so set them on any public host |
+| `FCM_SERVICE_ACCOUNT_JSON` or `FCM_SERVICE_ACCOUNT_FILE` | For native push | Firebase service account JSON (the content, or a path to the file). Secret: host environment or secret file only. Unset means `/api/push/native-register` answers 503 and the Android/iOS app gets no alerts. No extra Python package is needed |
 | `VAPID_SUBJECT` | No | Contact for push services, default `mailto:planb-demo@example.invalid`. Use a team mailbox, never a personal address |
 | `HOST`, `PORT` | No | Bind address and port. The image sets `0.0.0.0` and `8000`; Render supplies `PORT` itself |
 | `PLANB_TRUST_PROXY` | On a host | Number of reverse proxies in front of the app (the image and `render.yaml` set `1`) so the real visitor address is used for rate limiting |

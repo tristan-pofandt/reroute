@@ -22,7 +22,7 @@
 | `deeplinks.js` | `appUrlOpen` for `https://<domain>/...` and `reroute://...` to the router (history + `popstate`), closes the in-app browser (OAuth return), Android back button; emits `reroute:deeplink` |
 | `share.js` | `navigator.share` to the native share sheet (the existing "Share with other apps" button then appears and works) |
 | `chrome.js` | status bar style and colour follow `data-theme`, Android edge-to-edge overlay, hides the native splash, iOS keyboard accessory bar off |
-| `push.js` | `enablePush()` registers for FCM/APNs and POSTs the token; **not wired to the UI**: call it from the existing notification button on native |
+| `push.js` | wired to the trip "Watch in the background" toggle: our priming sheet, then the OS prompt, then the FCM token to `/api/push/native-register`; foreground toast, tap routing, badge reset (see Push below) |
 | `auth.js` | `signIn("apple" or "google", cfg)` via `@capgo/capacitor-social-login`; **not wired**: the accounts screen owner calls it and sends the `idToken` to the server |
 
 Haptics: `src/haptics.js` already routed to `@capacitor/haptics` (light/medium/heavy impact, selection, error notification) when native and to `navigator.vibrate` on the web; unchanged. The optional iOS-Safari `<input switch>` tick was skipped (undocumented trick, not needed in the native shell).
@@ -40,7 +40,7 @@ app (deep links, back), browser (OAuth in-app browser), geolocation, haptics, pu
 ## Contracts for the server owner (not implemented here; `server.py` untouched)
 
 1. **CORS:** allow origins `https://localhost` (Android) and `reroute://localhost` (iOS), methods GET/POST/OPTIONS, headers `Content-Type` and `Authorization`. If sessions use cookies, they need `SameSite=None; Secure` and may still be dropped by WKWebView; prefer bearer tokens for native.
-2. **`POST /api/push/native-register`**, body `{"token": "<fcm or apns token>", "platform": "ios" | "android", "watch": <same object as /api/push/subscribe, or null>}`; return `200 {"ok": true}`, `400` on bad input; rate-limit like `/api/push/subscribe`. Sending via FCM HTTP v1 for both platforms (upload the APNs key to Firebase) is simplest. Add an unregister endpoint for logout.
+2. **(Implemented, see Push below)** `POST /api/push/native-register`, body `{"token": "<fcm or apns token>", "platform": "ios" | "android", "watch": <same object as /api/push/subscribe, or null>}`; return `200 {"ok": true}`, `400` on bad input; rate-limit like `/api/push/subscribe`. Sending via FCM HTTP v1 for both platforms (upload the APNs key to Firebase) is simplest. Add an unregister endpoint for logout.
 3. **`/.well-known/assetlinks.json`** (`application/json`, no redirect):
 
 ```json
@@ -55,6 +55,24 @@ app (deep links, back), browser (OAuth in-app browser), geolocation, haptics, pu
 
 5. OAuth return: redirect the in-app browser to `https://<domain>/auth/callback?...` (App Link) or `reroute://auth/callback?...`; `deeplinks.js` maps both to the same path.
 
+## Push (FCM for Android and iOS)
+
+**Server** (`push_native.py`, `push.py`): Firebase Cloud Messaging HTTP v1 for both platforms, the same disruption monitor and watch as Web Push. Direct APNs is not implemented (upload the APNs key to Firebase instead). The OAuth token is signed with `cryptography`, so no `google-auth` dependency.
+
+- `POST /api/push/native-register` `{token, platform: "ios"|"android", app_version, locale, watch|null}` returns `{ok, id}`; the `id` is what notification links (`/?alternatives=<id>`) carry. Requires JSON, an allowed `Origin`, and the `X-Reroute-Device` header (16 to 64 chars of `[A-Za-z0-9_-]`; a custom header forces a CORS preflight, which is what makes the cookie-less native call CSRF-safe). Rate limited like `/api/push/subscribe`. Tied to the account when a session cookie or bearer token is sent. `503` JSON when FCM is not configured. Re-registering a token replaces its watch.
+- `POST /api/push/native-unregister` `{token}`.
+- FCM `UNREGISTERED` or `INVALID_ARGUMENT` (and HTTP 404) delete the token. Deleting an account deletes its tokens (`Accounts.on_delete`). Tokens are never logged. Storage: `data/push.json`, with the Web Push subscriptions.
+- Env (secrets, never committed): `FCM_SERVICE_ACCOUNT_JSON` or `FCM_SERVICE_ACCOUNT_FILE`.
+
+**Client**: the trip "Watch in the background" toggle calls `window.rerouteNativePush.enable(watch, primeSheet)`. When permission is "prompt" the app sheet "Get disruption alerts?" shows first; "Not now" (or closing it) leaves everything working and does not use the one-time iOS prompt. "Denied" shows how to turn Notifications on in the phone's Settings. Android 13+ `POST_NOTIFICATIONS` is requested by `requestPermissions()` after the sheet. In the foreground Android shows an in-app toast (iOS shows the system banner via `presentationOptions`); tapping a notification opens `/?alternatives=<id>` through the deep-link adapter; delivered notifications and the badge are cleared when the app opens. `push_enabled` is sent only with analytics consent.
+
+**Set-up (human)**
+1. Firebase console: create a project. Add an Android app (`au.reroute.app`) and an iOS app (same bundle id). Put `google-services.json` in `web/android/app/` and `GoogleService-Info.plist` in `web/ios/App/App/` (add it to the App target in Xcode).
+2. Apple Developer: create an APNs Auth Key (.p8), then in Firebase Project settings, Cloud Messaging, Apple app configuration, upload it with the Key ID and Team ID.
+3. Firebase Project settings, Service accounts, Generate new private key. Give the JSON to the server as `FCM_SERVICE_ACCOUNT_FILE` (path) or `FCM_SERVICE_ACCOUNT_JSON`. Never commit it.
+4. Server CORS must list `https://localhost` and `reroute://localhost` (`PLANB_CORS_ORIGINS`); `X-Reroute-Device` is already an allowed header.
+5. Test: Android, `adb install` the debug build, enable alerts on a trip, then use Settings, Demo mode, "Send test disruption push"; test tap routing with `adb shell am start -a android.intent.action.VIEW -d "reroute://localhost/?alternatives=ID"`. iOS needs a real device and an Xcode or TestFlight build with the Push Notifications capability; simulators do not receive FCM.
+
 ## Still needs a Mac, accounts or secrets
 
 Build and run on iOS (Mac, Xcode); Apple Developer Program (US$99) for signing, push, Associated Domains, Sign in with Apple and TestFlight; Google Play developer account (US$25) and upload keystore; Firebase project with `google-services.json` and `GoogleService-Info.plist`; production domain and the well-known files; Google Maps keys per platform (the web key is HTTP-referrer restricted and the bundled origin is `https://localhost` / `reroute://localhost`, so add those referrers or use a native-only key; audit row 8); Google and Apple OAuth client IDs; on-device testing of every adapter; screenshots, listing text, privacy labels and the Data safety form.
@@ -65,7 +83,7 @@ Build and run on iOS (Mac, Xcode); Apple Developer Program (US$99) for signing, 
 | --- | --- |
 | 1 native binary / Capacitor project | project generated, unbuilt |
 | 2 Guideline 4.2 | native geolocation, haptics, share, push and sign-in adapters exist; push and sign-in not yet wired to the UI |
-| 5 native push | client written (`push.js`), server contract above |
+| 5 native push | implemented (server, client, priming); needs Firebase set-up and a device test |
 | 8 Maps keys per platform | documented, not done |
 | Privacy manifest, usage strings | done, needs human review |
 | Target API | 36 |
