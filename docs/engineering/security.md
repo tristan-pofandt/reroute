@@ -34,7 +34,7 @@ The CSP was measured with the policy enforced on `/`, `/terms`, `/privacy`, `/ab
 
 ## CORS
 
-None by default: same-origin only, and the existing `Origin` check on every JSON POST still refuses other sites. For the native Capacitor app set `PLANB_CORS_ORIGINS=capacitor://localhost,https://localhost,ionic://localhost` (comma list, exact match). Listed origins get `Access-Control-Allow-Origin` for that origin only (never `*`), `Vary: Origin`, and preflights answer 204 with `GET, POST, OPTIONS` and headers `Content-Type, Authorization, X-Reroute-Device, X-CSRF-Token`. No credentials are allowed cross-origin (the native app should use bearer tokens). Account routes keep their own origin check in `accounts.py` and would also need the allow-list (flag for the accounts owner).
+None by default: same-origin only, and the existing `Origin` check on every JSON POST still refuses other sites. For the native Capacitor app set `PLANB_CORS_ORIGINS=capacitor://localhost,https://localhost,ionic://localhost` (comma list, exact match). Listed origins get `Access-Control-Allow-Origin` for that origin only (never `*`), `Vary: Origin`, and preflights answer 204 with `GET, POST, OPTIONS` and headers `Content-Type, Authorization, X-Reroute-Device, X-CSRF-Token`. No credentials are allowed cross-origin (the native app should use bearer tokens). Account routes keep their own origin check in `accounts.py`, which now honours the same `PLANB_CORS_ORIGINS` list (exact origin match), so the native app can call `/auth/native/*` and `/api/account/*`.
 
 ## Input validation review of `/api/*`
 
@@ -63,6 +63,6 @@ Unknown `/api` paths and wrong methods answer JSON (`Not found.`, `That method i
 4. The content filter is English-only and simple.
 5. `X-Forwarded-For` trust depends on `PLANB_TRUST_PROXY` matching the real proxy count; a wrong value lets visitors fake their address.
 6. The admin token is a single shared secret with no audit trail beyond the moderation log.
-7. No Docker build or image scan was run here (`docker` was not available); the Dockerfile change is a log format only.
+7. The image was built and smoke-tested on the home-lab LXC on 2026-10-28 (see the integration log); no image vulnerability scan was run.
 8. The gunicorn and Render platform logs may still record query strings outside our control.
 9. Native apps and the account flows were not reviewed in this pass.

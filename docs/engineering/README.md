@@ -21,3 +21,6 @@ Application-specific setup commands belong with the relevant application under `
 - [Ride board moderation](ride-board-moderation.md): report, block, filter, rate limits, auto-hide, operator queue and runbook.
 - [Security hardening](security.md): threat model, headers table, what was fixed, residual risks.
 - [Data and software licences](data-licences.md): attributions behind the Licences page and the Translink licence mismatch.
+- [Privacy data map](privacy-data-map.md): every data item (where stored, why, retention, who can access, deletion path); the store privacy forms must match it.
+- [Native wrapper](native-wrapper.md): Capacitor architecture, adapters, plugins, native push and sign-in contracts.
+- [Pre-submission audit (2026-10-28)](preflight-audit-2026-10-28.md): report-only audit of the build against store rules.
