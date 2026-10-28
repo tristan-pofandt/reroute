@@ -46,6 +46,7 @@ FILES = {
     "/terms": ("index.html", "text/html; charset=utf-8"),
     "/privacy": ("index.html", "text/html; charset=utf-8"),
     "/about": ("index.html", "text/html; charset=utf-8"),
+    "/account": ("index.html", "text/html; charset=utf-8"),
     "/community": ("index.html", "text/html; charset=utf-8"),
     "/licences": ("index.html", "text/html; charset=utf-8"),
     "/support": ("index.html", "text/html; charset=utf-8"),

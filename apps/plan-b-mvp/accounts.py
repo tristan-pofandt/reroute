@@ -66,6 +66,32 @@ SCHEMA = [  # version -> statements; applied once, in order
 ]
 
 
+DELETE_PAGE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delete your Reroute account</title><meta name="robots" content="index,follow">
+<style>:root{color-scheme:light dark;font:17px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}body{max-width:40rem;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:1.6rem;line-height:1.2}h2{font-size:1.15rem;margin-top:2rem}a{color:inherit}code{font-size:.9em}</style></head>
+<body><main>
+<h1>Delete your Reroute account and data</h1>
+<p>Reroute is a Brisbane trip planner. You never need an account to use it. This page is for people who made one (with Google or Apple) and want it gone.</p>
+<h2>Delete it yourself, in the app (fastest)</h2>
+<ol><li>Open Reroute and sign in if you are not already (deleting needs a sign-in from the last 10 minutes).</li>
+<li>Open the menu in the top corner and choose your name, which opens the <a href="/account">Account</a> page.</li>
+<li>Choose <strong>Delete my account</strong>, then confirm. If you want a copy first, choose <strong>Download my data</strong>.</li></ol>
+<p>Deletion is immediate and cannot be undone.</p>
+<h2>What is deleted</h2>
+<ul><li>Your account record: name, email address and the Google or Apple identifier.</li>
+<li>Every signed-in session on every device.</li>
+<li>Everything synced to your account: settings, saved places and trip history.</li>
+<li>If you used Sign in with Apple, we also ask Apple to revoke Reroute&#8217;s access to your Apple ID.</li></ul>
+<h2>What stays</h2>
+<p>Data kept only on your own device (in the browser or app) is not on our server; clear it in your browser or by uninstalling the app. Rides you posted to the community ride board are not linked to your account. Server logs that do not name you are rotated out by the host.</p>
+<h2>Cannot sign in?</h2>
+<p>Email <a href="mailto:privacy@reroute.invalid">privacy@reroute.invalid</a> from the address on the account and ask for it to be deleted. We will delete it within 30 days. <!-- TODO: replace privacy@reroute.invalid with the real contact address before launch. --></p>
+<p><a href="/privacy">Privacy</a> &middot; <a href="/terms">Terms</a> &middot; <a href="/">Back to Reroute</a></p>
+</main></body></html>"""
+
+
 class AuthError(Exception):
     """A sign-in that must be refused. `code` is one of the short strings the page shows; the details are logged, never sent."""
 
@@ -552,6 +578,10 @@ def blueprint(acct, limits=None):
             return reply({"signed_in": False, "enabled": acct.enabled})
         return reply({"signed_in": True, "enabled": True, "user": user_json(session), "csrf": acct.csrf_for(session["id_hash"]),
                       "reauth_required": int(acct.clock()) - session["auth_at"] > REAUTH_SECONDS})
+
+    @bp.get("/account/delete")
+    def delete_page():  # public and script-free: Google Play needs a web address that explains account deletion
+        return Response(DELETE_PAGE, mimetype="text/html", headers={"Cache-Control": "public, max-age=3600"})
 
     @bp.get("/.well-known/<name>")
     def well_known(name):

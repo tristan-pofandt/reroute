@@ -443,6 +443,14 @@ class AccountApi(unittest.TestCase):
         self.assertEqual(client.get("/.well-known/assetlinks.json").status_code, 404)  # not configured
         self.assertEqual(client.get("/.well-known/passwd").status_code, 404)
 
+    def test_public_deletion_page_needs_no_script_or_sign_in(self):
+        app, *_ = build({"ACCOUNTS_SECRET_KEY": SECRET})
+        reply = app.test_client().get("/account/delete")
+        text = reply.get_data(as_text=True)
+        self.assertEqual((reply.status_code, reply.mimetype), (200, "text/html"))
+        self.assertIn("Delete my account", text)
+        self.assertNotIn("<script", text)
+
     def test_security_headers_and_no_store(self):
         app, *_ = build()
         reply = app.test_client().get("/api/me", base_url=PUBLIC)
