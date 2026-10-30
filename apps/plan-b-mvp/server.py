@@ -158,6 +158,9 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
     push = push if push is not None else Push(data, monitor)
     osm = osm if osm is not None else OSM(data / "offline")
     services = services or Services(monitor=monitor, board=board, static=static, weather=weather, traffic=traffic)
+    rides_on = os.getenv("PLANB_RIDES", "").strip().lower() not in ("0", "false", "off")  # off: no public ride board, moderation still works
+    if not rides_on:
+        services.board = None  # plan answers then carry no ride matches
     public_url = public_url if public_url is not None else (os.getenv("PUBLIC_URL") or "").strip().rstrip("/") or None
     limiter = RateLimiter(clock)
     plan_limit, autocomplete_limit, fuel_limit = (_int("PLANB_PLAN_LIMIT_PER_HOUR", 40), _int("PLANB_AUTOCOMPLETE_LIMIT_PER_HOUR", 400),
@@ -347,7 +350,7 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
             "departure": (now + timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M"),
             "deadline": (now + timedelta(minutes=65)).strftime("%Y-%m-%dT%H:%M"),
             "fuel_types": google_api.FUEL_TYPES,
-            "push": push.ready(), "gtfs_static": static.status(), "public_url": public_url, "version": VERSION,
+            "rides": rides_on, "push": push.ready(), "gtfs_static": static.status(), "public_url": public_url, "version": VERSION,
             "offline_limits": offline_area.limits(), "offline_transit": static.offline_status(),
         })
 
@@ -559,6 +562,11 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
             blocked = {entry["poster"] for entry in board.blocks(who())}
             result["rides"] = [ride for ride in result["rides"] if ride["poster"] not in blocked or ride["is_member"]]
         return result
+
+    @app.before_request
+    def rides_switch():
+        if not rides_on and request.path.startswith("/api/rides"):
+            return failure("Shared rides are switched off.", 404)
 
     @app.post("/api/rides")
     def rides_create():

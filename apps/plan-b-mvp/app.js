@@ -532,7 +532,7 @@ function menuContent() {
         ${item(go("dashboard"), I.leaf(18), "var(--success)", "Impact Dashboard", `${kgShort(impact.co2)} CO₂ avoided this month`)}
         ${item(go("weather"), I.cloud(18), "var(--accent)", "Weather", "The week ahead, wind and the rain radar")}
         ${item(open("alerts"), I.signal(18), "var(--error)", "Translink alerts", "Live disruptions, searchable by line")}
-        ${item(go("rides"), I.users(18), "var(--teal)", "Shared rides", "Share a car or split an Uber")}
+        ${ridesOn() ? item(go("rides"), I.users(18), "var(--teal)", "Shared rides", "Share a car or split an Uber") : ""}
       </div></div>
       <p class="section-header">App</p>
       <div class="group"><div class="group-card">
@@ -660,10 +660,10 @@ function homeScreen() {
           <div class="stat"><b>${impact.greenTrips}</b><span>planned not by car</span></div>
         </div>
       </button>
-      <button class="tile-card" data-action="go" data-screen="rides">
+      ${ridesOn() ? `<button class="tile-card" data-action="go" data-screen="rides">
         <div class="tile-head"><h3 role="heading" aria-level="2">${I.users(16)}Shared rides</h3>${I.chevronRight()}</div>
         <p class="hint">${myRides ? `You're in ${plural(myRides, "shared ride")}.` : "Disrupted with lots of others? Share a car or split an Uber with people heading your way."}</p>
-      </button>
+      </button>` : ""}
       <p class="section-header">Get the app</p>
       <div class="group"><div class="group-card">
         ${canInstall() ? `<button class="row" data-action="install"><span class="row-icon" style="--tone:var(--accent)">${I.download(18)}</span><span class="row-label">Install Reroute<small>Add it to your home screen for background alerts</small></span><span class="chev">${I.chevronRight()}</span></button>` : ""}
@@ -1067,7 +1067,9 @@ function sortedOptions() {
   return list.sort(by);
 }
 
-const ridesTile = (title, text) => `<button class="tile-card" data-action="go" data-screen="rides"><div class="tile-head"><h3 role="heading" aria-level="2">${I.users(16)}${title}</h3>${I.chevronRight()}</div><p class="hint">${text}</p></button>`;
+// /api/status says rides:false when the server runs with PLANB_RIDES=0; until status loads the feature shows.
+const ridesOn = () => state.status?.rides !== false;
+const ridesTile = (title, text) => !ridesOn() ? "" : `<button class="tile-card" data-action="go" data-screen="rides"><div class="tile-head"><h3 role="heading" aria-level="2">${I.users(16)}${title}</h3>${I.chevronRight()}</div><p class="hint">${text}</p></button>`;
 
 function resultsScreen() {
   if (!state.plan) return journeyScreen(); // no plan yet (direct visit, reload): the normal empty trip form
@@ -2593,6 +2595,7 @@ function makePage(screen) {
 }
 
 function navigate(screen, direction = "forward", syncUrl = true) {
+  if (screen === "rides" && !ridesOn()) screen = "home";
   if ((screen === "results" || screen === "next") && !state.plan) screen = "journey"; // nothing to show yet
   if (transitioning || screen === state.screen) return;
   const legalPath = { terms: "/terms", privacy: "/privacy", sources: "/about", community: "/community", licences: "/licences", support: "/support", account: "/account" }[screen];
@@ -3244,6 +3247,7 @@ function checkWatch() {
 }
 
 async function loadMyRides() {
+  if (!ridesOn()) { state.rides.mine = []; return; }
   const tokens = store.get("rideTokens", []);
   if (!tokens.length) { state.rides.mine = []; return; }
   state.rides.loading = true;
