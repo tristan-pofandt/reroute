@@ -64,7 +64,7 @@ The deployment settings are documented in [`infra/plan-b-mvp/README.md`](../../i
 | `PLANB_ADMIN_TOKEN` | Secret that turns on the ride-board moderation queue at `/admin/moderation` (404 while unset). 32+ random characters, host secret only |
 | `PLANB_ALERT_WEBHOOK` | Optional `https://` webhook (Slack, Discord or ntfy). Called with a small JSON body when a ride-board post auto-hides after 3 reports; see `infra/plan-b-mvp/README.md`. Host secret |
 | `PLANB_CSP_ENFORCE` | `1` (default) enforces the Content-Security-Policy; `0` makes it report-only (violations are logged as warnings) |
-| `PLANB_CORS_ORIGINS` | Comma list of origins allowed to call the API cross-origin, default none. Native app: `capacitor://localhost,https://localhost,ionic://localhost` |
+| `PLANB_CORS_ORIGINS` | Comma list of origins allowed to call the API cross-origin, default none. Native app: `capacitor://localhost,https://localhost,ionic://localhost,reroute://localhost` |
 | `ACCOUNTS_SECRET_KEY` | Turns accounts on (32+ random characters; signs CSRF tokens, encrypts the Apple token). Unset: accounts are off and Reroute is guest-only |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_IOS_CLIENT_ID`, `GOOGLE_ANDROID_CLIENT_ID` | Google sign-in (web client; iOS and Android client IDs are comma-separated lists accepted by `/auth/native/google`) |
 | `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_CLIENT_ID`, `APPLE_BUNDLE_ID`, `APPLE_PRIVATE_KEY` or `APPLE_PRIVATE_KEY_FILE` | Sign in with Apple (Services ID, bundle IDs and the `.p8` key; never commit the key) |

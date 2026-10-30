@@ -132,7 +132,7 @@ If Apple cannot be reached, nothing is deleted and the person is told to try aga
 | `APPLE_DOMAIN_ASSOCIATION` (`_FILE`) | `/.well-known/apple-developer-domain-association.txt` |
 | `APPLE_APP_SITE_ASSOCIATION_JSON`, `ANDROID_ASSETLINKS_JSON` (`_FILE`) | Native deep-link association files |
 | `PLANB_DEV`, `ACCOUNTS_FAKE_PROVIDER` | Local testing only: auto-generated secret key and a fake provider. The fake provider cannot be enabled without `PLANB_DEV=1`. |
-| `PLANB_CORS_ORIGINS` | Native app origins (`capacitor://localhost,https://localhost,ionic://localhost`, comma list, exact match). Used by `security.py` for CORS headers **and** by the account routes' `Origin` check, so the native app can call `/auth/native/*` and `/api/account/*`. Empty by default. |
+| `PLANB_CORS_ORIGINS` | Native app origins (`capacitor://localhost,https://localhost,ionic://localhost,reroute://localhost`, comma list, exact match). Used by `security.py` for CORS headers **and** by the account routes' `Origin` check, so the native app can call `/auth/native/*` and `/api/account/*`. Empty by default. |
 | `PLANB_DATA_DIR` | Where `accounts.db` lives. It must be on a persistent disk or volume or accounts vanish on redeploy. |
 
 Values live only in the host's settings or a git-ignored `.env`; `.env.example` lists the names.

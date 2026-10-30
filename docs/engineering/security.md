@@ -34,7 +34,7 @@ The CSP was measured with the policy enforced on `/`, `/terms`, `/privacy`, `/ab
 
 ## CORS
 
-None by default: same-origin only, and the existing `Origin` check on every JSON POST still refuses other sites. For the native Capacitor app set `PLANB_CORS_ORIGINS=capacitor://localhost,https://localhost,ionic://localhost` (comma list, exact match). Listed origins get `Access-Control-Allow-Origin` for that origin only (never `*`), `Vary: Origin`, and preflights answer 204 with `GET, POST, OPTIONS` and headers `Content-Type, Authorization, X-Reroute-Device, X-CSRF-Token`. No credentials are allowed cross-origin (the native app should use bearer tokens). Account routes keep their own origin check in `accounts.py`, which now honours the same `PLANB_CORS_ORIGINS` list (exact origin match), so the native app can call `/auth/native/*` and `/api/account/*`.
+None by default: same-origin only, and the existing `Origin` check on every JSON POST still refuses other sites. For the native Capacitor app set `PLANB_CORS_ORIGINS=capacitor://localhost,https://localhost,ionic://localhost,reroute://localhost` (comma list, exact match). Listed origins get `Access-Control-Allow-Origin` for that origin only (never `*`), `Vary: Origin`, and preflights answer 204 with `GET, POST, OPTIONS` and headers `Content-Type, Authorization, X-Reroute-Device, X-CSRF-Token`. No credentials are allowed cross-origin (the native app should use bearer tokens). Account routes keep their own origin check in `accounts.py`, which now honours the same `PLANB_CORS_ORIGINS` list (exact origin match), so the native app can call `/auth/native/*` and `/api/account/*`.
 
 ## Input validation review of `/api/*`
 
