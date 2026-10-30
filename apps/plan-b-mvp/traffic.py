@@ -12,8 +12,10 @@ import math
 import threading
 import time
 from urllib.error import URLError
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
+
+from mycelium_emitter import timed
 
 URL = "https://api.qldtraffic.qld.gov.au/v2/events"
 # The public key the Queensland Government publishes for QLDTraffic on its open data portal.
@@ -179,7 +181,7 @@ class Traffic:
     @staticmethod
     def _download(url):
         request = Request(url, headers={"User-Agent": "Reroute-student-MVP", "Accept": "application/json"})
-        with urlopen(request, timeout=15) as response:
+        with timed("external", "file:apps/plan-b-mvp/traffic.py", "external:" + str(urlsplit(url).hostname)), urlopen(request, timeout=15) as response:
             return json.load(response)
 
     def events(self, now=None):

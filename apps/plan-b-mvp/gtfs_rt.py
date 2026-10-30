@@ -13,6 +13,8 @@ import time
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
+from mycelium_emitter import timed
+
 FEED_BASE = "https://gtfsrt.api.translink.com.au/api/realtime/SEQ/"
 CACHE_SECONDS = 60
 # Vehicle positions move quickly, so they are cached for less time than alerts.
@@ -414,7 +416,7 @@ class Monitor:
     def _download(name):
         request = Request(FEED_BASE + name, headers={"User-Agent": "Reroute-student-MVP"})
         try:
-            with urlopen(request, timeout=20) as response:
+            with timed("external", "file:apps/plan-b-mvp/gtfs_rt.py", "external:translink-rt", feed=name), urlopen(request, timeout=20) as response:
                 return response.read()
         except (URLError, TimeoutError, OSError) as error:
             raise FeedError(f"Translink {name} feed could not be reached.") from error
