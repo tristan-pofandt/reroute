@@ -46,6 +46,7 @@ const I = {
   search: (s) => svg('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', s),
   external: (s = 16) => svg('<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>', s),
   moon: (s) => svg('<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>', s),
+  palette: (s) => svg('<circle cx="13.5" cy="6.5" r="1"/><circle cx="17.5" cy="10.5" r="1"/><circle cx="8.5" cy="7.5" r="1"/><circle cx="6.5" cy="12.5" r="1"/><path d="M12 2a10 10 0 0 0 0 20 1.7 1.7 0 0 0 1.2-2.9 1.6 1.6 0 0 1 1.2-2.8H16a6 6 0 0 0 6-6C22 6 17.5 2 12 2z"/>', s),
   home: (s) => svg('<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>', s),
   scooter: (s) => svg('<circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 18h7l-2-8h4l2 8M13 10h-2l-1-4h4M17 6h2"/>', s),
   bike: (s) => svg('<circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="m6 17 4-8 4 8H6l4-8h5l3 8M12 6h3"/>', s),
@@ -124,8 +125,14 @@ const store = {
   set(name, value) { try { localStorage.setItem(`planb.${name}`, JSON.stringify(value)); } catch { /* storage unavailable: keep in memory */ } },
 };
 
+// Settings, Themes: [id, name, base]. The colours are in app.css (:root[data-palette]); Original keeps the Auto, Light and Dark choice in settings.theme.
+// Keep the dark ids in step with the theme bootstrap in index.html and web/index.html (test_palettes.py checks all three).
+const PALETTES = [["original", "Original", ""], ["matcha", "Matcha", "light"], ["apricot", "Apricot", "light"], ["clay", "Clay", "light"],
+  ["harvest", "Harvest", "light"], ["fern", "Fern", "light"], ["smoke", "Smoke", "light"], ["sakura", "Sakura", "light"],
+  ["jacaranda", "Jacaranda", "light"], ["glacier", "Glacier", "light"], ["dusk", "Dusk Rose", "dark"], ["tide", "Tide", "dark"],
+  ["ember", "Ember", "dark"], ["moss", "Moss", "dark"], ["neon", "Neon", "dark"], ["graphite", "Graphite", "dark"]];
 const DEFAULT_SETTINGS = {
-  theme: "dark", motion: "full",
+  theme: "dark", palette: "original", motion: "full",
   modes: { transit: true, drive: true, rideshare: true, scooter: false, ebike: false, bicycle: false },
   transit_modes: { bus: true, train: true, tram: true, ferry: true },
   fuel_l_per_100km: 8, fuel_type: "SP91", fuel_price_mode: "auto", fuel_price: 2.3,
@@ -2334,7 +2341,7 @@ function settingsContent() {
 
       <p class="section-header">Appearance</p>
       <div class="group"><div class="group-card">
-        <div class="row"><span class="row-icon" style="--tone:var(--violet)">${I.moon(18)}</span><span class="row-label">Theme</span>${segmented("theme", s.theme, [["system", "Auto"], ["light", "Light"], ["dark", "Dark"]])}</div>
+        <button class="row" data-action="open-themes"><span class="row-icon" style="--tone:var(--violet)">${I.palette(18)}</span><span class="row-label">Themes</span>${valueSpan(currentPalette()[1])}<span class="chev">${I.chevronRight()}</span></button>
         <div class="row"><span class="row-icon" style="--tone:var(--teal)">${I.activity(18)}</span><span class="row-label">Reduce motion</span>${toggle("motion_reduced", s.motion === "reduced", "Reduce motion")}</div>
       </div></div>${window.RerouteAnalytics?.settingsGroup() ?? ""}
 
@@ -2477,10 +2484,50 @@ async function previewFuel() {
   rerenderSettings();
 }
 
+// ── Themes sheet (opened from Settings, above it) ────────────────────────────
+const currentPalette = () => PALETTES.find(([id]) => id === settings.palette) || PALETTES[0];
+function themesSheet() {
+  const [current, name, base] = currentPalette();
+  return `<div class="grabber"><span></span></div>
+    <div class="sheet-head"><h3 id="sheet-title">Themes</h3>${sheetClose()}</div>
+    <div class="sheet-scroll">
+      <div class="theme-grid" role="group" aria-label="Colour themes">
+        ${PALETTES.map(([id, label]) => `<button class="theme-tile" data-action="pick-palette" data-value="${id}" aria-pressed="${id === current}"><span class="theme-swatch" data-palette="${id}" aria-hidden="true"><span class="sw-dots"><i></i><i></i><i></i></span><span class="sw-card"><i></i><i></i></span></span><span class="theme-name">${label}</span></button>`).join("")}
+      </div>
+      ${base ? `<p class="group-footer" style="margin:0 0 16px">${name} is a ${base} theme. Status colours (on time, delayed, cancelled) and route colours stay the same in every theme so they keep their meaning.</p>`
+        : `<p class="section-header">Original</p>
+      <div class="group"><div class="group-card">
+        <div class="row"><span class="row-icon" style="--tone:var(--violet)">${I.moon(18)}</span><span class="row-label">Light or dark</span>${segmented("theme", settings.theme, [["system", "Auto"], ["light", "Light"], ["dark", "Dark"]], "theme-mode")}</div>
+      </div><p class="group-footer">Auto follows your device setting.</p></div>`}
+    </div>`;
+}
+function openThemesSheet() {
+  openSheet(themesSheet());
+  sheetEl.dataset.themes = "1";
+  sheetEl.classList.add("above-settings");
+}
+function refreshThemesSheet() {
+  const sheet = sheetEl?.querySelector(".sheet");
+  if (!sheet || !sheetEl.dataset.themes) return;
+  const focused = document.activeElement, top = sheet.querySelector(".sheet-scroll").scrollTop;
+  sheet.innerHTML = themesSheet();
+  sheet.querySelector(".sheet-scroll").scrollTop = top;
+  restoreFocus(focused);
+}
+function setTheme(key, value) {
+  settings[key] = value;
+  saveSettings();
+  applyTheme();
+  refreshThemesSheet();
+  rerenderSettings();
+}
+
 function applyTheme() {
-  const theme = settings.theme === "light" ? "light" : settings.theme === "system" && !matchMedia("(prefers-color-scheme: dark)").matches ? "light" : "dark";
-  document.documentElement.dataset.theme = theme;
-  document.querySelector('meta[name="theme-color"]').content = theme === "light" ? "#EEF0F5" : "#090A0F";
+  const [palette, , base] = currentPalette(), root = document.documentElement;
+  const theme = base || (settings.theme === "light" ? "light" : settings.theme === "system" && !matchMedia("(prefers-color-scheme: dark)").matches ? "light" : "dark");
+  root.dataset.theme = theme;
+  if (base) root.dataset.palette = palette; else delete root.dataset.palette;
+  document.querySelector('meta[name="theme-color"]').content = getComputedStyle(root).getPropertyValue("--bg-base").trim() || (theme === "light" ? "#EEF0F5" : "#090A0F");
   if (settings.motion === "reduced") document.documentElement.dataset.motion = "reduced"; else delete document.documentElement.dataset.motion;
   maps.forEach((entry) => entry.restyle());
 }
@@ -2758,11 +2805,12 @@ function mapIcon(kind, bearingDeg = null, vehicle = null) {
     vehicle: vehicle?.colour ? cssColour(vehicle.colour) : cssColour(SEGMENT_COLOUR[vehicle?.vehicle] || "var(--seg-bus)"),
   };
   const colour = colours[kind] || colours.end;
-  const body = kind === "park" ? '<text x="22" y="28" text-anchor="middle" font-family="Arial,sans-serif" font-size="18" font-weight="700" fill="#fff">P</text>'
-    : kind === "me" ? `<path d="M22 8 14 32l8-5 8 5z" fill="#fff" transform="rotate(${bearingDeg ?? 0} 22 22)"/>`
+  const glyph = ["park", "me", "here"].includes(kind) ? cssColour("var(--on-accent)") : "#fff"; // accent pins take the theme's on-accent colour, the rest stay white
+  const body = kind === "park" ? `<text x="22" y="28" text-anchor="middle" font-family="Arial,sans-serif" font-size="18" font-weight="700" fill="${glyph}">P</text>`
+    : kind === "me" ? `<path d="M22 8 14 32l8-5 8 5z" fill="${glyph}" transform="rotate(${bearingDeg ?? 0} 22 22)"/>`
       : kind === "vehicle" ? `<path d="M14 14h16v12H14zM17 11h10v3H17zM17 28a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" fill="#fff"/><path d="M22 10V4" stroke="#fff" stroke-width="2" transform="rotate(${bearingDeg ?? 0} 22 18)"/>`
         : kind === "traffic" || kind === "closure" ? '<path d="M22 12v12M22 29v1" stroke="#1C1303" stroke-width="3" stroke-linecap="round"/>'
-          : '<circle cx="22" cy="22" r="6" fill="#fff"/>';
+          : `<circle cx="22" cy="22" r="6" fill="${glyph}"/>`;
   const svgText = `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="16" fill="${colour}" stroke="#F1F5F9" stroke-width="3"/><g>${body}</g></svg>`;
   return { url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svgText)}`, scaledSize: new GM.Size(44, 44), anchor: new GM.Point(22, 22) };
 }
@@ -3430,11 +3478,13 @@ const actions = {
   "open-settings": openSettings,
   "close-settings": closeSettings,
   "settings-backdrop": (el, event) => { if (event.target === el) closeSettings(); },
+  "open-themes": openThemesSheet,
+  "pick-palette": (el) => setTheme("palette", el.dataset.value),
+  "theme-mode": (el) => setTheme("theme", el.dataset.value),
   segment: (el) => {
     const { name, value } = el.dataset;
     settings[name] = value;
     saveSettings();
-    if (name === "theme") applyTheme();
     if (name === "fuel_price_mode" && value === "auto") previewFuel();
     rerenderSettings();
   },

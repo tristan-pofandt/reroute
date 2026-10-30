@@ -41,6 +41,33 @@
   color-scheme: light;
 }
 
+/* Palettes (Settings, Themes). Each sits on its light or dark base above (app.js sets both data-theme and data-palette) and replaces surfaces, text,
+   accent and the two icon tones; borders, fills and accent tints derive from those. Status colours and route-leg colours stay with the base.
+   The same rules colour the preview swatches in the Themes sheet. test_palettes.py checks contrast; Matcha's soft fill is the one listed exception. */
+:is(:root, .theme-swatch)[data-palette]:not([data-palette="original"]) {
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent); --accent-glow: color-mix(in srgb, var(--accent) 18%, transparent); --border-focus: var(--accent-text);
+  --border-subtle: color-mix(in srgb, var(--text-main) 9%, transparent); --border-strong: color-mix(in srgb, var(--text-main) 16%, transparent); --divider: color-mix(in srgb, var(--text-main) 7%, transparent);
+  --fill: color-mix(in srgb, var(--text-main) 5%, transparent); --fill-strong: color-mix(in srgb, var(--text-main) 10%, transparent);
+  --nav-bg: color-mix(in srgb, var(--bg-base) 84%, transparent); --chart: var(--accent); --chart-past: color-mix(in srgb, var(--accent) 42%, transparent);
+}
+:is(:root, .theme-swatch)[data-palette="matcha"] { --bg-void: #EFE8D8; --bg-base: #F7F2E6; --bg-surface: #FBF8EF; --bg-card: #FFFDF7; --bg-pop: #FFFEFA; --text-main: #2F3A2B; --text-muted: #5B6655; --text-faint: #8E967F; --accent: #94C985; --accent-text: #3F7A38; --on-accent: #14300F; --teal: #9C8858; --violet: #AD806C; }
+:is(:root, .theme-swatch)[data-palette="apricot"] { --bg-void: #EADDD7; --bg-base: #F3EAE6; --bg-surface: #F8F1EE; --bg-card: #FDF9F7; --bg-pop: #FFFCFA; --text-main: #3A251D; --text-muted: #6E4E42; --text-faint: #A2857A; --accent: #D46642; --accent-text: #B4461F; --on-accent: #2A1208; --teal: #BB7546; --violet: #C66F4E; }
+:is(:root, .theme-swatch)[data-palette="clay"] { --bg-void: #CFCAC0; --bg-base: #DCD8D0; --bg-surface: #E6E2DB; --bg-card: #EFECE6; --bg-pop: #F4F1EC; --text-main: #3B3232; --text-muted: #5E5250; --text-faint: #8C807C; --accent: #A8624D; --accent-text: #904935; --on-accent: #FFFFFF; --teal: #7A6A60; --violet: #8F726C; }
+:is(:root, .theme-swatch)[data-palette="harvest"] { --bg-void: #F6E68E; --bg-base: #FEF1A5; --bg-surface: #FFF6C4; --bg-card: #FFFBE2; --bg-pop: #FFFDF0; --text-main: #2E2803; --text-muted: #5C5404; --text-faint: #8F8530; --accent: #B64926; --accent-text: #8E2800; --on-accent: #FFFFFF; --teal: #746B03; --violet: #8A8202; }
+:is(:root, .theme-swatch)[data-palette="fern"] { --bg-void: #E1E6E1; --bg-base: #ECEFEC; --bg-surface: #F5F7F5; --bg-card: #FEFEFE; --bg-pop: #FFFFFF; --text-main: #1C2A1C; --text-muted: #4A5A49; --text-faint: #7C8D7B; --accent: #324E31; --accent-text: #324E31; --on-accent: #FEFEFE; --teal: #7B8C7A; --violet: #5E6E5D; }
+:is(:root, .theme-swatch)[data-palette="smoke"] { --bg-void: #CECECE; --bg-base: #D9D8D8; --bg-surface: #E2E1E1; --bg-card: #ECEBEB; --bg-pop: #F2F1F1; --text-main: #2A2727; --text-muted: #4D4A49; --text-faint: #7A7676; --accent: #974E50; --accent-text: #7A3C3E; --on-accent: #FFFFFF; --teal: #5B5857; --violet: #916767; }
+:is(:root, .theme-swatch)[data-palette="sakura"] { --bg-void: #F3E2E6; --bg-base: #FAEEF1; --bg-surface: #FDF5F7; --bg-card: #FFFBFC; --bg-pop: #FFFDFE; --text-main: #3A2229; --text-muted: #6E4A55; --text-faint: #A3828C; --accent: #BF4D6D; --accent-text: #A83357; --on-accent: #FFFFFF; --teal: #BA7589; --violet: #9B7BB8; }
+:is(:root, .theme-swatch)[data-palette="jacaranda"] { --bg-void: #E6E1F2; --bg-base: #EFEBF8; --bg-surface: #F6F3FC; --bg-card: #FCFBFF; --bg-pop: #FEFDFF; --text-main: #241D3B; --text-muted: #544C6E; --text-faint: #8A83A3; --accent: #7B5CC9; --accent-text: #5E41A8; --on-accent: #FFFFFF; --teal: #579287; --violet: #A574BB; }
+:is(:root, .theme-swatch)[data-palette="glacier"] { --bg-void: #DEE4EC; --bg-base: #E9EEF4; --bg-surface: #F2F5F9; --bg-card: #FAFCFE; --bg-pop: #FDFEFF; --text-main: #1C2836; --text-muted: #4A5A6E; --text-faint: #7E8DA0; --accent: #3E7AA9; --accent-text: #2C5F88; --on-accent: #FFFFFF; --teal: #4A929C; --violet: #7486B7; }
+:is(:root, .theme-swatch)[data-palette="dusk"] { --bg-void: #1A2828; --bg-base: #243636; --bg-surface: #2C4141; --bg-card: #334A4A; --bg-pop: #3A5353; --text-main: #F3ECE9; --text-muted: #C6CDBE; --text-faint: #919985; --accent: #FFC8C7; --accent-text: #FFC8C7; --on-accent: #243636; --teal: #CBE0CC; --violet: #D5ADA5; }
+:is(:root, .theme-swatch)[data-palette="tide"] { --bg-void: #06121D; --bg-base: #0A1826; --bg-surface: #102233; --bg-card: #14293D; --bg-pop: #193047; --text-main: #E6F1F8; --text-muted: #9DB4C6; --text-faint: #6D8699; --accent: #3CC4C0; --accent-text: #7FDCD9; --on-accent: #04201F; --teal: #5FA8E8; --violet: #9C9CF0; }
+:is(:root, .theme-swatch)[data-palette="ember"] { --bg-void: #120D0B; --bg-base: #18120F; --bg-surface: #221A16; --bg-card: #2A201B; --bg-pop: #322620; --text-main: #F5EBE3; --text-muted: #C2AFA2; --text-faint: #8C7A6E; --accent: #F2A541; --accent-text: #F7C27A; --on-accent: #2A1703; --teal: #E07A5F; --violet: #D9A6A0; }
+:is(:root, .theme-swatch)[data-palette="moss"] { --bg-void: #0B110D; --bg-base: #0F1712; --bg-surface: #16211A; --bg-card: #1B2820; --bg-pop: #213026; --text-main: #E8F0E9; --text-muted: #A8B8AC; --text-faint: #748779; --accent: #8FD07A; --accent-text: #B2E2A1; --on-accent: #11240B; --teal: #5FBFA3; --violet: #C9C27A; }
+:is(:root, .theme-swatch)[data-palette="neon"] { --bg-void: #0E0818; --bg-base: #140B22; --bg-surface: #1D1130; --bg-card: #24163A; --bg-pop: #2B1B44; --text-main: #F4EEFF; --text-muted: #B9A9D6; --text-faint: #8473A6; --accent: #FF4FA0; --accent-text: #FF8CC2; --on-accent: #2A0418; --teal: #4FE3E8; --violet: #B48CFF; }
+:is(:root, .theme-swatch)[data-palette="graphite"] { --bg-void: #000000; --bg-base: #0A0A0A; --bg-surface: #141414; --bg-card: #1B1B1B; --bg-pop: #232323; --text-main: #F2F2F2; --text-muted: #ABABAB; --text-faint: #7A7A7A; --accent: #E6E6E6; --accent-text: #FFFFFF; --on-accent: #111111; --teal: #9E9E9E; --violet: #C8C8C8; }
+/* Original's swatch shows both of its bases, since it follows Auto, Light or Dark. */
+.theme-swatch[data-palette="original"] { --bg-base: linear-gradient(135deg, #090A0F 50%, #EEF0F5 50%); --bg-card: #181B24; --text-main: #F1F5F9; --accent: #575AF0; --teal: #2DD4BF; --violet: #A78BFA; }
+
 /* Text follows the system font size: sizes are in rem (1rem = 16px at the default 100%). */
 html { font-size: 100%; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; }
@@ -243,7 +270,7 @@ button.row:active, a.row:active { transform: scale(0.97); background: var(--fill
 .switch .track { position: absolute; inset: 0; border-radius: 16px; background: var(--fill-strong); border: 1px solid var(--border-strong); transition: var(--transition-smooth); }
 .switch .knob { position: absolute; top: 4px; left: 4px; width: 22px; height: 22px; border-radius: 50%; background: var(--knob); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); transition: transform 0.2s var(--spring); }
 .switch input:checked ~ .track { background: var(--accent); border-color: transparent; }
-.switch input:checked ~ .knob { transform: translateX(20px); background: #fff; }
+.switch input:checked ~ .knob { transform: translateX(20px); background: var(--on-accent); }
 .switch input:active ~ .knob { transform: scale(0.94); }
 .switch input:checked:active ~ .knob { transform: translateX(20px) scale(0.94); }
 .switch input:focus-visible ~ .track { outline: 2px solid var(--border-focus); outline-offset: 2px; box-shadow: 0 0 0 5px var(--accent-glow); }
@@ -717,8 +744,8 @@ button.tile-card:active { transform: scale(0.97); background: var(--bg-card); }
 .demo-pill button::before { content: ""; position: absolute; inset: -6px -2px; }
 .demo-pill button:active { transform: scale(0.97); opacity: 0.8; }
 .demo-edit { padding: 0 6px 0 14px; border-radius: 16px 0 0 16px; }
-.demo-exit { width: 32px; justify-content: center; border-radius: 0 16px 16px 0; border-left: 1px solid rgba(255, 255, 255, 0.28) !important; }
-.demo-dot { width: 7px; height: 7px; border-radius: 50%; background: #fff; }
+.demo-exit { width: 32px; justify-content: center; border-radius: 0 16px 16px 0; border-left: 1px solid color-mix(in srgb, var(--on-accent) 28%, transparent) !important; }
+.demo-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--on-accent); }
 .opt-group { margin-bottom: 24px; }
 .opt-group > p { font-size: 0.8125rem; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
 .opt-chips { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -764,7 +791,7 @@ button.tile-card:active { transform: scale(0.97); background: var(--bg-card); }
 .nav-stack { display: flex; flex-direction: column; gap: 8px; }
 .nav-stack:empty { display: none; }
 .nav-banner { display: flex; gap: 16px; align-items: center; padding: 16px; }
-.nav-icon { --tone: var(--accent); width: 60px; height: 60px; border-radius: 18px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--tone); color: #fff; }
+.nav-icon { --tone: var(--accent); width: 60px; height: 60px; border-radius: 18px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: var(--tone); color: var(--on-accent); }
 .nav-icon.done { --tone: var(--success); color: var(--on-success); }
 .nav-text { min-width: 0; flex: 1; }
 .nav-dist { display: block; font-size: 1.625rem; font-weight: 600; letter-spacing: -0.03em; line-height: 1.15; font-variant-numeric: tabular-nums; }
@@ -820,7 +847,7 @@ button.tile-card:active { transform: scale(0.97); background: var(--bg-card); }
 .interactive-element.primary:focus-visible { box-shadow: 0 0 0 3px var(--bg-base), 0 0 0 5px var(--border-focus); }
 @media (hover: hover) { .interactive-element.primary:hover { background: var(--accent); filter: brightness(1.08); } }
 .trip-btn { width: 100%; justify-content: flex-start; gap: 16px; min-height: 84px; padding: 18px 20px; border-radius: 20px; margin-bottom: 12px; text-align: left; box-shadow: 0 12px 32px color-mix(in srgb, var(--accent) 34%, transparent); }
-.trip-icon { width: 48px; height: 48px; border-radius: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.18); }
+.trip-icon { width: 48px; height: 48px; border-radius: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--on-accent) 18%, transparent); }
 .trip-text { min-width: 0; }
 .trip-text strong { display: block; font-size: 1.1875rem; font-weight: 600; letter-spacing: -0.02em; }
 .trip-text small { display: block; font-size: 0.8125rem; font-weight: 400; margin-top: 2px; line-height: 1.4; }
@@ -936,6 +963,27 @@ button.tile-card:active { transform: scale(0.97); background: var(--bg-card); }
 
 /* Saved place editor opens above the Settings panel */
 .sheet-backdrop.above-settings { z-index: 65; }
+
+/* Themes sheet: a 4 x 4 grid of palette swatches. --ring and --ring-gap resolve on the tile, so the selected ring uses the current theme, not the swatch's. */
+.theme-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px 12px; margin-bottom: 24px; }
+html[data-text="large"] .theme-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.theme-tile { --ring: var(--accent-text); --ring-gap: var(--bg-surface); display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; padding: 0; border: none; border-radius: 18px; background: none; color: var(--text-muted); }
+.theme-swatch {
+  display: flex; flex-direction: column; justify-content: space-between; width: 100%; aspect-ratio: 1; padding: 10px; border-radius: 16px; background: var(--bg-base);
+  box-shadow: inset 0 0 0 1px var(--border-strong); transition: var(--transition-smooth);
+}
+.sw-dots { display: flex; gap: 4px; }
+.sw-dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+.sw-dots i:nth-child(2) { background: var(--teal); }
+.sw-dots i:nth-child(3) { background: var(--violet); }
+.sw-card { display: flex; flex-direction: column; gap: 4px; padding: 6px; border-radius: 8px; background: var(--bg-card); }
+.sw-card i { height: 4px; width: 70%; border-radius: 2px; background: var(--text-main); opacity: 0.8; }
+.sw-card i + i { height: 8px; width: 45%; border-radius: 4px; background: var(--accent); opacity: 1; }
+.theme-name { max-width: 100%; font-size: 0.75rem; font-weight: 500; line-height: 1.3; text-align: center; overflow-wrap: anywhere; }
+.theme-tile[aria-pressed="true"] { color: var(--text-main); }
+.theme-tile[aria-pressed="true"] .theme-name { font-weight: 600; }
+.theme-tile[aria-pressed="true"] .theme-swatch { box-shadow: inset 0 0 0 1px var(--border-strong), 0 0 0 2px var(--ring-gap), 0 0 0 4px var(--ring); }
+.theme-tile:active .theme-swatch { transform: scale(0.97); }
 .delete-btn { color: var(--error-text); }
 .delete-btn.confirm { background: var(--error); color: var(--on-error); border-color: transparent; }
 button.row:disabled { opacity: 0.45; cursor: default; }
@@ -1297,6 +1345,7 @@ html[data-text="large"] .wx-main, html[data-text="large"] .wx-head { flex-wrap: 
 @media (prefers-contrast: more) {
   :root { --text-muted: #CBD5E1; --text-faint: #A8B3C5; --border-subtle: rgba(255, 255, 255, 0.28); --border-strong: rgba(255, 255, 255, 0.5); }
   :root[data-theme="light"] { --text-muted: #3F485B; --text-faint: #566075; --border-subtle: rgba(15, 18, 34, 0.4); --border-strong: rgba(15, 18, 34, 0.65); }
+  :root[data-palette]:not([data-palette="original"]) { --text-muted: color-mix(in srgb, var(--text-main) 82%, var(--bg-base)); --text-faint: color-mix(in srgb, var(--text-main) 66%, var(--bg-base)); --border-subtle: color-mix(in srgb, var(--text-main) 35%, transparent); --border-strong: color-mix(in srgb, var(--text-main) 60%, transparent); }
 }
 @media (forced-colors: active) {
   :focus-visible { outline: 2px solid Highlight; }

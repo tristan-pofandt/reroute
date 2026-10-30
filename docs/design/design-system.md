@@ -31,6 +31,8 @@ Let's fine-tune the layout using visual diagnostic dials. Please adjust the curr
 - Text Muted (`--text-muted`): #94A3B8
 - Accent Core (`--accent`): #6366F1
 
+These are the Original palette's dark values. Settings, Themes offers 15 more palettes that override the same tokens; see [the themes log](../product/reroute-themes-log-2026-10-30.md) and the palette rules in `apps/plan-b-mvp/app.css`.
+
 ## Typography & Spacing (Airiness Dial: High)
 - Font Family: Inter, -apple-system, BlinkMacSystemFont, sans-serif
 - Base Letter Spacing: -0.01em

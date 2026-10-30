@@ -18,8 +18,12 @@
     // Apply the saved theme before first paint (default Dark) so there is no flash. app.js keeps the same rules in applyTheme().
     try {
       const saved = JSON.parse(localStorage.getItem("planb.settings") || "{}");
-      const theme = saved.theme === "light" || (saved.theme === "system" && !matchMedia("(prefers-color-scheme: dark)").matches) ? "light" : "dark";
+      // A palette other than Original fixes its own base; keep this list in step with the dark entries of PALETTES in app.js.
+      const palette = saved.palette && saved.palette !== "original" ? saved.palette : "";
+      const theme = palette ? (["dusk", "tide", "ember", "moss", "neon", "graphite"].includes(palette) ? "dark" : "light")
+        : saved.theme === "light" || (saved.theme === "system" && !matchMedia("(prefers-color-scheme: dark)").matches) ? "light" : "dark";
       document.documentElement.dataset.theme = theme;
+      if (palette) document.documentElement.dataset.palette = palette;
       document.querySelector('meta[name="theme-color"]').content = theme === "light" ? "#EEF0F5" : "#090A0F";
       if (saved.motion === "reduced") document.documentElement.dataset.motion = "reduced";
     } catch { document.documentElement.dataset.theme = "dark"; }
