@@ -3,7 +3,7 @@
 #   docker build -f infra/plan-b-mvp/Dockerfile -t plan-b-mvp .
 #   docker run --rm -p 8000:8000 -e MAPS_API_KEY=... plan-b-mvp
 # Stage 1: build the React shell (apps/plan-b-mvp/web) into static files. Only web/dist ships from this stage.
-FROM node:22-slim AS web
+FROM node:25-slim AS web
 WORKDIR /web
 COPY apps/plan-b-mvp/web/package.json apps/plan-b-mvp/web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
