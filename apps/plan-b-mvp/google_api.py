@@ -12,11 +12,13 @@ import re
 import threading
 import time
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
 
+from mycelium_emitter import emit, timed
 import usage
 
+_NODE = "file:apps/plan-b-mvp/google_api.py"  # Mycelium map node for this module
 ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes"
 PLACES_NEARBY_URL = "https://places.googleapis.com/v1/places:searchNearby"
 PLACES_AUTOCOMPLETE_URL = "https://places.googleapis.com/v1/places:autocomplete"
@@ -79,6 +81,7 @@ def tracking():
 
 def record_request(api, sku):
     usage.count(api, sku)  # the process-wide daily tally behind /admin/usage
+    emit("cost", _NODE, "external:" + api, usd=PRICES.get((api, sku), 0) / 1000, api=api, sku=sku)
     tracker = _tracker.get()
     if tracker:
         tracker.record(api, sku)
@@ -118,13 +121,13 @@ def _post_json(url, key, body, field_mask, timeout=18):
     request = Request(url, data=json.dumps(body).encode("utf-8"), headers={
         "Content-Type": "application/json", "X-Goog-Api-Key": key, "X-Goog-FieldMask": field_mask,
     }, method="POST")
-    with urlopen(request, timeout=timeout) as response:
+    with timed("external", _NODE, "external:" + str(urlsplit(url).hostname)), urlopen(request, timeout=timeout) as response:
         return json.load(response)
 
 
 def _get_json(url, timeout=15, headers=None):
     request = Request(url, headers={"User-Agent": "Reroute-student-MVP", **(headers or {})})
-    with urlopen(request, timeout=timeout) as response:
+    with timed("external", _NODE, "external:" + str(urlsplit(url).hostname)), urlopen(request, timeout=timeout) as response:
         return json.load(response)
 
 

@@ -34,6 +34,7 @@ from osm import OSM, OverpassBusy, OverpassError
 import push_native
 from push import Push, PushError
 from moderation import actor_id, init_moderation
+from mycelium_emitter import init_telemetry
 from rides import Board, RateLimited, RideError
 from security import init_security
 from traffic import Traffic
@@ -653,6 +654,7 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
 
     app.config["PLANB_VERSION"] = VERSION
     init_ops(app, app.extensions["planb"])  # /healthz, /readyz, /admin/usage, optional Sentry (ops.py)
+    init_telemetry(app)  # Mycelium metadata events; off unless MYCELIUM_URL and MYCELIUM_KEY are set (mycelium_emitter.py)
     init_admin_api(app, app.extensions["planb"], acct)  # /admin/api/*: runtime switches, caps and session revocation (admin_api.py)
 
     @app.errorhandler(500)

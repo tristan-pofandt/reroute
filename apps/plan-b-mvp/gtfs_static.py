@@ -25,6 +25,7 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from gtfs_rt import line_keys, train_codes, train_key_matches
+from mycelium_emitter import emit, timed
 from offline_area import clip_runs, flat, simplify
 
 URL = "https://gtfsrt.api.translink.com.au/GTFS/SEQ_GTFS.zip"
@@ -198,6 +199,7 @@ class Static:
         if self.data is None and path.exists():
             try:
                 self._install(json.loads(path.read_text(encoding="utf-8")))
+                emit("read", "file:apps/plan-b-mvp/gtfs_static.py", "store:data/gtfs/index.json")
             except (OSError, ValueError, KeyError):
                 pass
         if self.data is not None and self._clock() - self.data["built_at"] < MAX_AGE:
@@ -208,7 +210,7 @@ class Static:
         self.directory.mkdir(parents=True, exist_ok=True)
         part = self.directory / (ARCHIVE + ".part")
         try:
-            with self._open(self.url) as response, open(part, "wb") as out:
+            with timed("external", "file:apps/plan-b-mvp/gtfs_static.py", "external:translink-gtfs"), self._open(self.url) as response, open(part, "wb") as out:
                 while True:
                     chunk = response.read(1 << 20)
                     if not chunk:
@@ -226,6 +228,7 @@ class Static:
         temporary = path.with_suffix(".tmp")
         temporary.write_text(json.dumps(index, separators=(",", ":")), encoding="utf-8")
         temporary.replace(path)
+        emit("write", "file:apps/plan-b-mvp/gtfs_static.py", "store:data/gtfs/index.json")
         self._install(index)
 
     @staticmethod
