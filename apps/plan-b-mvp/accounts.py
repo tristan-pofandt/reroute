@@ -33,6 +33,7 @@ from joserfc.errors import JoseError
 from joserfc.jwk import ECKey, KeySet
 import requests
 
+from mycelium_emitter import timed, watch_sqlite
 import site_config
 
 log = logging.getLogger("planb.accounts")
@@ -139,19 +140,22 @@ class Http:
     timeout = 10
 
     def get_json(self, url):
-        reply = requests.get(url, timeout=self.timeout)
+        with timed("external", "file:apps/plan-b-mvp/accounts.py", "external:" + str(urlsplit(url).hostname)):
+            reply = requests.get(url, timeout=self.timeout)
         reply.raise_for_status()
         return reply.json()
 
     def exchange(self, token_url, client_id, client_secret, code, verifier, redirect_uri):
         session = OAuth2Session(client_id, client_secret, token_endpoint_auth_method="client_secret_post", redirect_uri=redirect_uri or None)
         try:
-            return dict(session.fetch_token(token_url, code=code, timeout=self.timeout, **({"code_verifier": verifier} if verifier else {})))
+            with timed("external", "file:apps/plan-b-mvp/accounts.py", "external:" + str(urlsplit(token_url).hostname)):
+                return dict(session.fetch_token(token_url, code=code, timeout=self.timeout, **({"code_verifier": verifier} if verifier else {})))
         finally:
             session.close()
 
     def revoke(self, url, data):
-        reply = requests.post(url, data=data, timeout=self.timeout)
+        with timed("external", "file:apps/plan-b-mvp/accounts.py", "external:" + str(urlsplit(url).hostname)):
+            reply = requests.post(url, data=data, timeout=self.timeout)
         return reply.status_code == 200
 
 
@@ -305,7 +309,7 @@ class Accounts:
         conn = sqlite3.connect(self.path, timeout=10)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
-        return conn
+        return watch_sqlite(conn, "file:apps/plan-b-mvp/accounts.py", "store:data/accounts.db")
 
     def _migrate(self):
         with closing(self.db()) as conn, conn:

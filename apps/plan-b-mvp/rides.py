@@ -23,6 +23,7 @@ import urllib.request
 from contentfilter import ContentFilter
 from google_api import metres
 from limits import RateLimiter
+from mycelium_emitter import timed, watch_sqlite
 
 MATCH_START_M = 2000
 MATCH_END_M = 2500
@@ -44,7 +45,7 @@ def deliver_alert(url, payload):
         if not url.startswith(("https://", "http://")):
             raise ValueError("PLANB_ALERT_WEBHOOK must be an http(s) URL")
         request = urllib.request.Request(url, json.dumps(payload).encode(), {"Content-Type": "application/json", "User-Agent": "reroute-alert"})
-        with urllib.request.urlopen(request, timeout=5):  # nosec: the URL is operator configuration
+        with timed("external", "file:apps/plan-b-mvp/rides.py", "external:alert-webhook"), urllib.request.urlopen(request, timeout=5):  # nosec: the URL is operator configuration
             pass
     except Exception as error:  # a slow or wrong webhook only costs the notification
         log.warning("moderation alert webhook failed: %s", type(error).__name__)
@@ -117,7 +118,7 @@ class Board:
         db = sqlite3.connect(self._file or ":memory:", check_same_thread=False, isolation_level=None)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA busy_timeout = 5000")
-        return db
+        return watch_sqlite(db, "file:apps/plan-b-mvp/rides.py", "store:data/rides.sqlite3")
 
     @contextmanager
     def _cx(self):

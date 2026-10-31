@@ -21,6 +21,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from limits import DailyCap
+from mycelium_emitter import emit, timed
 from offline_area import KM_PER_DEGREE, clip_runs, flat, inside, simplify
 
 URLS = ("https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter")
@@ -408,7 +409,7 @@ class OSM:
         body = urlencode({"data": text}).encode("ascii")
         request = Request(url, data=body, headers={"User-Agent": "Reroute-student-MVP (offline area download)",
                                                    "Content-Type": "application/x-www-form-urlencoded"})
-        with urlopen(request, timeout=HTTP_TIMEOUT) as response:
+        with timed("external", "file:apps/plan-b-mvp/osm.py", "external:overpass"), urlopen(request, timeout=HTTP_TIMEOUT) as response:
             return json.load(response)
 
     def _path(self, bbox):
@@ -419,6 +420,7 @@ class OSM:
         path = self._path(bbox)
         try:
             if self._clock() - path.stat().st_mtime < CACHE_SECONDS:
+                emit("read", "file:apps/plan-b-mvp/osm.py", "store:data/offline/osm_*.json")  # one node for the whole cache: the bbox in the file name is a location
                 return path.read_bytes()
         except OSError:
             pass
@@ -457,6 +459,7 @@ class OSM:
             temporary = path.with_suffix(".tmp")
             temporary.write_bytes(text)
             temporary.replace(path)
+            emit("write", "file:apps/plan-b-mvp/osm.py", "store:data/offline/osm_*.json", bytes=len(text))
             cached = sorted(self.directory.glob("osm_*.json"), key=lambda item: item.stat().st_mtime, reverse=True)
             for old in cached[CACHE_FILES:]:
                 old.unlink(missing_ok=True)

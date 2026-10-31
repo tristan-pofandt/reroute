@@ -9,8 +9,10 @@ import json
 import threading
 import time
 from urllib.error import URLError
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
+
+from mycelium_emitter import timed
 
 URL = "https://api.open-meteo.com/v1/forecast"
 CACHE_SECONDS = 600
@@ -283,7 +285,7 @@ class Weather:
     @staticmethod
     def _download(url):
         request = Request(url, headers={"User-Agent": "Reroute-student-MVP"})
-        with urlopen(request, timeout=10) as response:
+        with timed("external", "file:apps/plan-b-mvp/weather.py", "external:" + str(urlsplit(url).hostname)), urlopen(request, timeout=10) as response:
             return json.load(response)
 
     def raw(self, lat, lng, force=False):

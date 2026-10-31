@@ -20,6 +20,7 @@ import time
 from urllib.parse import urlsplit
 
 from gtfs_rt import FeedError, line_keys, train_codes, train_key_matches
+from mycelium_emitter import emit
 import push_native
 
 CHECK_EVERY = 60
@@ -176,6 +177,7 @@ class Push:
         path = self.directory / "vapid.json"
         try:
             stored = json.loads(path.read_text(encoding="utf-8"))
+            emit("read", "file:apps/plan-b-mvp/push.py", "store:data/vapid.json")  # the name only; the keys never leave
             self.private_key, self.public_key = stored["private"], stored["public"]
             return
         except (OSError, ValueError, KeyError):
@@ -184,6 +186,7 @@ class Push:
             private, public = generate_keys()
             self.directory.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps({"private": private, "public": public}), encoding="utf-8")
+            emit("write", "file:apps/plan-b-mvp/push.py", "store:data/vapid.json")
             self.private_key, self.public_key = private, public
         except (ImportError, OSError):
             self.private_key = self.public_key = None
@@ -196,7 +199,9 @@ class Push:
 
     def _read(self):
         try:
-            return json.loads((self.directory / "push.json").read_text(encoding="utf-8"))
+            data = json.loads((self.directory / "push.json").read_text(encoding="utf-8"))
+            emit("read", "file:apps/plan-b-mvp/push.py", "store:data/push.json")
+            return data
         except (OSError, ValueError):
             return {}
 
@@ -206,6 +211,7 @@ class Push:
             temporary = self.directory / "push.json.tmp"
             temporary.write_text(json.dumps(self._subscriptions), encoding="utf-8")
             temporary.replace(self.directory / "push.json")
+            emit("write", "file:apps/plan-b-mvp/push.py", "store:data/push.json")
         except OSError:
             pass
 
