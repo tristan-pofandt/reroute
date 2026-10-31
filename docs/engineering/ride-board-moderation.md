@@ -56,6 +56,16 @@ curl -H "Authorization: Bearer $PLANB_ADMIN_TOKEN" -H "Content-Type: application
      -d '{"action":"remove","id":"5439456f"}' https://HOST/admin/moderation/action
 ```
 
+## Admin JSON API (switches, caps, sessions)
+
+`admin_api.py`, for an operator dashboard such as Mycelium. Same rule as `/admin/usage`: off (404) unless `PLANB_ADMIN_TOKEN` is set, and a wrong token also gets 404. Bearer token only, JSON only.
+
+- `GET /admin/api/settings`: `{"rides", "signin", "accounts", "caps": {"plan": {"limit", "used_today"}, "autocomplete": {...}}}`.
+- `POST /admin/api/settings` with any of `{"rides": bool, "signin": bool, "caps": {"plan": n, "autocomplete": n}}` (caps 0 to 100000, 0 means no cap). Everything is validated before anything changes. Ride board off works like `PLANB_RIDES=0`; sign-in off refuses new web and native sign-ins (503 or the "disabled" error) while existing sessions keep working.
+- `POST /admin/api/sessions/revoke` with `{"user_id": "u_..."}` signs one user out everywhere; `{}` signs out everyone. Returns `{"revoked": n}`.
+
+Changes last until the process restarts; the `PLANB_*` variables stay the defaults. Test: `python -m unittest test_admin_api`.
+
 ## Auto-hide alert
 
 When the third distinct report hides a post, `rides.py` writes `ride board post <id> auto-hidden after 3 reports (harassment x2, scam x1); review it at /admin/moderation` at WARNING level (logger `planb.rides`). If the environment variable `PLANB_ALERT_WEBHOOK` is an `http(s)` URL, a daemon thread also POSTs JSON `{"text", "content", "post_id", "reports", "reasons"}` to it with a 5 second timeout (`text` is read by Slack, `content` by Discord; an ntfy topic URL shows the body). Only the post id, the count and the reason codes are sent: no nickname, note, poster id or reporter id. Failures are logged and ignored. Treat the webhook URL as a secret (set it as a host secret, never in the repo). Test: `python -m unittest test_moderation`.

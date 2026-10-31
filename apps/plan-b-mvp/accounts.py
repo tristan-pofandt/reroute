@@ -248,6 +248,7 @@ class Accounts:
         self.providers, self.fake = {}, False
         self.secret = self._secret(env.get("ACCOUNTS_SECRET_KEY", ""))
         self.enabled = self.secret is not None
+        self.signin_paused = False  # switched at runtime by the admin API (admin_api.py); existing sessions keep working
         self._seen, self._seen_lock = {}, threading.Lock()
         self.on_delete = []  # callables(user_id) run after an account is deleted (e.g. native push tokens)
         if not self.enabled:
@@ -350,6 +351,12 @@ class Accounts:
             if renewed:
                 conn.execute("UPDATE sessions SET last_seen = ?, expires_at = ? WHERE id_hash = ?", (now, now + SESSION_DAYS * 86400, key))
         return dict(row), renewed
+
+    def revoke_sessions(self, user_id=None):
+        """Sign out one user everywhere, or everyone when user_id is None. Returns how many sessions ended."""
+        with closing(self.db()) as conn, conn:
+            cursor = conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,)) if user_id else conn.execute("DELETE FROM sessions")
+            return cursor.rowcount
 
     # ── Users ───────────────────────────────────────────────────────────────
 
@@ -642,7 +649,7 @@ def blueprint(acct, limits=None):
     @bp.get("/auth/<name>/login")
     def start(name):
         next_path = safe_next(request.args.get("next", "/"))
-        if not acct.web_ready(name):
+        if not acct.web_ready(name) or acct.signin_paused:
             return back(next_path, auth_error="disabled")
         blocked = limited("auth")
         if blocked:
@@ -727,6 +734,8 @@ def blueprint(acct, limits=None):
     def native(name):
         if not acct.native_ready(name):
             return fail("This sign-in is not available.", 404)
+        if acct.signin_paused:
+            return fail("Sign-in is paused. Try again later.", 503)
         blocked = limited("native")
         if blocked:
             return blocked

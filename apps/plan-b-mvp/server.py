@@ -27,6 +27,7 @@ from gtfs_static import NotReady, Static
 from limits import DailyCap, RateLimiter, is_loopback
 from live_routes import BRISBANE, PLACE_ID, InputError, Services, live, plan
 import offline_area
+from admin_api import init_admin_api
 from ops import init_ops
 from offline_area import AreaError, Jobs, Pending, parse_bbox, parse_days
 from osm import OSM, OverpassBusy, OverpassError
@@ -159,8 +160,8 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
     push = push if push is not None else Push(data, monitor)
     osm = osm if osm is not None else OSM(data / "offline")
     services = services or Services(monitor=monitor, board=board, static=static, weather=weather, traffic=traffic)
-    rides_on = os.getenv("PLANB_RIDES", "").strip().lower() not in ("0", "false", "off")  # off: no public ride board, moderation still works
-    if not rides_on:
+    switches = {"rides": os.getenv("PLANB_RIDES", "").strip().lower() not in ("0", "false", "off")}  # off: no public ride board, moderation still works; admin_api.py flips it at runtime
+    if not switches["rides"]:
         services.board = None  # plan answers then carry no ride matches
     public_url = public_url if public_url is not None else (os.getenv("PUBLIC_URL") or "").strip().rstrip("/") or None
     limiter = RateLimiter(clock)
@@ -182,7 +183,7 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
     if trusted:
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=trusted, x_proto=trusted, x_host=trusted)
     app.extensions["planb"] = {"key": key, "monitor": monitor, "board": board, "static": static, "weather": weather, "traffic": traffic,
-                               "push": push, "services": services, "limiter": limiter, "caps": caps, "osm": osm, "jobs": jobs}
+                               "push": push, "services": services, "limiter": limiter, "caps": caps, "osm": osm, "jobs": jobs, "switches": switches}
     app.config["PLANB_KEY_SOURCE"] = key_source
 
     # ── Helpers ────────────────────────────────────────────────────────────
@@ -351,7 +352,7 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
             "departure": (now + timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M"),
             "deadline": (now + timedelta(minutes=65)).strftime("%Y-%m-%dT%H:%M"),
             "fuel_types": google_api.FUEL_TYPES,
-            "rides": rides_on, "push": push.ready(), "gtfs_static": static.status(), "public_url": public_url, "version": VERSION,
+            "rides": switches["rides"], "push": push.ready(), "gtfs_static": static.status(), "public_url": public_url, "version": VERSION,
             "offline_limits": offline_area.limits(), "offline_transit": static.offline_status(),
         })
 
@@ -566,7 +567,7 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
 
     @app.before_request
     def rides_switch():
-        if not rides_on and request.path.startswith("/api/rides"):
+        if not switches["rides"] and request.path.startswith("/api/rides"):
             return failure("Shared rides are switched off.", 404)
 
     @app.post("/api/rides")
@@ -654,6 +655,7 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
     app.config["PLANB_VERSION"] = VERSION
     init_ops(app, app.extensions["planb"])  # /healthz, /readyz, /admin/usage, optional Sentry (ops.py)
     init_telemetry(app)  # Mycelium metadata events; off unless MYCELIUM_URL and MYCELIUM_KEY are set (mycelium_emitter.py)
+    init_admin_api(app, app.extensions["planb"], acct)  # /admin/api/*: runtime switches, caps and session revocation (admin_api.py)
 
     @app.errorhandler(500)
     def server_error(error):
