@@ -60,6 +60,11 @@ class DailyCap:
             self.count += 1
             return True
 
+    def used(self):
+        """Requests counted so far today."""
+        with self._lock:
+            return self.count if self._day == self._today() else 0
+
 
 def is_loopback(address):
     try:
