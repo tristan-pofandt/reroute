@@ -10,6 +10,7 @@ import tempfile
 import time
 import unittest
 import zipfile
+from datetime import datetime
 
 import gtfs_static
 from gtfs_static import Static, build_index
@@ -209,6 +210,45 @@ class MatchingTests(unittest.TestCase):
     def test_ferry_matches_by_name_and_vehicle_type(self):
         match = self.static.match_transit("F1", "", "ferry", None, [-27.4980, 153.0230], [-27.4400, 153.0700])
         self.assertEqual((match["route_ids"], match["colour"]), (["F1-5204"], "#61C5C9"))
+
+
+CALENDAR = """service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date
+s,1,1,1,1,1,1,1,20260101,20271231
+"""
+DAY = datetime(2026, 11, 3, tzinfo=gtfs_static.BRISBANE).timestamp()  # a Tuesday, Brisbane midnight
+
+
+class TimetableTests(unittest.TestCase):
+    def static(self, **files):
+        return ready_static(content=make_zip(**{"calendar.txt": CALENDAR, **files}))
+
+    def test_ensure_builds_the_timetable_and_departures_need_the_alighting_stop_later_on_the_trip(self):
+        static = self.static()
+        self.assertTrue(static.timetable_ready)
+        found = static.departures(["1683"], ["1951"], DAY + 7 * 3600, DAY + 9 * 3600)
+        self.assertEqual([(item["trip_id"], item["departs"], item["arrives"]) for item in found], [("t412", DAY + 8 * 3600, DAY + 8 * 3600 + 600)])
+        self.assertEqual(static.departures(["1951"], ["1683"], DAY, DAY + 86400), [])  # wrong direction
+        self.assertEqual(static.departures(["1683"], ["1951"], DAY + 8 * 3600 + 60, DAY + 9 * 3600), [])  # already left
+
+    def test_calendar_exceptions_remove_a_day(self):
+        static = self.static(**{"calendar_dates.txt": "service_id,date,exception_type\ns,20261103,2\n"})
+        self.assertEqual(static.departures(["1683"], ["1951"], DAY, DAY + 86400), [])
+        self.assertEqual(len(static.departures(["1683"], ["1951"], DAY + 86400, DAY + 2 * 86400)), 1)
+
+    def test_step_trip_matches_the_line_across_route_id_versions_and_lists_the_stops(self):
+        trip = self.static().step_trip(["412-4"], ["1683"], ["1951"], DAY + 8 * 3600 + 240)
+        self.assertEqual(trip["trip_id"], "t412")
+        self.assertEqual([(call["stop_id"], call["time"]) for call in trip["calls"]], [("1683", DAY + 8 * 3600), ("1951", DAY + 8 * 3600 + 600)])
+        self.assertIsNone(self.static().step_trip(["66-5146"], ["1683"], ["1951"], DAY + 8 * 3600))
+
+    def test_departures_endpoint_leaves_out_the_steps_own_trip_and_has_the_route_name(self):
+        from live_routes import Services, departures
+        services = Services(static=self.static())
+        query = {"route_ids": ["412-5146"], "stop_ids": ["1683"], "arr_stop_ids": ["1951"], "trip_id": None, "names": ["412"]}
+        now = datetime.fromtimestamp(DAY + 7 * 3600, gtfs_static.BRISBANE)
+        listed = departures({"query": query, "limit": 4}, services, now)["departures"]
+        self.assertEqual([(item["line"], item["headsign"], item["colour"], item["label"]) for item in listed], [("412", "UQ Lakes station", "#E463A4", "No live data")])
+        self.assertEqual(departures({"query": {**query, "trip_id": "t412"}}, services, now)["departures"], [])
 
 
 if __name__ == "__main__":

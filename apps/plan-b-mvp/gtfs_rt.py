@@ -616,3 +616,21 @@ class Monitor:
 
     def realtime_for(self, query):
         return self.step_status(query)["realtime"]
+
+    def trip_times(self, trip_ids, stop_ids):
+        """{trip_id: realtime object plus "departs" (predicted time at one of `stop_ids`)} for the trips the feed has. Never raises."""
+        wanted, stops = set(trip_ids), set(stop_ids)
+        try:
+            trips = self.trip_updates()
+        except FeedError:
+            return {}
+        result = {}
+        for trip in trips:
+            if trip["trip_id"] not in wanted:
+                continue
+            stop = stop_event(trip, stops)
+            delay = stop_delay(stop)[1] if stop and stop_delay(stop)[1] is not None else trip["delay"]
+            cancelled = trip["cancelled"] or bool(stop and stop["skipped"])
+            status, minutes = ("cancelled", None) if cancelled else delay_status(delay)
+            result[trip["trip_id"]] = {**realtime_object(status, minutes), "departs": _iso(stop_time(stop)) if stop and not cancelled else None}
+        return result

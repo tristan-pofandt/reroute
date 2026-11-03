@@ -16,7 +16,7 @@ from urllib.parse import urlencode
 import demo_mode
 import google_api
 from google_api import RoutesError, ServiceError, decode_polyline, metres
-from gtfs_rt import delay_status, line_keys, realtime_object
+from gtfs_rt import delay_status, line_keys, realtime_object, route_key
 import nav
 import traffic as traffic_mod
 import weather as weather_mod
@@ -760,6 +760,12 @@ def _plan(payload, key, services, now, demo):
                     item["trip_id"] = query["trip_id"] = trip_id
                 item["realtime"] = status["realtime"]
                 statuses.append(status)
+            trip = services.static.step_trip(item["route_ids"], query["stop_ids"], query["arr_stop_ids"], query["scheduled"], query["trip_id"]) \
+                if match and hasattr(services.static, "step_trip") else None
+            if trip:
+                # The step's stops from boarding to alighting (dots on the map, "Ride N stops"); the timetable trip id lets /api/live look it up exactly.
+                item["calls"] = [{"name": call["name"], "lat": call["lat"], "lng": call["lng"], "time": _epoch_iso(call["time"])} for call in trip["calls"]]
+                item["trip_id"] = query["trip_id"] = query["trip_id"] or trip["trip_id"]
         if not services.monitor or not option["lines"]:
             return None
         if statuses:
@@ -985,6 +991,43 @@ def clean_query(value):
             "arr_stop_ids": strings("arr_stop_ids", 12, 40), "trip_id": trip_id or None,
             "scheduled": int(scheduled) if scheduled else None, "names": strings("names", 4, 80), "category": category,
             "line": line, "sim": value.get("sim") is True}
+
+
+def _epoch_iso(epoch):
+    return datetime.fromtimestamp(epoch, BRISBANE).isoformat()
+
+
+DEPARTURES_MAX = 60
+
+
+def departures(payload, services, now=None):
+    """Services from a step's boarding stop that also call at its alighting stops, soonest first, until the end of the day, with live
+    times where the realtime feed has the trip (POST /api/departures). The step's own trip is left out. Never calls Google."""
+    if not isinstance(payload, dict):
+        raise InputError("Send the live query of a transit step.")
+    query = clean_query(payload.get("query"))
+    limit = payload.get("limit", 4)
+    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= DEPARTURES_MAX:
+        raise InputError(f"Ask for between 1 and {DEPARTURES_MAX} departures.")
+    now = now or datetime.now(BRISBANE)
+    static = services.static
+    if not (query["stop_ids"] and query["arr_stop_ids"] and static and hasattr(static, "departures")):
+        return {"departures": [], "more": False, "fetched_at": now.isoformat()}
+    end = datetime(now.year, now.month, now.day, tzinfo=BRISBANE) + timedelta(days=1)
+    until = max(end, now + timedelta(hours=3))  # just before midnight the last services of the night still show
+    found = [item for item in static.departures(query["stop_ids"][:1], query["arr_stop_ids"], now.timestamp() - 60, until.timestamp(), limit + 2)
+             if item["trip_id"] != query["trip_id"]]
+    times = services.monitor.trip_times([item["trip_id"] for item in found], query["stop_ids"][:1]) \
+        if services.monitor and hasattr(services.monitor, "trip_times") else {}
+    result = []
+    for item in found[:limit]:
+        route = static.route(item["route_id"]) or ["", "", None, "", ""]
+        live_time = times.get(item["trip_id"]) or realtime_object()
+        result.append({"trip_id": item["trip_id"], "line": route[0] or route_key(item["route_id"]), "headsign": item["headsign"],
+                       "colour": f"#{route[3]}" if route[3] else None, "text_colour": f"#{route[4]}" if route[4] else None,
+                       "scheduled": _epoch_iso(item["departs"]), "departs": live_time.get("departs") or _epoch_iso(item["departs"]),
+                       "arrives": _epoch_iso(item["arrives"]), "status": live_time["status"], "label": live_time["label"]})
+    return {"departures": result, "more": len(found) > limit, "fetched_at": now.isoformat()}
 
 
 def live(payload, services, now=None):

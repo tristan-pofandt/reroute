@@ -8,9 +8,13 @@ ready, `match_transit` returns None and the planner falls back to keyword matchi
 The zip itself is kept as data/gtfs/SEQ_GTFS.zip (replaced atomically by each new download) so that an
 offline area's timetable can be cut from it later: `area_timetable` streams stop_times.txt once and keeps
 only the stops inside the area and the trips that run on the chosen days (a few seconds for a dense area).
+
+Each download is also copied into data/gtfs/timetable.sqlite3 (every stop time, indexed by stop), so a transit step's stops in between
+and the other departures from its stop until the end of the day are answered in milliseconds.
 """
 
 from collections import Counter, OrderedDict
+from contextlib import closing
 import csv
 import io
 import json
@@ -20,11 +24,12 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 import re
+import sqlite3
 import zipfile
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
-from gtfs_rt import line_keys, train_codes, train_key_matches
+from gtfs_rt import line_keys, route_key, train_codes, train_key_matches
 from mycelium_emitter import emit, timed
 from offline_area import clip_runs, flat, simplify
 
@@ -39,6 +44,9 @@ MAX_ROUTE_IDS = 60
 MAX_STOPS = 8
 DAY_SECONDS = 86400
 ARCHIVE = "SEQ_GTFS.zip"
+TIMETABLE = "timetable.sqlite3"
+TIMETABLE_VERSION = 1
+MATCH_WINDOW = 900  # seconds either side of Google's departure time when looking for a step's timetable trip
 EXTRACT_CACHE = 4  # timetable extracts kept in memory (as JSON bytes, a few MB each)
 SHAPE_TOLERANCE_M = 5
 BRISBANE = timezone(timedelta(hours=10), "AEST")
@@ -118,6 +126,77 @@ def build_index(archive, built_at=None):
             "stop_routes": stop_routes, "headsigns": {route_ids[i]: sorted(signs) for i, signs in headsigns.items()}}
 
 
+TIMETABLE_SCHEMA = """
+    PRAGMA journal_mode = OFF; PRAGMA synchronous = OFF;
+    CREATE TABLE trips (trip INTEGER PRIMARY KEY, trip_id TEXT NOT NULL, route_id TEXT, service_id TEXT, headsign TEXT);
+    CREATE TABLE stops (stop_id TEXT PRIMARY KEY, name TEXT, lat REAL, lng REAL) WITHOUT ROWID;
+    CREATE TABLE calls (trip INTEGER, seq INTEGER, stop_id TEXT, arr INTEGER, dep INTEGER, PRIMARY KEY (trip, seq)) WITHOUT ROWID;
+    CREATE TABLE calendar (service_id TEXT, monday INT, tuesday INT, wednesday INT, thursday INT, friday INT, saturday INT, sunday INT,
+                           start_date TEXT, end_date TEXT);
+    CREATE TABLE calendar_dates (service_id TEXT, date TEXT, kind INT);
+"""
+
+
+def build_timetable(archive, path):
+    """Write a SQLite copy of the timetable to `path`: trips, stops, every stop time and the calendar, indexed for `Static.departures`
+    and `Static.trip_calls`. stop_times.txt is streamed once. It is written to a .part file and moved into place, so readers never see half."""
+    path = Path(path)
+    part = path.with_name(path.name + ".part")
+    part.unlink(missing_ok=True)
+    db = sqlite3.connect(part)
+    try:
+        db.executescript(TIMETABLE_SCHEMA)
+        trips = {}
+        for row in _csv_rows(archive, "trips.txt"):
+            if row.get("trip_id"):
+                trips[row["trip_id"].encode("utf-8")] = key = len(trips) + 1
+                db.execute("INSERT INTO trips VALUES (?, ?, ?, ?, ?)",
+                           (key, row["trip_id"], row.get("route_id", ""), row.get("service_id", ""), (row.get("trip_headsign") or "").strip()))
+        db.executemany("INSERT OR IGNORE INTO stops VALUES (?, ?, ?, ?)",
+                       ((row["stop_id"], (row.get("stop_name") or "").strip(), _float(row.get("stop_lat")), _float(row.get("stop_lon")))
+                        for row in _csv_rows(archive, "stops.txt") if row.get("stop_id") and row.get("location_type") in (None, "", "0")))
+        with archive.open("stop_times.txt") as raw:
+            db.executemany("INSERT OR IGNORE INTO calls VALUES (?, ?, ?, ?, ?)", _call_rows(raw, trips))
+        names = set(archive.namelist())
+        if "calendar.txt" in names:
+            db.executemany("INSERT INTO calendar VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                           ((row.get("service_id", ""), *[(row.get(day) or "").strip() == "1" for day in WEEKDAYS],
+                             (row.get("start_date") or "").strip(), (row.get("end_date") or "").strip()) for row in _csv_rows(archive, "calendar.txt")))
+        if "calendar_dates.txt" in names:
+            db.executemany("INSERT INTO calendar_dates VALUES (?, ?, ?)",
+                           ((row.get("service_id", ""), (row.get("date") or "").strip(), {"1": 1, "2": 2}.get((row.get("exception_type") or "").strip(), 0))
+                            for row in _csv_rows(archive, "calendar_dates.txt")))
+        db.executescript(f"CREATE UNIQUE INDEX trips_id ON trips (trip_id); CREATE INDEX calls_stop ON calls (stop_id, dep); PRAGMA user_version = {TIMETABLE_VERSION};")
+        db.commit()
+    finally:
+        db.close()
+    part.replace(path)
+
+
+def _call_rows(raw, trips):
+    """(trip key, sequence, stop_id, arrival s, departure s) for each timed row of stop_times.txt whose trip is known."""
+    columns, ends_line = _columns(raw, "trip_id", "arrival_time", "departure_time", "stop_id", "stop_sequence")
+    trip_col, arrival_col, departure_col, stop_col, sequence_col = columns
+    last = max(columns)
+    for line in _lines(raw):
+        if ends_line:
+            line = line.rstrip(b"\r")
+        parts = line.split(b",", last + 1) if b'"' not in line else _quoted(line)
+        if len(parts) <= last:
+            continue
+        trip = trips.get(parts[trip_col])
+        arrive, depart = _seconds(parts[arrival_col]), _seconds(parts[departure_col])
+        if trip is None or (arrive is None and depart is None):
+            continue
+        yield trip, int(parts[sequence_col]), parts[stop_col].decode("utf-8"), depart if arrive is None else arrive, arrive if depart is None else depart
+
+
+def _brisbane_midnight(epoch):
+    """Epoch of the Brisbane midnight that starts the day containing `epoch` (Brisbane has no daylight saving)."""
+    day = datetime.fromtimestamp(epoch, BRISBANE).date()
+    return datetime(day.year, day.month, day.day, tzinfo=BRISBANE).timestamp()
+
+
 def _normal(text):
     text = (text or "").lower().replace(" station", "").replace(" railway", "")
     return "".join(char for char in text if char.isalnum() or char == " ").strip()
@@ -142,10 +221,33 @@ class Static:
         self._extract_lock = threading.Lock()  # one extract at a time, and never while a new zip replaces the old one
         self._cache_lock = threading.Lock()
         self._extracts = OrderedDict()
+        self.timetable_ready = self._timetable_current()
 
     @property
     def archive_path(self):
         return self.directory / ARCHIVE
+
+    @property
+    def timetable_path(self):
+        return self.directory / TIMETABLE
+
+    def _db(self):
+        return sqlite3.connect(f"file:{self.timetable_path.as_posix()}?mode=ro", uri=True)
+
+    def _timetable_current(self):
+        if not self.timetable_path.exists():
+            return False
+        try:
+            with closing(self._db()) as db:
+                return db.execute("PRAGMA user_version").fetchone()[0] == TIMETABLE_VERSION
+        except sqlite3.Error:
+            return False
+
+    def _build_timetable(self, zip_path):
+        with zipfile.ZipFile(zip_path) as archive:
+            build_timetable(archive, self.timetable_path)
+        self.timetable_ready = True
+        emit("write", "file:apps/plan-b-mvp/gtfs_static.py", "store:data/gtfs/timetable.sqlite3")
 
     # ── Status ──────────────────────────────────────────────────────────────
 
@@ -206,6 +308,8 @@ class Static:
             if not self.archive_ready and zipfile.is_zipfile(self.archive_path):
                 self.archive_ready, self.archive_error = True, False
             if self.archive_ready:
+                if not self.timetable_ready:  # an install from before the timetable existed: build it from the zip already on disk
+                    self._build_timetable(self.archive_path)
                 return
         self.directory.mkdir(parents=True, exist_ok=True)
         part = self.directory / (ARCHIVE + ".part")
@@ -218,6 +322,7 @@ class Static:
                     out.write(chunk)
             with zipfile.ZipFile(part) as archive:
                 index = build_index(archive, self._clock())
+            self._build_timetable(part)
             with self._extract_lock:  # an extract may be reading the old zip (and Windows cannot replace an open file)
                 part.replace(self.archive_path)
                 with self._cache_lock:
@@ -314,6 +419,76 @@ class Static:
         shorts = sorted({routes[route][0] for route in candidates})
         return {"route_ids": ordered, "stop_id": boarding, "dep_stop_ids": departure[:MAX_STOPS], "arr_stop_ids": arrival[:MAX_STOPS],
                 "colour": f"#{colour}" if colour else None, "text_colour": f"#{text}" if text else None, "short_names": shorts}
+
+    # ── Timetable lookups (SQLite, read-only) ───────────────────────────────
+
+    @staticmethod
+    def _services(db, base):
+        """service_ids running on the Brisbane day that starts at the epoch `base`."""
+        day = datetime.fromtimestamp(base, BRISBANE).date()
+        key, weekday = day.strftime("%Y%m%d"), WEEKDAYS[day.weekday()]
+        return [row[0] for row in db.execute(
+            f"SELECT service_id FROM calendar WHERE start_date <= ?1 AND end_date >= ?1 AND {weekday} = 1 "
+            "UNION SELECT service_id FROM calendar_dates WHERE date = ?1 AND kind = 1 EXCEPT SELECT service_id FROM calendar_dates WHERE date = ?1 AND kind = 2",
+            (key,))]
+
+    def departures(self, stop_ids, arr_stop_ids, after, until, limit=20):
+        """Trips that leave one of `stop_ids` between the epochs `after` and `until` and later call at one of `arr_stop_ids`, soonest first.
+
+        Each is {trip_id, route_id, headsign, departs, arrives (epochs), base (epoch of its service day), from_seq, to_seq}. Trips of the
+        previous service day still running after midnight (times past 24:00) are included. Empty until the timetable has been built.
+        """
+        if not (self.timetable_ready and stop_ids and arr_stop_ids):
+            return []
+        found = {}
+        marks = lambda items: ",".join("?" * len(items))
+        try:
+            with closing(self._db()) as db:
+                today = _brisbane_midnight(after)
+                for base in (today - DAY_SECONDS, today):
+                    services = self._services(db, base)
+                    if not services:
+                        continue
+                    rows = db.execute(
+                        "SELECT t.trip_id, t.route_id, t.headsign, a.dep, a.seq, MIN(b.seq), b.arr FROM calls a JOIN trips t ON t.trip = a.trip "
+                        f"JOIN calls b ON b.trip = a.trip AND b.seq > a.seq WHERE a.stop_id IN ({marks(stop_ids)}) AND b.stop_id IN ({marks(arr_stop_ids)}) "
+                        f"AND a.dep BETWEEN ? AND ? AND t.service_id IN ({marks(services)}) GROUP BY a.trip, a.seq ORDER BY a.dep LIMIT ?",
+                        (*stop_ids, *arr_stop_ids, after - base, until - base, *services, limit))
+                    for trip_id, route_id, headsign, dep, from_seq, to_seq, arr in rows:
+                        found.setdefault(trip_id, {"trip_id": trip_id, "route_id": route_id, "headsign": headsign, "departs": base + dep,
+                                                   "arrives": base + arr, "base": base, "from_seq": from_seq, "to_seq": to_seq})
+        except sqlite3.Error:
+            return []
+        return sorted(found.values(), key=lambda item: item["departs"])[:limit]
+
+    def trip_calls(self, trip_id, base, from_seq, to_seq):
+        """The stops of one trip from `from_seq` to `to_seq` inclusive: [{stop_id, name, lat, lng, time (epoch)}]."""
+        try:
+            with closing(self._db()) as db:
+                rows = db.execute("SELECT c.stop_id, s.name, s.lat, s.lng, c.arr, c.dep FROM calls c JOIN trips t ON t.trip = c.trip "
+                                  "JOIN stops s ON s.stop_id = c.stop_id WHERE t.trip_id = ? AND c.seq BETWEEN ? AND ? ORDER BY c.seq",
+                                  (trip_id, from_seq, to_seq)).fetchall()
+        except sqlite3.Error:
+            return []
+        return [{"stop_id": stop_id, "name": name, "lat": lat, "lng": lng, "time": base + (dep if index == 0 else arr)}
+                for index, (stop_id, name, lat, lng, arr, dep) in enumerate(rows) if lat is not None and lng is not None]
+
+    def step_trip(self, route_ids, stop_ids, arr_stop_ids, scheduled, trip_id=None):
+        """The timetable trip of one transit step, with its `calls`: the realtime trip when it is known, else the trip on the step's line
+        leaving nearest to Google's departure time (which may already include a delay). A `departures` item, or None."""
+        if not (scheduled and route_ids):
+            return None
+        found = self.departures(stop_ids, arr_stop_ids, scheduled - MATCH_WINDOW, scheduled + MATCH_WINDOW, limit=60)
+        lines = {route_key(route) for route in route_ids}
+        pool = [item for item in found if trip_id and item["trip_id"] == trip_id] or [item for item in found if route_key(item["route_id"]) in lines]
+        best = min(pool, key=lambda item: abs(item["departs"] - scheduled), default=None)
+        if best:
+            best["calls"] = self.trip_calls(best["trip_id"], best["base"], best["from_seq"], best["to_seq"])
+        return best
+
+    def route(self, route_id):
+        """[short name, long name, route type, colour, text colour] of an indexed route, or None."""
+        return (self.data or {}).get("routes", {}).get(route_id)
 
     # ── Offline area timetables ─────────────────────────────────────────────
 

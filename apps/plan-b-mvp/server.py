@@ -25,7 +25,7 @@ from google_api import RoutesError, ServiceError
 from gtfs_rt import FeedError, Monitor
 from gtfs_static import NotReady, Static
 from limits import DailyCap, RateLimiter, is_loopback
-from live_routes import BRISBANE, PLACE_ID, InputError, Services, live, plan
+from live_routes import BRISBANE, PLACE_ID, InputError, Services, departures, live, plan
 import offline_area
 from admin_api import init_admin_api
 from ops import init_ops
@@ -527,6 +527,11 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
     @app.post("/api/live")
     def live_api():
         return post(lambda body: live(body, services), limit=32768)
+
+    # The other services from a transit step's stop to the same place, until the end of the day (static timetable plus live times).
+    @app.post("/api/departures")
+    def departures_api():
+        return post(lambda body: departures(body, services), limit=16384)
 
     @app.post("/api/sync")
     def sync_api():
