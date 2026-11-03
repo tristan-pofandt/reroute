@@ -65,6 +65,13 @@ function profileChange(menu, opened) {
   c.finished?.then(() => { if (profile?.c === c) profile.closing = false; });
 }
 
+// A tapped-open section (legacy `.drop`: walking turns, other departures, the stops of a ride, place details): its lines drop in from
+// just above, one after another, with the page spring. Closing just hides them (leaving is faster than arriving).
+const DROP_LINES = ":scope > .drop-body > :not(ol, ul), :scope > .drop-body > :is(ol, ul) > li";
+function dropOpened(box) {
+  slide([...box.querySelectorAll(DROP_LINES)], { x: 0, y: -10 }, { cap: 8 });
+}
+
 // Busy buttons get a loader drawn from the logo: the direct route bends into the detour and back, the app's idea in one line.
 const STRAIGHT = [4, 28, 10, 22, 18, 14, 28, 4], DETOUR = [4, 28, 4, 16, 11, 6, 25, 6];
 const path = (t) => { const n = STRAIGHT.map((v, i) => +lerp(v, DETOUR[i], t).toFixed(2)); return `M${n[0]} ${n[1]} C${n[2]} ${n[3]} ${n[4]} ${n[5]} ${n[6]} ${n[7]}`; };
@@ -102,6 +109,7 @@ export function handleMutations(list, done) {
       const t = m.target, was = (m.oldValue || "").split(" ").includes("open"), now = t.classList.contains("open");
       if (was !== now && t.matches(".menu-backdrop, .settings-backdrop, .sheet-backdrop")) panelChange(t, now);
       if (was !== now && t.matches(".profile-menu")) profileChange(t, now);
+      if (!was && now && t.matches(".drop")) dropOpened(t);
       if (t.matches("button.is-loading")) addLoader(t);
     } else {
       if (m.removedNodes.length) crossFade(m, done);

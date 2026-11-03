@@ -1372,16 +1372,34 @@ function panicScreen() {
 const modeKind = (s) => (s.transit ? s.transit.vehicle : s.mode === "drive" ? "car" : CYCLE_MODES.includes(s.mode) ? s.mode : "walk");
 const vehicleTile = (t, size = 28) => (KIND_ICON[t.vehicle] || I.bus)(size);
 
+const destName = () => (state.plan?.destination || "").split(",")[0] || "Your destination";
+// Consecutive walking steps become one step ("Walk 7 min", its turns behind a tap), so the banner and voice never call out single turns:
+// the map shows the way. `i` stays the step's index in o.nav (live status lookups), `k` is its place in this list.
 function navSteps(o) {
-  const steps = o.nav.map((n, i) => ({ ...n, i, poly: n.polyline?.length > 1 ? n.polyline : [n.start, n.end] }));
+  const steps = [];
+  o.nav.forEach((n, i) => {
+    const s = { ...n, i, poly: n.polyline?.length > 1 ? n.polyline : [n.start, n.end] }, prev = steps.at(-1);
+    if (n.transit || n.mode !== "walk") steps.push(s);
+    else if (prev?.walk) Object.assign(prev, { parts: [...prev.parts, s], poly: [...prev.poly, ...s.poly.slice(1)], end: s.end, distance_m: prev.distance_m + s.distance_m, duration_s: prev.duration_s + s.duration_s });
+    else steps.push({ ...s, walk: true, parts: [s] });
+  });
   const end = steps.at(-1).end;
-  steps.push({ arrive: true, mode: "arrive", instruction: (state.plan?.destination || "").split(",")[0] || "Your destination", maneuver: "ARRIVE", distance_m: 0, duration_s: 0, start: end, end, poly: [end, end], i: steps.length });
-  return steps;
+  steps.push({ arrive: true, mode: "arrive", instruction: destName(), maneuver: "ARRIVE", distance_m: 0, duration_s: 0, start: end, end, poly: [end, end], i: o.nav.length });
+  return steps.map((s, k) => ({ ...s, k }));
 }
 
 function navInit(o) {
+  dropOpen.clear();
+  alts.clear();
   state.nav = { optionId: o.id, steps: navSteps(o), idx: 0, pos: null, heading: null, acc: null, following: true, error: null, offSince: null, off: false, sheetOpen: false, autoOpened: false,
     finished: false, replanning: false, replanError: null, said: new Set(), sim: null, lock: null, watchId: null, timer: null };
+}
+// Stops still ahead on a ride: the timetable's stops when the plan has them (each projected onto the leg once), else Google's count shared out along the line.
+function stopsLeft(s, pr) {
+  const t = s.transit, calls = t.calls || [];
+  if (calls.length < 2) return Math.max(0, t.stops - Math.round((t.stops * pr.along) / Math.max(1, pr.total)));
+  s.callAlong ||= calls.slice(1).map((c) => project([c.lat, c.lng], s.poly).along);
+  return s.callAlong.filter((along) => along > pr.along + 20).length;
 }
 
 // What the banner says. Walking and driving show the upcoming maneuver and the distance to it; a transit leg shows boarding, then the alight countdown.
@@ -1389,17 +1407,24 @@ const navRiding = (n, s) => { const pr = n.pos && project(n.pos, s.poly); return
 const boardName = (t) => (t.vehicle === "rail" && t.name ? `the ${t.name} train` : t.line);
 function navView() {
   const n = state.nav, s = n.steps[n.idx];
-  if (n.finished || !s || s.arrive) return { done: true, icon: I.flag(30), head: "You have arrived", instr: (state.plan?.destination || "").split(",")[0], remain: 0 };
+  if (n.finished || !s || s.arrive) return { done: true, icon: I.flag(30), head: "You have arrived", instr: destName(), remain: 0 };
   if (s.transit) {
     const t = s.transit, pr = navRiding(n, s);
     if (pr) {
-      const left = Math.max(0, t.stops - Math.round((t.stops * pr.along) / Math.max(1, pr.total)));
+      const left = stopsLeft(s, pr);
       return { icon: vehicleTile(t), head: left <= 1 ? "Get off at the next stop" : `Alight after ${left} stops`, instr: `Ride ${t.line} to ${t.headsign || t.arrival_stop}`, sub: `Get off at ${t.arrival_stop}`, live: s.i, pill: true, remain: 0 };
     }
     return { icon: vehicleTile(t), head: "At your stop", instr: `Board ${boardName(t)} to ${t.headsign || t.arrival_stop}`, sub: `at ${t.departure_stop}`, live: s.i, remain: 0 };
   }
   const nxt = n.steps[n.idx + 1], pr = n.pos ? project(n.pos, s.poly) : null;
   const remain = pr ? Math.max(0, pr.total - pr.along) : s.distance_m;
+  if (s.walk) {
+    // One line for the whole walk; only its last 120 m say what comes next (boarding, or arriving), which the voice reads at 100 m.
+    const share = pr?.total ? remain / pr.total : 1, to = nxt?.transit ? nxt.transit.departure_stop : destName();
+    if (pr && nxt?.transit && remain <= 120) return { icon: vehicleTile(nxt.transit), head: `In ${fmtDist(remain)}`, instr: `Board ${boardName(nxt.transit)} to ${nxt.transit.headsign || nxt.transit.arrival_stop}`, sub: `at ${nxt.transit.departure_stop}`, live: nxt.i, remain };
+    if (pr && nxt?.arrive && remain <= 120) return { icon: I.flag(30), head: `In ${fmtDist(remain)}`, instr: `Arrive at ${to}`, remain };
+    return { icon: I.walk(30), head: `Walk ${fmtMins(s.duration_s * share)}`, instr: `to ${to}`, sub: fmtDist(s.distance_m * share), say: `Walk ${fmtMins(s.duration_s * share)} to ${to}`, remain: 0 };
+  }
   if (!pr || !nxt || pr.along <= 25) return { icon: maneuverIcon(s.maneuver || "DEPART", 30), head: n.idx === 0 ? "Start" : "Now", instr: s.instruction, sub: `${fmtDist(remain)} on this step`, remain: 0 };
   if (nxt.transit) return { icon: vehicleTile(nxt.transit), head: `In ${fmtDist(remain)}`, instr: `Board ${boardName(nxt.transit)} to ${nxt.transit.headsign || nxt.transit.arrival_stop}`, sub: `at ${nxt.transit.departure_stop}`, live: nxt.i, remain };
   return { icon: maneuverIcon(nxt.maneuver, 30), head: `In ${fmtDist(remain)}`, instr: nxt.instruction, remain };
@@ -1447,14 +1472,100 @@ function navEtaHtml() {
 }
 function navStepsHtml() {
   const n = state.nav, o = findOption(n.optionId);
-  return n.steps.map((s, i) => {
-    const cls = i < n.idx || n.finished ? "done" : i === n.idx ? "current" : "";
-    const t = s.transit;
-    const icon = s.arrive ? I.flag(18) : t ? vehicleTile(t, 18) : maneuverIcon(s.maneuver || "STRAIGHT", 18);
+  return n.steps.map((s) => {
+    const cls = s.k < n.idx || n.finished ? "done" : s.k === n.idx ? "current" : "";
+    const open = `<div class="nav-step${s.transit ? " transit-step" : ""} ${cls}"${cls === "current" ? ' aria-current="step"' : ""}>`;
+    if (s.transit) return `${open}${transitBlock(o, s)}</div>`;
+    const icon = s.arrive ? I.flag(18) : s.walk ? I.walk(18) : maneuverIcon(s.maneuver || "STRAIGHT", 18);
     const tone = s.arrive ? "var(--success)" : SEGMENT_COLOUR[modeKind(s)] || "var(--accent)";
-    const small = s.arrive ? "" : t ? `${esc(t.departure_stop)} to ${esc(t.arrival_stop)} · ${plural(t.stops, "stop")}` : `${fmtDist(s.distance_m)} · ${fmtMins(s.duration_s)}`;
-    return `<div class="nav-step ${cls}"${cls === "current" ? ' aria-current="step"' : ""}><span class="row-icon" style="--tone:${tone}">${icon}</span><div><p>${esc(t ? `Take ${t.line} to ${t.headsign || t.arrival_stop}` : s.instruction)}</p>${small ? `<small>${small}</small>` : ""}${t ? `<span class="rt-line" data-live="${esc(o.id)}:${s.i}">${liveLine(o, s.i)}</span>` : ""}</div></div>`;
+    let body = `<p>${esc(s.instruction)}</p>${s.arrive ? "" : `<small>${fmtDist(s.distance_m)} · ${fmtMins(s.duration_s)}</small>`}`;
+    if (s.walk) {
+      const turns = s.parts.filter((p) => p.instruction), head = `<span class="drop-title">Walk ${fmtMins(s.duration_s)}</span><span class="drop-sub">${fmtDist(s.distance_m)}</span>`;
+      body = turns.length ? drop(`walk:${s.k}`, head, `<ol class="walk-turns">${turns.map((p) => `<li>${maneuverIcon(p.maneuver || "STRAIGHT", 16)}<span>${esc(p.instruction)}<small>${fmtDist(p.distance_m)}</small></span></li>`).join("")}</ol>`) : head;
+    }
+    return `${open}<span class="row-icon" style="--tone:${tone}">${icon}</span><div>${body}</div></div>`;
   }).join("");
+}
+
+// A section opened by tapping its head. The open state lives in dropOpen (so a repaint keeps it) and the class is toggled in place, which
+// motion/panels.js sees and answers by sliding the lines in (choreography.js timing).
+const dropOpen = new Set();
+function drop(key, head, body, cls = "") {
+  const open = dropOpen.has(key);
+  return `<div class="drop${cls ? ` ${cls}` : ""}${open ? " open" : ""}" data-drop="${esc(key)}"><button class="drop-head" data-action="drop" aria-expanded="${open}"><span class="drop-text">${head}</span><span class="drop-chev">${I.chevronDown(16)}</span></button><div class="drop-body">${body}</div></div>`;
+}
+
+// Line pills use the line's own colour, with dark or light text by its brightness.
+const inkOn = (hex) => { const m = /^#([0-9a-f]{6})$/i.exec(hex || ""); if (!m) return "#FFFFFF"; const v = parseInt(m[1], 16); return 0.299 * (v >> 16) + 0.587 * ((v >> 8) & 255) + 0.114 * (v & 255) > 160 ? "#1D1D1D" : "#FFFFFF"; };
+const linePill = (line, colour) => `<span class="line-pill" style="background:${esc(colour || "var(--seg-bus)")};color:${inkOn(colour)}">${esc(line || "")}</span>`;
+// "Now" when the service is due within a minute (or just left), else its clock time.
+const clockOrNow = (iso) => { if (!iso) return ""; const due = Date.parse(iso) - Date.now(); return due < 60000 && due > -120000 ? "Now" : timeOf(iso); };
+const rtText = (status, label) => (status === "unknown" ? "Scheduled" : status === "on_time" ? "On time" : label);
+function statusHtml(o, i) {
+  const rt = rtOf(o, i), v = rt.vehicle;
+  const where = v ? (v.stops_away === null || v.stops_away === undefined ? "on the map" : v.stops_away <= 0 ? "at your stop" : `${plural(v.stops_away, "stop")} away`) : "";
+  return `<span class="tb-rt ${esc(rt.status)}">${esc(rtText(rt.status, rt.label))}${rt.simulated ? " · Simulated" : ""}</span>${where ? `<span class="rt-veh">${I.pin(12)}${KIND_NAME[o.nav[i].transit.vehicle] || "Vehicle"} ${where}</span>` : ""}`;
+}
+const departHtml = (o, i) => clockOrNow(rtOf(o, i).departs || o.nav[i].transit.departure_time);
+// Timetable times of a ride's stops, moved by the live delay when there is one, so the stops and the arrival agree with each other.
+const liveShift = (o, i, iso) => { const d = rtOf(o, i).delay_min; return new Date(Date.parse(iso) + (Number.isFinite(d) ? d : 0) * 60000).toISOString(); };
+const arriveHtml = (o, i) => {
+  const t = o.nav[i].transit, last = t.calls?.at(-1)?.time, at = rtOf(o, i).arrives || (last ? liveShift(o, i, last) : t.arrival_time);
+  return at ? timeOf(at) : "";
+};
+// The parts of a transit step that live updates patch in place, by the flag after the step index in data-live.
+const LIVE_PARTS = { p: (o, i) => liveLine(o, i, true), s: statusHtml, t: departHtml, a: arriveHtml };
+const liveHtml = (o, i, flag) => (LIVE_PARTS[flag] || liveLine)(o, i);
+
+// A transit leg spread over several lines: the boarding stop, then (indented, joined by a bar in the line's colour) the service with its
+// live departure time, other departures and the stops in between, then the stop to get off at with its arrival time.
+function transitBlock(o, s) {
+  const t = s.transit, i = s.i, colour = t.colour || SEGMENT_COLOUR[t.vehicle] || "var(--accent)", live = (flag) => `data-live="${esc(o.id)}:${i}:${flag}"`;
+  const between = (t.calls || []).slice(1, -1);
+  const ride = `Ride ${plural(t.stops ?? between.length + 1, "stop")} (${fmtMins(s.duration_s)})`;
+  return `<div class="tb" style="--line:${esc(colour)}">
+    <div class="tb-end"><span class="row-icon" style="--tone:${esc(colour)}">${vehicleTile(t, 18)}</span><p>${esc(t.departure_stop || "Your stop")}</p></div>
+    <div class="tb-body">
+      <div class="tb-service">${linePill(t.line, t.colour)}<div class="tb-name"><b>${esc(t.headsign || t.arrival_stop || "")}</b><span class="tb-status" ${live("s")}>${statusHtml(o, i)}</span></div><span class="tb-time" ${live("t")}>${departHtml(o, i)}</span></div>
+      ${t.live_query ? drop(`alts:${i}`, `<span class="drop-title">Other departures</span>`, altsHtml(i), "tb-drop") : ""}
+      ${between.length ? drop(`stops:${i}`, `<span class="drop-title">${ride}</span>`, `<ol class="tb-stops">${between.map((c) => `<li><span>${esc(c.name)}</span><time>${timeOf(liveShift(o, i, c.time))}</time></li>`).join("")}</ol>`, "tb-drop") : `<p class="tb-ride">${ride}</p>`}
+    </div>
+    <div class="tb-end tb-to"><span class="tb-dot" aria-hidden="true"></span><p>${esc(t.arrival_stop || "Your stop")}</p><span class="tb-time" ${live("a")}>${arriveHtml(o, i)}</span></div>
+  </div>`;
+}
+
+// Other services from the step's stop to the same place (any line), loaded when "Other departures" opens and kept for a minute.
+const alts = new Map(); // o.nav index -> { at, list, more } or { at, error }
+const altRow = (d) => `<div class="alt-row">${linePill(d.line, d.colour)}<span class="alt-name"><b>${esc(d.headsign || "")}</b><small class="tb-rt ${esc(d.status)}">${esc(rtText(d.status, d.label))}</small></span><span class="tb-time">${clockOrNow(d.departs)}</span></div>`;
+function altsHtml(i) {
+  const a = alts.get(i);
+  if (!a?.list && !a?.error) return skelLines("Finding other departures", 80, 60);
+  if (a.error) return `<p class="tb-note">${esc(a.error)}</p>`;
+  if (!a.list.length) return `<p class="tb-note">No other services from this stop to the same place later today.</p>`;
+  return `${a.list.map(altRow).join("")}${a.more ? `<button class="btn btn-secondary tb-more" data-action="more-departures" data-i="${i}">More departures</button>` : ""}`;
+}
+async function loadAlts(i) {
+  const n = state.nav, q = n && findOption(n.optionId)?.nav[i]?.transit?.live_query, was = alts.get(i);
+  if (!q || was?.loading || (was && Date.now() - was.at < 60000)) return;
+  alts.set(i, { ...was, loading: true });
+  try {
+    const data = await postJSON("/api/departures", { query: q, limit: 4 });
+    alts.set(i, { at: Date.now(), list: data.departures, more: data.more });
+  } catch { alts.set(i, { at: Date.now(), error: "Other departures aren't available right now." }); }
+  if (state.nav === n) navPaint();
+}
+// "More departures": every remaining service today, in a sheet above the directions.
+async function openDepartures(i) {
+  const t = findOption(state.nav?.optionId)?.nav[i]?.transit;
+  if (!t?.live_query) return;
+  openPopup(`<div class="grabber"><span></span></div>
+    <div class="sheet-head"><h3 id="popup-title">Departures from ${esc(t.departure_stop || "this stop")}</h3><button class="icon-btn" data-action="close-popup" aria-label="Close">${I.x(18)}</button></div>
+    <div class="sheet-scroll" data-departures><p class="tb-note">To ${esc(t.arrival_stop || "your stop")}, until the end of the day</p>${skelLines("Loading departures", 80, 60, 80)}</div>`, "departures");
+  const box = popupEl.querySelector("[data-departures]");
+  try {
+    const data = await postJSON("/api/departures", { query: t.live_query, limit: 60 });
+    if (box.isConnected) box.innerHTML = `<p class="tb-note">To ${esc(t.arrival_stop || "your stop")}, until the end of the day</p>${data.departures.map(altRow).join("") || `<p class="tb-note">No other services later today.</p>`}`;
+  } catch { if (box.isConnected) box.innerHTML = notice("Departures aren't available right now.", "error"); }
 }
 function navFabsHtml() {
   const n = state.nav;
@@ -1505,7 +1616,7 @@ function navEntry() { for (const entry of maps.values()) if (entry.nav) return e
 function navLines(entry) {
   const n = state.nav;
   entry.lines.forEach(({ line, step }) => {
-    const done = step.i < n.idx, cur = step.i === n.idx, kind = modeKind(step);
+    const done = step.k < n.idx, cur = step.k === n.idx, kind = modeKind(step);
     line.setOptions({ strokeColor: done ? cssColour("var(--text-faint)") : step.transit?.colour || cssColour(SEGMENT_COLOUR[kind] || "var(--accent)"),
       strokeWeight: cur ? 8 : kind === "walk" ? 4 : 6, strokeOpacity: done ? 0.45 : cur ? 1 : 0.85, zIndex: cur ? 2 : 1 });
   });
@@ -1522,6 +1633,11 @@ function buildNavMap(el) {
     entry.lines.push({ line: new GM.Polyline({ path: s.poly.map(toLatLng), map, geodesic: true }), step: s });
     s.poly.forEach((point) => entry.bounds.extend(toLatLng(point)));
   });
+  // A dot at every stop of each ride (white with the line's colour, the boarding and alighting stops a little larger), to count the stops left.
+  n.steps.forEach((s) => (s.transit?.calls || []).forEach((c, j, calls) => entry.markers.push(new GM.Marker({
+    position: { lat: c.lat, lng: c.lng }, map, clickable: false, zIndex: 3, title: c.name,
+    icon: { path: GM.SymbolPath.CIRCLE, scale: j === 0 || j === calls.length - 1 ? 5.5 : 4, fillColor: "#FFFFFF", fillOpacity: 1,
+      strokeColor: s.transit.colour || cssColour(SEGMENT_COLOUR[s.transit.vehicle] || "var(--accent)"), strokeWeight: 2.5 } }))));
   entry.markers.push(new GM.Marker({ position: toLatLng(n.steps[0].start), map, icon: mapIcon("start"), clickable: false }));
   entry.markers.push(new GM.Marker({ position: toLatLng(n.steps.at(-1).end), map, icon: mapIcon("end"), clickable: false }));
   fitMap(entry, { top: 48, right: 48, bottom: 48, left: 48 });
@@ -1562,7 +1678,7 @@ function navMap() {
       }
     }
   }
-  syncVehicles(entry, n.idx);
+  syncVehicles(entry, n.steps[n.idx]?.i ?? 0);
 }
 
 function navFix(pos, heading, acc) {
@@ -1599,7 +1715,7 @@ function navAdvance() {
   if (n.finished && !n.arrivedSaid) { n.arrivedSaid = true; endBgWatch(); }
 }
 function navAnnounce() {
-  const v = navView(), text = v.done ? "You have arrived." : `${v.head === "Now" || v.head === "Start" ? "" : `${v.head}. `}${v.instr}`;
+  const v = navView(), text = v.done ? "You have arrived." : v.say || `${v.head === "Now" || v.head === "Start" ? "" : `${v.head}. `}${v.instr}`;
   const region = currentPage?.querySelector("[data-nav-say]");
   if (region) region.textContent = text;
   if (settings.voice) speak(text);
@@ -3560,6 +3676,14 @@ const actions = {
   "nav-recenter": () => { const n = state.nav, entry = navEntry(); n.following = true; if (entry) { entry.zoomIdx = null; entry.fitSig = null; if (!n.pos) fitMap(entry, { top: 48, right: 48, bottom: 48, left: 48 }); } navPaint(); },
   "nav-voice": () => { settings.voice = !settings.voice; saveSettings(); if (settings.voice) speak("Voice prompts on."); else try { speechSynthesis.cancel(); } catch { /* optional */ } navPaint(); },
   "nav-replan": navReplan,
+  drop: (el) => {
+    const box = el.closest("[data-drop]"), key = box.dataset.drop, open = !box.classList.contains("open");
+    box.classList.toggle("open", open);
+    el.setAttribute("aria-expanded", String(open));
+    if (open) dropOpen.add(key); else dropOpen.delete(key);
+    if (open && key.startsWith("alts:")) loadAlts(Number(key.slice(5)));
+  },
+  "more-departures": (el) => openDepartures(Number(el.dataset.i)),
   // Demo mode, sharing, install
   "open-demo": openDemoSheet,
   "demo-set": (el) => { const { name, value } = el.dataset; state.demo[name] = name === "late_min" ? Number(value) : value; saveDemo(); refreshDemoSheet(); if (name === "weather") { loadWeather(); if (state.screen === "weather") loadWeatherDetail(); } },
@@ -3874,7 +3998,7 @@ function paintLive() {
   document.querySelectorAll("[data-live]").forEach((el) => {
     const [id, i, flag] = el.dataset.live.split(":");
     if (id !== o.id) return;
-    const html = liveLine(o, Number(i), flag === "p");
+    const html = liveHtml(o, Number(i), flag);
     if (el.__h !== html) { el.innerHTML = html; el.__h = html; }
   });
   maps.forEach((entry) => { if (!entry.nav) syncVehicles(entry); });

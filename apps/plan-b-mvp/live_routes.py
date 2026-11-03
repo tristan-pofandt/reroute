@@ -1024,7 +1024,7 @@ def departures(payload, services, now=None):
         route = static.route(item["route_id"]) or ["", "", None, "", ""]
         live_time = times.get(item["trip_id"]) or realtime_object()
         result.append({"trip_id": item["trip_id"], "line": route[0] or route_key(item["route_id"]), "headsign": item["headsign"],
-                       "colour": f"#{route[3]}" if route[3] else None, "text_colour": f"#{route[4]}" if route[4] else None,
+                       "colour": _colour(route[3]), "text_colour": _colour(route[4]),
                        "scheduled": _epoch_iso(item["departs"]), "departs": live_time.get("departs") or _epoch_iso(item["departs"]),
                        "arrives": _epoch_iso(item["arrives"]), "status": live_time["status"], "label": live_time["label"]})
     return {"departures": result, "more": len(found) > limit, "fetched_at": now.isoformat()}

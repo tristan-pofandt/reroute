@@ -833,6 +833,53 @@ button.tile-card:active { transform: scale(0.97); background: var(--bg-card); }
 .nav-step.current { background: var(--accent-soft); }
 .nav-step.current::before, .nav-step.current + .nav-step::before { display: none; }
 
+/* Tap-to-open sections (.drop): the head is a full-width button, the chevron turns, motion/panels.js slides the lines in. */
+.drop-head { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 0; background: none; border: none; color: inherit; font: inherit; text-align: left; border-radius: 10px; }
+.drop-text { flex: 1; min-width: 0; }
+.drop-title { display: block; font-size: 0.9375rem; font-weight: 500; line-height: 1.4; }
+.drop-sub { display: block; font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+.drop-chev { display: flex; color: var(--text-muted); transition: transform 200ms var(--ease-out); }
+.drop.open > .drop-head .drop-chev { transform: rotate(180deg); }
+.drop:not(.open) > .drop-body { display: none; }
+.walk-turns { list-style: none; margin: 4px 0 2px; padding: 0; display: grid; gap: 10px; }
+.walk-turns li { display: flex; gap: 10px; align-items: flex-start; font-size: 0.875rem; line-height: 1.4; }
+.walk-turns svg { flex-shrink: 0; margin-top: 2px; color: var(--text-muted); }
+.nav-step .walk-turns small { display: inline; margin: 0 0 0 6px; }
+
+/* A transit leg: boarding stop, then the indented service, other departures and stops joined by a thick rounded bar in the line's colour,
+   then the stop to get off at. The bar runs from under the vehicle icon (36 px wide, so it sits at 15 px) down into the end stop's ring. */
+.nav-step.transit-step { display: block; }
+.tb-end { display: flex; align-items: center; gap: 14px; }
+.tb-end p { flex: 1; min-width: 0; font-weight: 600; }
+.tb-body { position: relative; margin-left: 15px; padding: 10px 0 10px 35px; display: grid; gap: 4px; }
+.tb-body::before { content: ""; position: absolute; left: 0; top: -2px; bottom: -4px; width: 6px; border-radius: 3px; background: var(--line); }
+.tb-dot { width: 36px; flex-shrink: 0; display: flex; justify-content: center; position: relative; z-index: 1; }
+.tb-dot::before { content: ""; width: 16px; height: 16px; border-radius: 50%; border: 4px solid var(--line); background: var(--bg-surface); box-sizing: border-box; }
+.tb-service { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+.line-pill { flex-shrink: 0; min-width: 40px; padding: 3px 9px; border-radius: 8px; font-size: 0.8125rem; font-weight: 700; text-align: center; line-height: 1.35; font-variant-numeric: tabular-nums; }
+.tb-name { flex: 1; min-width: 0; }
+.tb-name b { display: block; font-size: 0.9375rem; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.tb-status { display: flex; flex-wrap: wrap; gap: 2px 10px; margin-top: 2px; font-size: 0.75rem; }
+.tb-rt { color: var(--text-muted); font-weight: 500; }
+.tb-rt.on_time { color: var(--success-text); }
+.tb-rt.late { color: var(--warning-text); }
+.tb-rt.early { color: var(--accent-text); }
+.tb-rt.cancelled { color: var(--error-text); }
+.tb-time { flex-shrink: 0; font-size: 0.9375rem; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tb-to .tb-time { color: var(--text-muted); font-weight: 500; }
+.tb-drop { border-top: 1px solid var(--divider); }
+.tb-stops { list-style: none; margin: 0; padding: 2px 0 8px; display: grid; gap: 8px; }
+.tb-stops li { display: flex; justify-content: space-between; gap: 12px; font-size: 0.8125rem; color: var(--text-muted); }
+.tb-stops time { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.alt-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+.alt-name { flex: 1; min-width: 0; }
+.alt-name b { display: block; font-size: 0.875rem; font-weight: 500; }
+.alt-name small, .nav-step .alt-name small { display: block; font-size: 0.75rem; margin-top: 1px; }
+.tb-more { min-height: 40px; margin: 4px 0 8px; }
+.tb-note, .tb-ride { font-size: 0.8125rem; color: var(--text-muted); padding: 8px 0; }
+.tb-ride { border-top: 1px solid var(--divider); }
+.departures .sheet-scroll .alt-row + .alt-row { border-top: 1px solid var(--divider); }
+
 /* ── Refinements: Reroute ───────────────────────────────────────────────── */
 
 /* Design-system interactive element (docs/design/design-system.md) and its accent-filled primary variant. */
