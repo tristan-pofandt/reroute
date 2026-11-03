@@ -7,7 +7,7 @@ const svg = (body, size = 20) =>
   `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${size < 16 ? 2.1 : 1.75}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
 
 const I = {
-  bus: (s) => svg('<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 10h18M8 5v4M16 5v4M7.5 16.5h.01M16.5 16.5h.01"/>', s),
+  bus: (s) => svg('<rect x="4" y="3" width="16" height="15" rx="2.5"/><path d="M4 11h16M9 6.5h6M2 7.5l2-1M22 7.5l-2-1M8 14.5h.01M16 14.5h.01M7 18v2.5M17 18v2.5"/>', s),
   train: (s) => svg('<rect x="4.5" y="3" width="15" height="15" rx="2.5"/><path d="M4.5 11h15M12 3v8M8.5 19l-2 2.5M15.5 19l2 2.5M8.5 15h.01M15.5 15h.01"/>', s),
   tram: (s) => svg('<rect x="5" y="6" width="14" height="12" rx="2.5"/><path d="M9 3h6M12 3v3M5 12h14M9 18l-2 3M15 18l2 3"/>', s),
   ferry: (s) => svg('<path d="M3 17c1.5 1.3 3 1.3 4.5 0s3-1.3 4.5 0 3 1.3 4.5 0 3-1.3 4.5 0"/><path d="M5 14l1.5-5h11L19 14M9 9V5h6v4"/>', s),
@@ -653,7 +653,7 @@ function homeScreen() {
       ${syncCard()}</div>
       <p class="section-header">Impact and sharing</p>
       <button class="tile-card" data-action="go" data-screen="dashboard">
-        <div class="tile-head"><h3 role="heading" aria-level="2"><span class="leaf-sway">${I.leaf(16)}</span>Your impact this month</h3>${I.chevronRight()}</div>
+        <div class="tile-head"><h3 role="heading" aria-level="2">${I.leaf(16)}Your impact this month</h3>${I.chevronRight()}</div>
         <div class="stat-row">
           <div class="stat"><b>${kg(impact.co2)}</b><span>est. CO₂ avoided</span></div>
           <div class="stat"><b>${savedText(impact)}</b><span>saved vs driving</span></div>
@@ -1375,7 +1375,7 @@ const vehicleTile = (t, size = 28) => (KIND_ICON[t.vehicle] || I.bus)(size);
 function navSteps(o) {
   const steps = o.nav.map((n, i) => ({ ...n, i, poly: n.polyline?.length > 1 ? n.polyline : [n.start, n.end] }));
   const end = steps.at(-1).end;
-  steps.push({ arrive: true, mode: "arrive", instruction: "Arrive at your destination", maneuver: "ARRIVE", distance_m: 0, duration_s: 0, start: end, end, poly: [end, end], i: steps.length });
+  steps.push({ arrive: true, mode: "arrive", instruction: (state.plan?.destination || "").split(",")[0] || "Your destination", maneuver: "ARRIVE", distance_m: 0, duration_s: 0, start: end, end, poly: [end, end], i: steps.length });
   return steps;
 }
 
