@@ -114,6 +114,14 @@ class TripUpdateTests(unittest.TestCase):
         self.assertIsNone(find_trip(trips, None, ["412-5146"], ["somewhere-else"], 10_000))
         self.assertIsNone(find_trip(trips, None, [], ["1683"], 10_000))
 
+    def test_find_trip_matches_the_line_across_route_id_versions_and_the_predicted_time(self):
+        # The realtime feed says '412-4' where the static timetable says '412-5146'; Google's time (10_270) already includes the 290 s delay.
+        trips = gtfs_rt.decode_trip_updates(FEED_HEADER + trip_entity("1", "late", "412-4", [stop_update(5, "1683", 290, 10_290)])
+                                            + trip_entity("2", "other-line", "66-4", [stop_update(5, "1683", 0, 10_270)]))
+        self.assertEqual(find_trip(trips, None, ["412-5146"], ["1683"], 10_270)["trip_id"], "late")
+        self.assertEqual(find_trip(trips, None, ["412-5146"], ["1683"], 10_010)["trip_id"], "late")  # the scheduled time still matches
+        self.assertIsNone(find_trip(trips, None, ["412-5146"], ["1683"], 10_600))
+
 
 class DelayLabelTests(unittest.TestCase):
     def test_delay_status_thresholds(self):
@@ -142,7 +150,7 @@ class StepStatusTests(unittest.TestCase):
 
     def test_exact_trip_gives_delay_vehicle_stops_away_and_exact_route_alerts(self):
         feeds = dict(
-            alerts=alert_entity("hit", effect=3, routes=("412-5146",)) + alert_entity("miss", effect=3, routes=("412-9999",)),
+            alerts=alert_entity("hit", effect=3, routes=("412-5146",)) + alert_entity("miss", effect=3, routes=("66-5146",)),
             trips=trip_entity("1", "t1", "412-5146", [stop_update(5, "1683", 180, NOW + 780)]),
             vehicles=vehicle_entity("v", trip_id="t1", sequence=3, stamp=NOW - 5, bearing=90.0))
         status = self.monitor(**feeds).step_status(self.QUERY)
@@ -155,6 +163,14 @@ class StepStatusTests(unittest.TestCase):
         self.assertEqual(sorted(realtime["vehicle"]), ["bearing", "label", "lat", "lng", "stops_away", "updated"])
         self.assertEqual([a["id"] for a in status["alerts"]], ["hit"])
         self.assertEqual((status["delay"], status["checked"], status["error"]), (3, True, None))
+
+    def test_predicted_departure_and_arrival_times_and_alerts_across_route_id_versions(self):
+        feeds = dict(alerts=alert_entity("hit", effect=3, routes=("412-4",)),
+                     trips=trip_entity("1", "t1", "412-4", [stop_update(5, "1683", 180, NOW + 780), stop_update(9, "1690", 200, NOW + 1500)]))
+        realtime = self.monitor(**feeds).step_status({**self.QUERY, "arr_stop_ids": ["1690"]})["realtime"]
+        self.assertEqual((realtime["trip_id"], realtime["alerts"]), ("t1", ["hit"]))
+        self.assertEqual((realtime["departs"], realtime["arrives"]), (gtfs_rt._iso(NOW + 780), gtfs_rt._iso(NOW + 1500)))
+        self.assertIsNone(self.monitor(**feeds).step_status(self.QUERY)["realtime"]["arrives"])
 
     def test_vehicle_that_has_passed_the_stop_has_no_stops_away(self):
         feeds = dict(trips=trip_entity("1", "t1", "412-5146", [stop_update(5, "1683", 0, NOW + 600)]), vehicles=vehicle_entity("v", trip_id="t1", sequence=9))

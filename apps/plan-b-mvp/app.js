@@ -3856,7 +3856,12 @@ async function pollLive(o) {
   live.polledAt = Date.now();
   try {
     const data = await postJSON("/api/live", { queries: qs.map(([, q]) => q), demo: demoBody() });
-    qs.forEach(([i], k) => { if (data.results[k]) live.results[liveKey(o, i)] = data.results[k]; });
+    qs.forEach(([i, q], k) => {
+      const r = data.results[k];
+      if (!r) return;
+      live.results[liveKey(o, i)] = r;
+      if (r.trip_id) q.trip_id = r.trip_id; // later polls look the trip up by id instead of matching it again
+    });
     live.at = Date.now();
     live.failed = false;
   } catch { live.failed = true; }

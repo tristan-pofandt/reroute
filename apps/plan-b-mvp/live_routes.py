@@ -604,7 +604,8 @@ def _submit(pool, function, *args):
 def _live_query(record, item, match):
     """The opaque query the app sends back to /api/live to refresh one transit step."""
     names = list(dict.fromkeys(name for name in (item["line"], item["name"]) if name))
-    return {"v": 1, "route_ids": item["route_ids"], "stop_ids": match["dep_stop_ids"] if match else [], "trip_id": None,
+    return {"v": 1, "route_ids": item["route_ids"], "stop_ids": match["dep_stop_ids"] if match else [],
+            "arr_stop_ids": match["arr_stop_ids"] if match else [], "trip_id": None,
             "scheduled": int(record["scheduled"]) if record["scheduled"] else None, "names": names,
             "category": record["category"], "line": item["line"], "sim": False}
 
@@ -980,7 +981,8 @@ def clean_query(value):
     line = value.get("line") or ""
     if not isinstance(line, str) or len(line) > 60:
         raise InputError("A live query is not valid.")
-    return {"v": 1, "route_ids": strings("route_ids", 80, 40), "stop_ids": strings("stop_ids", 12, 40), "trip_id": trip_id or None,
+    return {"v": 1, "route_ids": strings("route_ids", 80, 40), "stop_ids": strings("stop_ids", 12, 40),
+            "arr_stop_ids": strings("arr_stop_ids", 12, 40), "trip_id": trip_id or None,
             "scheduled": int(scheduled) if scheduled else None, "names": strings("names", 4, 80), "category": category,
             "line": line, "sim": value.get("sim") is True}
 

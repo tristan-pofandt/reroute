@@ -371,6 +371,11 @@ def stop_event(trip, stop_ids):
     return next((stop for stop in trip["stops"] if stop["stop_id"] in stop_ids), None)
 
 
+def stop_time(stop):
+    """Predicted epoch at a stop-time update (departure when it has one)."""
+    return stop["dep_time"] if stop["dep_time"] is not None else stop["arr_time"]
+
+
 def stop_delay(stop):
     """(scheduled epoch, delay seconds) at a stop-time update, using the departure when it has one."""
     if stop["dep_time"] is not None:
@@ -383,23 +388,28 @@ def stop_delay(stop):
 
 
 def find_trip(trips, trip_id=None, route_ids=(), stop_ids=(), scheduled=None, tolerance=MATCH_TOLERANCE_SECONDS):
-    """Exact trip by id, else the trip on one of `route_ids` whose scheduled time at one of `stop_ids` is closest to `scheduled`."""
+    """Exact trip by id, else the trip on one of the lines of `route_ids` whose time at one of `stop_ids` is closest to `scheduled`.
+
+    Lines are compared by route_key: the realtime feed's route_id suffix ('445-4') differs from the static timetable's ('445-5146').
+    Both the scheduled and the predicted time count, since Google's departure time already includes the live delay.
+    """
     if trip_id:
         for trip in trips:
             if trip["trip_id"] == trip_id:
                 return trip
     if not (route_ids and stop_ids and scheduled):
         return None
-    routes, stops, best, best_gap = set(route_ids), set(stop_ids), None, tolerance + 1
+    lines, stops, best, best_gap = {route_key(route) for route in route_ids}, set(stop_ids), None, tolerance + 1
     for trip in trips:
-        if trip["route_id"] not in routes:
+        if route_key(trip["route_id"] or "") not in lines:
             continue
         for stop in trip["stops"]:
             if stop["stop_id"] not in stops:
                 continue
-            planned, _ = stop_delay(stop)
-            if planned is not None and abs(planned - scheduled) < best_gap:
-                best, best_gap = trip, abs(planned - scheduled)
+            times = [time_ for time_ in (stop_delay(stop)[0], stop_time(stop)) if time_ is not None]
+            gap = min((abs(time_ - scheduled) for time_ in times), default=None)
+            if gap is not None and gap < best_gap:
+                best, best_gap = trip, gap
     return best
 
 
@@ -535,6 +545,7 @@ class Monitor:
         Returns {"realtime": realtime object, "alerts": [alert dicts], "delay", "cancelled", "checked", "error"}.
         """
         route_ids = set(query.get("route_ids") or [])
+        lines = {route_key(route) for route in route_ids}
         stop_ids = set(query.get("stop_ids") or [])
         scheduled = query.get("scheduled")
         result = {"realtime": realtime_object(), "alerts": [], "delay": None, "cancelled": 0, "checked": False, "error": None}
@@ -547,7 +558,7 @@ class Monitor:
             return result
         errors = []
         try:
-            result["alerts"] = [alert for alert in self.alerts()["alerts"] if route_ids & set(alert["route_ids"])]
+            result["alerts"] = [alert for alert in self.alerts()["alerts"] if lines & {route_key(route) for route in alert["route_ids"]}]
         except FeedError as error:
             errors.append(str(error))
         trips = []
@@ -559,7 +570,7 @@ class Monitor:
         result["checked"] = not errors
         alert_ids = [alert["id"] for alert in result["alerts"]]
         trip = find_trip(trips, query.get("trip_id"), route_ids, stop_ids, scheduled)
-        result["cancelled"] = sum(1 for other in trips if other["route_id"] in route_ids and other["cancelled"])
+        result["cancelled"] = sum(1 for other in trips if route_key(other["route_id"] or "") in lines and other["cancelled"])
         if trip:
             stop = stop_event(trip, stop_ids)
             delay = trip["delay"]
@@ -572,10 +583,14 @@ class Monitor:
             result["delay"] = minutes
             result["realtime"] = realtime_object(status, minutes, self._vehicle_for(trip, stop), alert_ids)
             result["realtime"]["trip_id"] = trip["trip_id"]
+            # Predicted clock times for the step's two ends (the app shows the live departure and arrival times).
+            arrival = stop_event(trip, set(query.get("arr_stop_ids") or []))
+            result["realtime"]["departs"] = _iso(stop_time(stop)) if stop and status != "cancelled" else None
+            result["realtime"]["arrives"] = _iso(arrival["arr_time"] if arrival["arr_time"] is not None else arrival["dep_time"]) if arrival and status != "cancelled" else None
             return result
         near = scheduled is None or scheduled - self._clock() <= NEAR_TERM_SECONDS
         delays = [other["delay"] for other in trips
-                  if other["route_id"] in route_ids and not other["cancelled"] and other["delay"] is not None] if near else []
+                  if route_key(other["route_id"] or "") in lines and not other["cancelled"] and other["delay"] is not None] if near else []
         # Without the exact trip only a route-wide late median is reported: "on time" or "early" would be a guess.
         status, minutes = delay_status(statistics.median(delays)) if delays else ("unknown", None)
         if status == "late":
