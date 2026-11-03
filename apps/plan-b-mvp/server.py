@@ -168,6 +168,7 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
     plan_limit, autocomplete_limit, fuel_limit = (_int("PLANB_PLAN_LIMIT_PER_HOUR", 40), _int("PLANB_AUTOCOMPLETE_LIMIT_PER_HOUR", 400),
                                                   _int("PLANB_FUEL_LIMIT_PER_HOUR", 120))
     place_limit = _int("PLANB_PLACE_LIMIT_PER_HOUR", 60)
+    photo_limit = _int("PLANB_PHOTO_LIMIT_PER_HOUR", 120)  # each place photo is a paid Place Photos request
     offline_limit = _int("PLANB_OFFLINE_LIMIT_PER_HOUR", 6)  # each of the map and the timetable; these are not Google requests
     waiting = threading.BoundedSemaphore(offline_area.MAX_WAITING)  # shared, so at most two threads ever wait on offline extracts
     jobs = {"map": Jobs("map", offline_wait, clock, waiting), "transit": Jobs("transit", offline_wait, clock, waiting)}
@@ -407,6 +408,46 @@ def create_app(key=UNSET, data_dir=None, monitor=None, board=None, static=None, 
         if not found:
             return failure("Google has no details for that place.", 404)
         return reply(found)
+
+    # The place sheet: hours, rating, reviews, contact details and photo names. Asked for only when the traveller expands a place.
+    @app.get("/api/place/info")
+    def place_info_api():
+        if not key:
+            return failure("Place details need the Google Maps API key.", 503)
+        place_id = request.args.get("id", "")
+        if not PLACE_ID.match(place_id):
+            return failure("Choose the place again.", 400)
+        blocked = guard("place", place_limit, "autocomplete")
+        if blocked:
+            return blocked
+        try:
+            found = google_api.place_info(key, place_id)
+        except ServiceError as error:
+            return failure(str(error), 502)
+        return reply(found) if found else failure("Google has no details for that place.", 404)
+
+    # One place photo: a redirect to Google's short-lived image address, so the key stays on the server. The gallery loads these lazily.
+    @app.get("/api/place/photo")
+    def place_photo_api():
+        if not key:
+            return failure("Place photos need the Google Maps API key.", 503)
+        name = request.args.get("name", "")
+        try:
+            width = int(request.args.get("w", "640"))
+        except ValueError:
+            width = 0
+        if not google_api.PHOTO_NAME.match(name) or not 120 <= width <= 1600:
+            return failure("That photo is not valid.", 400)
+        blocked = guard("photo", photo_limit, "autocomplete")
+        if blocked:
+            return blocked
+        try:
+            found = google_api.place_photo(key, name, width)
+        except ServiceError as error:
+            return failure(str(error), 502)
+        if not found:
+            return failure("That photo is unavailable.", 404)
+        return Response(status=302, headers={"Location": found, "Cache-Control": "private, max-age=600"})
 
     @app.get("/api/fuel")
     def fuel():

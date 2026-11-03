@@ -66,7 +66,8 @@ export function travel(d, phase) {
 // is left holding an element at opacity 0 or with a stale will-change / animation effect.
 export const clamp = (v, a = 0, b = 1) => (v < a ? a : v > b ? b : v);
 export const CSS_EASE = `cubic-bezier(${EASE.join(",")})`;
-const IN_MS = 400, IN_N = 20, OUT_N = 12;
+export const IN_MS = 400; // one arrival (the spring settles in this time)
+const IN_N = 20, OUT_N = 12;
 // progress curves, sampled once: the arrival spring (the same one as spring()) and the leaving ease-out
 export const IN_CURVE = (() => { const g = fmSpring({ keyframes: [0, 1], duration: IN_MS, bounce: 0.12 }); return Array.from({ length: IN_N + 1 }, (_, i) => (i === IN_N ? 1 : g.next((i * IN_MS) / IN_N).value)); })();
 const OUT_CURVE = (() => { const e = cubicBezier(...EASE); return Array.from({ length: OUT_N + 1 }, (_, i) => e(i / OUT_N)); })();

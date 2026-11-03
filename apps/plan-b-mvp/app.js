@@ -93,6 +93,9 @@ const I = {
   // Menu, profile, map picker and the weather page
   chevronDown: (s = 14) => svg('<polyline points="6 9 12 15 18 9"/>', s),
   user: (s) => svg('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>', s),
+  phone: (s) => svg('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>', s),
+  globe: (s) => svg('<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>', s),
+  bookmark: (s) => svg('<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>', s),
   info: (s) => svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>', s),
   shield: (s) => svg('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>', s),
   file: (s) => svg('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>', s),
@@ -842,10 +845,10 @@ function journeyScreen() {
       <p class="subtitle">Public transport options come first, with the true cost of driving and the CO₂ you avoid alongside.</p>
       <p class="section-header">Journey</p>
       <div class="group"><div class="group-card">
-        <div class="row field-row${originRowClass()}" data-origin-row><span class="row-icon" style="--tone:var(--success)">${f.origin === CURRENT_PLACE ? I.locate(18) : I.walk(18)}</span><div class="place-input"><label for="f-origin">From</label><input id="f-origin" type="text" data-field="origin" ${acAttrs("form.origin")} value="${esc(f.origin)}" placeholder="Address, stop or place" autocomplete="off"></div></div>
+        <div class="row field-row${originRowClass()}" data-origin-row><span class="row-icon" style="--tone:var(--success)">${f.origin === CURRENT_PLACE ? I.locate(18) : I.walk(18)}</span><div class="place-input"><label for="f-origin">From</label><input id="f-origin" type="text" data-field="origin" ${acAttrs("form.origin")} value="${esc(f.origin)}" placeholder="Address, stop or place" autocomplete="off"></div>${placeInfoButton("origin")}</div>
         ${originNote()}
         ${placeChips("origin")}
-        <div class="row field-row"><span class="row-icon" style="--tone:var(--error)">${I.pin(18)}</span><div class="place-input"><label for="f-destination">To</label><input id="f-destination" type="text" data-field="destination" ${acAttrs("form.destination")} value="${esc(f.destination)}" placeholder="Address or place" autocomplete="off"></div></div>
+        <div class="row field-row"><span class="row-icon" style="--tone:var(--error)">${I.pin(18)}</span><div class="place-input"><label for="f-destination">To</label><input id="f-destination" type="text" data-field="destination" ${acAttrs("form.destination")} value="${esc(f.destination)}" placeholder="Address or place" autocomplete="off"></div>${placeInfoButton("destination")}</div>
         ${placeChips("destination")}
       </div></div>
       <p class="section-header">When</p>
@@ -2671,10 +2674,10 @@ const bridge = window.RerouteBridge || null;
 // Focus management. An open layer (menu, Settings, a sheet, a full-screen map, a pop-up or a dialog) is modal: the screen and
 // any layer under it are inert and Tab wraps inside it. Order matches the stacking order, top first.
 const expandedMap = () => viewport.querySelector(":scope > .map-wrap.expanded");
-const topLayer = () => dialogEl || popupEl || expandedMap() || sheetEl || settingsEl || menuEl;
+const topLayer = () => dialogEl || placeEl || popupEl || expandedMap() || sheetEl || settingsEl || menuEl;
 function syncInert() {
   const top = topLayer();
-  [currentPage, menuEl, settingsEl, sheetEl, expandedMap(), popupEl, document.getElementById("demo-pill")].forEach((el) => { if (el) el.inert = !!top && el !== top; });
+  [currentPage, menuEl, settingsEl, sheetEl, expandedMap(), popupEl, placeEl, document.getElementById("demo-pill")].forEach((el) => { if (el) el.inert = !!top && el !== top; });
 }
 document.addEventListener("keydown", (event) => {
   const top = event.key === "Tab" && topLayer();
@@ -3191,7 +3194,7 @@ function closePopup(immediate = false) {
   const el = popupEl;
   popupEl = null;
   syncInert();
-  if (el.classList.contains("picker")) disposePicker();
+  if (el.classList.contains("picker")) { closePlace(false, true); disposePicker(); }
   if (immediate) return el.remove();
   el.classList.remove("open");
   setTimeout(() => el.remove(), 360);
@@ -3490,6 +3493,13 @@ const actions = {
   "alert-more": (el) => { const a = findAlert(el.dataset.id); if (a) openPopup(alertPopup(a)); },
   "close-popup": () => closePopup(),
   "popup-backdrop": (el, event) => { if (event.target === el) closePopup(); },
+  "place-info": openPlace,
+  "close-place": () => closePlace(),
+  "place-backdrop": (el, event) => { if (event.target === el) closePlace(); },
+  "place-use": () => { closePlace(false, true); usePickedPlace(); },
+  "place-share": sharePlace,
+  "place-save": togglePlaceSaved,
+  "place-view": (el) => showPlaceView(el.dataset.view),
   // Choose on map
   "pick-map": (el) => openMapPicker(el.dataset.path),
   "picker-zoom": (el) => { if (picker.map) picker.map.setZoom(picker.map.getZoom() + Number(el.dataset.delta)); },
@@ -3900,6 +3910,7 @@ document.addEventListener("input", (event) => {
   if (t.dataset.field && state.form) {
     const field = t.dataset.field;
     Object.assign(state.form, { [field]: t.value, [`${field}PlaceId`]: null, [`${field}Coords`]: null });
+    t.closest(".field-row")?.querySelector(".place-i")?.remove(); // typed text is no longer that place
     if (field === "origin" && (state.form.originLocating || state.form.originNote)) { Object.assign(state.form, { originLocating: false, originNote: null }); paintOrigin(); }
     state.error = null;
   }
@@ -3956,6 +3967,7 @@ document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   if (dialogEl) return closeDialog();
   if (profileOpen()) { toggleProfileMenu(false); return currentPage.querySelector(".avatar-btn")?.focus(); }
+  if (placeEl) return closePlace();
   if (popupEl) return closePopup();
   const expanded = viewport.querySelector(".map-wrap.expanded [data-action='map-expand']");
   if (expanded) return actions["map-expand"](expanded);
@@ -4794,7 +4806,7 @@ const autocomplete = (() => {
 // keep coordinates beside a readable label; saved places store plain text, so a pin is saved as its "lat,lng" coordinates.
 function applyPlace(path, text, placeId, coords = null) {
   const [scope, field] = path.split(".");
-  if (scope === "form") { Object.assign(state.form, { [field]: text, [`${field}PlaceId`]: placeId || null, [`${field}Coords`]: coords }); if (field === "origin") Object.assign(state.form, { originLocating: false, originNote: null }); state.error = null; }
+  if (scope === "form") { Object.assign(state.form, { [field]: text, [`${field}PlaceId`]: placeId || null, [`${field}Coords`]: coords }); if (field === "origin") Object.assign(state.form, { originLocating: false, originNote: null }); state.error = null; syncPlaceInfo(field); }
   else if (scope === "panic") { Object.assign(state.panic, { [field]: text, [`${field}PlaceId`]: placeId || null, [`${field}Coords`]: coords }); }
   else if (scope === "draft") { if (state.placeDraft) Object.assign(state.placeDraft, { [field]: text, place_id: placeId || null }); }
   else { const p = savedPlace(field); if (p) { p.address = text.slice(0, PLACE_ADDRESS_MAX); p.place_id = placeId || null; saveSettings(); } }
@@ -4812,7 +4824,8 @@ function pickerCardInner() {
   // Offline maps have no Google places to tap, so only the pin is offered there.
   if (!c) return `<div class="picker-hint"><span class="row-icon" style="--tone:var(--accent)">${I.pin(18)}</span><p>${state.offline ? "<b>Press and hold</b> anywhere on the offline map to drop a pin." : "<b>Tap a place</b> on the map to choose it, or <b>press and hold</b> anywhere to drop a pin."}</p></div>`;
   if (c.kind === "loading") return skelLines("Looking up this place", 60, 80);
-  if (c.kind === "place") return `<div class="picker-choice"><span class="row-icon" style="--tone:var(--error)">${I.pin(18)}</span><div><b>${esc(c.name)}</b><small>${esc(c.address)}</small><span class="picker-attr">${googleMapsAttribution()}</span></div></div>`;
+  // A tapped place opens its details sheet (hours, photos, reviews), which grows out of this card.
+  if (c.kind === "place") return `<button class="picker-choice place-open" data-action="place-info" data-from="picker" aria-haspopup="dialog"><span class="row-icon" style="--tone:var(--error)">${I.pin(18)}</span><div><b>${esc(c.name)}</b><small>${esc(c.address)}</small><span class="picker-attr">${googleMapsAttribution()}</span></div><span class="place-more" aria-hidden="true">${I.chevronDown(18)}</span><span class="visually-hidden">Show details</span></button>`;
   return `<div class="picker-choice"><span class="row-icon" style="--tone:var(--error)">${I.pin(18)}</span><div><b>Dropped pin</b><small>${c.lat.toFixed(5)}, ${c.lng.toFixed(5)} · drag the pin or tap the map to move it</small>${c.note ? `<small class="warn-text">${esc(c.note)}</small>` : ""}</div></div>`;
 }
 function pickerSheet(path) {
@@ -5007,6 +5020,190 @@ function disposePicker() {
   if (picker.map) GM.event.clearInstanceListeners(picker.map);
   Object.assign(picker, { map: null, me: null, overlay: null, choice: null, path: null, req: picker.req + 1 });
 }
+
+// ── Place sheet ──────────────────────────────────────────────────────────────
+// Everything about one Google place (hours, rating, photos, reviews, contact details), opened from the picker's place card or from the
+// "i" button beside a From or To field that holds a place. It is its own layer above the picker; motion/panels.js grows it out of the
+// element that opened it (placeEl._from) and shrinks it back on close. Details are fetched only now (GET /api/place/info), never on a tap.
+let placeEl = null;
+let placeFocus = null;
+const place = { id: null, name: "", address: "", fromPicker: false, data: null, error: null, view: "overview", req: 0 };
+const PLACE_VIEWS = { overview: "Overview", reviews: "Reviews", photos: "Photos", about: "About" };
+
+function openPlace(trigger) {
+  const fromPicker = trigger.dataset.from === "picker", field = (trigger.dataset.path || "").split(".")[1];
+  const c = picker.choice, id = fromPicker ? c?.kind === "place" && c.placeId : state.form?.[`${field}PlaceId`];
+  if (!id) return;
+  const [name, ...rest] = (fromPicker ? `${c.name}, ${c.address}` : state.form[field] || "").split(", ");
+  Object.assign(place, { id, fromPicker, name: fromPicker ? c.name : name, address: fromPicker ? c.address : rest.join(", "), data: null, error: null, view: "overview", req: place.req + 1 });
+  dropOpen.delete("place-view");
+  dropOpen.delete("place-hours");
+  closePlace(false, true);
+  placeFocus = trigger;
+  placeEl = document.createElement("div");
+  placeEl.className = "place-backdrop";
+  placeEl.dataset.action = "place-backdrop";
+  placeEl._from = trigger.getBoundingClientRect();
+  placeEl.innerHTML = `<div class="place-sheet" role="dialog" aria-modal="true" aria-labelledby="place-title">${placeSheetHtml()}</div>`;
+  viewport.appendChild(placeEl);
+  syncInert();
+  dragToClose(placeEl, ".place-sheet", ".grabber, .place-head", "y", () => closePlace(true));
+  requestAnimationFrame(() => requestAnimationFrame(() => placeEl?.classList.add("open")));
+  placeEl.querySelector(".icon-btn")?.focus({ preventScroll: true });
+  loadPlace();
+}
+function closePlace(dragged = false, immediate = false) {
+  if (!placeEl) return;
+  const el = placeEl;
+  placeEl = null;
+  place.req++;
+  syncInert();
+  if (immediate) return el.remove();
+  el._dragged = dragged;
+  el.classList.remove("open");
+  setTimeout(() => el.remove(), 340);
+  restoreFocus(placeFocus);
+}
+async function loadPlace() {
+  const req = place.req;
+  try {
+    const r = await fetch(`/api/place/info?id=${encodeURIComponent(place.id)}`);
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || "Details for this place aren't available right now.");
+    if (req === place.req) place.data = data;
+  } catch (error) { if (req === place.req) place.error = error.message; }
+  if (req !== place.req || !placeEl) return;
+  if (place.data) setHTML(placeEl.querySelector("#place-title"), esc(place.data.name)); // Google's name, which can differ from the field's text
+  setHTML(placeEl.querySelector("[data-place-sub]"), placeSubHtml());
+  setHTML(placeEl.querySelector("[data-place-body]"), placeBodyHtml());
+}
+
+const stars = (r) => `<span class="stars" style="--r:${Math.round((r / 5) * 100)}%" role="img" aria-label="Rated ${r.toFixed(1)} out of 5">★★★★★</span>`;
+const weekdayOf = (date) => new Intl.DateTimeFormat("en-AU", { timeZone: "Australia/Brisbane", weekday: "long" }).format(date);
+function openState(d) {
+  if (d.status === "CLOSED_PERMANENTLY") return { cls: "closed", text: "Permanently closed" };
+  if (d.status === "CLOSED_TEMPORARILY") return { cls: "closed", text: "Temporarily closed" };
+  if (d.open_now === true) return { cls: "open", text: "Open", more: d.next_close ? `Closes ${timeOf(d.next_close)}` : "" };
+  if (d.open_now === false) {
+    const at = d.next_open && new Date(d.next_open), sameDay = at && weekdayOf(at) === weekdayOf(new Date());
+    return { cls: "closed", text: "Closed", more: at ? `Opens ${sameDay ? "" : `${weekdayOf(at).slice(0, 3)} `}${timeOf(d.next_open)}` : "" };
+  }
+  return null;
+}
+function placeSubHtml() {
+  const d = place.data;
+  if (!d) return esc(place.address);
+  const open = openState(d);
+  const facts = [d.rating !== null && `<span class="place-rating"><b>${d.rating.toFixed(1)}</b>${stars(d.rating)}${d.rating_count ? `<span>(${d.rating_count.toLocaleString("en-AU")})</span>` : ""}</span>`,
+    d.type && esc(d.type), d.price && esc(d.price)].filter(Boolean).join('<span aria-hidden="true"> · </span>');
+  return `${facts ? `<span class="place-facts">${facts}</span>` : ""}${open ? `<span class="place-now"><b class="${open.cls}">${open.text}</b>${open.more ? ` · ${esc(open.more)}` : ""}</span>` : ""}`;
+}
+function placeSheetHtml() {
+  return `<div class="grabber"><span></span></div>
+    <div class="place-head"><div class="place-title"><h3 id="place-title">${esc(place.name || "This place")}</h3><p class="place-sub" data-place-sub>${placeSubHtml()}</p></div>
+      <button class="icon-btn" data-action="close-place" aria-label="Close">${I.x(18)}</button></div>
+    ${place.fromPicker ? `<div class="place-use"><button class="btn btn-primary" data-action="place-use">Use this place</button></div>` : ""}
+    <div class="place-scroll" data-place-body>${placeBodyHtml()}</div>`;
+}
+const placeSaved = () => settings.saved_places.find((p) => p.place_id && p.place_id === place.id);
+function placeActionsHtml(d) {
+  const act = (icon, label, attrs, on = false) => `<${attrs.startsWith("href") ? "a" : "button"} class="place-act${on ? " on" : ""}" ${attrs}>${icon(20)}<span>${label}</span></${attrs.startsWith("href") ? "a" : "button"}>`;
+  const saved = placeSaved();
+  return `<div class="place-actions">
+    ${d.dial ? act(I.phone, "Call", `href="tel:${esc(d.dial)}"`) : act(I.phone, "Call", 'disabled aria-label="Call (no phone number listed)"')}
+    ${act(I.share, "Share", 'data-action="place-share"')}
+    ${act(I.bookmark, saved ? "Saved" : "Save", `data-action="place-save" aria-pressed="${!!saved}"`, !!saved)}
+    ${d.website ? act(I.globe, "Website", `href="${esc(d.website)}" target="_blank" rel="noopener noreferrer"`) : act(I.globe, "Website", 'disabled aria-label="Website (none listed)"')}
+  </div>`;
+}
+const photoSrc = (p, w) => `/api/place/photo?name=${encodeURIComponent(p.name)}&w=${w}`;
+const photoCredit = (p) => p.credits.map((a) => (a.uri ? `<a href="${esc(a.uri)}" target="_blank" rel="noopener noreferrer">${esc(a.name)}</a>` : esc(a.name))).join(", ");
+const photoFig = (p, i, w = 640) => `<figure class="place-photo"><img src="${photoSrc(p, w)}" alt="Photo ${i + 1} of ${esc(place.data.name)}" loading="lazy" decoding="async">${p.credits.length ? `<figcaption>${photoCredit(p)}</figcaption>` : ""}</figure>`;
+function placeBodyHtml() {
+  const d = place.data;
+  if (!d && place.error) return `<div class="place-view">${notice(esc(place.error), "error")}${place.address ? placeRow(I.pin, esc(place.address)) : ""}</div>`;
+  if (!d) return `<div class="place-actions">${'<div class="skeleton place-act-skel"></div>'.repeat(4)}</div><div class="place-gallery">${'<div class="skeleton place-photo"></div>'.repeat(2)}</div><div class="place-view">${skelLines("Loading this place", 40, 100, 80, 60)}</div>`;
+  return `${placeActionsHtml(d)}
+    ${d.photos.length ? `<div class="place-gallery" role="list" aria-label="Photos">${d.photos.map((p, i) => photoFig(p, i)).join("")}</div>` : ""}
+    <div class="place-views">${placeViewMenu()}</div>
+    ${placeViewHtml(d)}
+    <p class="fine place-attr">Details, photos and reviews from Google Maps</p>`;
+}
+// The section title is a menu: Overview, Reviews, Photos, About.
+const placeViewMenu = () => drop("place-view", `<span class="place-view-title">${PLACE_VIEWS[place.view]}</span>`, Object.entries(PLACE_VIEWS).map(([id, label]) => `<button class="place-menu-item" data-action="place-view" data-view="${id}"${id === place.view ? ' aria-current="true"' : ""}>${label}</button>`).join(""), "place-view-menu");
+const placeRow = (icon, html, href = "") => (href ? `<a class="place-row" href="${esc(href)}"${href.startsWith("http") ? ' target="_blank" rel="noopener noreferrer"' : ""}>${icon(18)}<span>${html}</span></a>` : `<div class="place-row">${icon(18)}<span>${html}</span></div>`);
+function hoursHtml(d) {
+  if (!d.hours.length) return "";
+  const today = weekdayOf(new Date()), open = openState(d);
+  const rows = d.hours.map((line) => { const [day, ...time] = line.split(": "); return `<li${day === today ? ' class="today"' : ""}><span>${esc(day)}</span><span>${esc(time.join(": "))}</span></li>`; }).join("");
+  const todayLine = d.hours.find((line) => line.startsWith(`${today}:`))?.split(": ").slice(1).join(": ");
+  return drop("place-hours", `<span class="drop-title">${open ? `<b class="${open.cls}">${open.text}</b>${open.more ? ` · ${esc(open.more)}` : ""}` : "Opening hours"}</span>${todayLine ? `<span class="drop-sub">Today ${esc(todayLine)}</span>` : ""}`, `<ul class="place-hours">${rows}</ul>`, "place-hours-drop");
+}
+const reviewHtml = (r) => `<article class="review"><div class="review-head">${r.author_photo ? `<img src="${esc(r.author_photo)}" alt="" width="32" height="32" loading="lazy" referrerpolicy="no-referrer">` : `<span class="review-avatar" aria-hidden="true">${esc(r.author.slice(0, 1))}</span>`}
+  <div>${r.author_uri ? `<a href="${esc(r.author_uri)}" target="_blank" rel="noopener noreferrer">${esc(r.author)}</a>` : `<b>${esc(r.author)}</b>`}<small>${r.rating ? stars(r.rating) : ""} ${esc(r.when)}</small></div></div>${r.text ? `<p>${esc(r.text)}</p>` : ""}</article>`;
+function aboutRows(d) {
+  return `${d.address ? placeRow(I.pin, esc(d.address)) : ""}${d.phone ? placeRow(I.phone, esc(d.phone), `tel:${d.dial}`) : ""}${d.website ? placeRow(I.globe, esc(d.website.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")), d.website) : ""}`;
+}
+function placeViewHtml(d) {
+  const reviews = (list) => list.map(reviewHtml).join("") || `<p class="tb-note">No reviews yet.</p>`;
+  const more = d.maps_url ? `<a class="btn btn-secondary place-maps" href="${esc(d.maps_url)}" target="_blank" rel="noopener noreferrer">Open in Google Maps ${I.external(16)}</a>` : "";
+  const business = [d.type && placeRow(I.info, esc(d.type)), d.price && placeRow(I.dollar, `Price ${esc(d.price)}`), d.rating_count && placeRow(I.star, `${d.rating.toFixed(1)} from ${d.rating_count.toLocaleString("en-AU")} Google reviews`)].filter(Boolean).join("");
+  const body = {
+    overview: `${hoursHtml(d)}
+      ${d.reviews.length ? `<section class="place-block clamp"><h4>Reviews</h4>${reviews(d.reviews.slice(0, 2))}<button class="btn btn-secondary" data-action="place-view" data-view="reviews">All reviews</button></section>` : ""}
+      ${business || d.summary ? `<section class="place-block"><h4>Business info</h4>${d.summary ? `<p class="place-summary">${esc(d.summary)}</p>` : ""}${business}</section>` : ""}
+      <section class="place-block"><h4>About</h4>${aboutRows(d)}</section>`,
+    reviews: `<section class="place-block">${d.rating !== null ? `<p class="place-score"><b>${d.rating.toFixed(1)}</b>${stars(d.rating)}<span>${d.rating_count ? `${d.rating_count.toLocaleString("en-AU")} reviews` : ""}</span></p>` : ""}${reviews(d.reviews)}</section>${more}`,
+    photos: d.photos.length ? `<div class="place-photo-grid">${d.photos.map((p, i) => photoFig(p, i, 480)).join("")}</div>` : `<p class="tb-note">No photos of this place yet.</p>`,
+    about: `${d.summary ? `<p class="place-summary">${esc(d.summary)}</p>` : ""}${hoursHtml(d)}<section class="place-block">${aboutRows(d)}${business}</section>${more}`,
+  }[place.view];
+  return `<div class="place-view" data-place-view>${body}</div>`;
+}
+async function sharePlace() {
+  const d = place.data, url = d?.maps_url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place.name)}&query_place_id=${encodeURIComponent(place.id)}`;
+  try {
+    if (navigator.share) return await navigator.share({ title: d?.name || place.name, text: d?.address || place.address, url });
+    await navigator.clipboard.writeText(url);
+    toast("Link copied.");
+  } catch (error) { if (error?.name !== "AbortError") toast("This place couldn't be shared.", "warning"); }
+}
+// Save keeps the place in Saved places (Settings), under its Google name; tapping again removes it.
+function togglePlaceSaved() {
+  const d = place.data, saved = placeSaved();
+  if (saved) {
+    settings.saved_places = settings.saved_places.filter((p) => p !== saved);
+    toast(`Removed ${saved.name} from your places.`);
+  } else {
+    if (customPlaces().length >= MAX_CUSTOM_PLACES) return toast(`You can save up to ${MAX_CUSTOM_PLACES} places. Delete one in Settings first.`, "warning");
+    const base = (d?.name || place.name).slice(0, PLACE_NAME_MAX), taken = (n) => [...FIXED_PLACES.map(([, f]) => f), ...customPlaces().map((p) => p.name)].some((x) => x.toLowerCase() === n.toLowerCase());
+    let name = base;
+    for (let k = 2; taken(name); k++) name = `${base.slice(0, PLACE_NAME_MAX - 4)} (${k})`;
+    settings.saved_places.push({ id: newPlaceId(), name, address: (d?.address || place.address).slice(0, PLACE_ADDRESS_MAX), place_id: place.id });
+    toast(`Saved ${name}.`);
+  }
+  saveSettings();
+  const actions = placeEl?.querySelector(".place-actions");
+  if (actions && d) actions.outerHTML = placeActionsHtml(d);
+}
+function showPlaceView(view) {
+  if (!place.data || !PLACE_VIEWS[view]) return;
+  place.view = view;
+  dropOpen.delete("place-view");
+  const views = placeEl?.querySelector(".place-views"), current = placeEl?.querySelector("[data-place-view]");
+  if (views) views.innerHTML = placeViewMenu();
+  if (current) current.outerHTML = placeViewHtml(place.data); // a new .place-view: motion/panels.js slides its blocks in
+  views?.scrollIntoView({ block: "nearest", behavior: prefersReducedMotion() ? "auto" : "smooth" });
+  views?.querySelector(".drop-head")?.focus({ preventScroll: true });
+}
+// The plain "i" beside a From or To field that holds a Google place.
+// Autocomplete picks do not re-render the page, so the button is added or removed in place.
+function syncPlaceInfo(field) {
+  const row = currentPage?.querySelector(`#f-${field}`)?.closest(".field-row");
+  if (!row) return;
+  row.querySelector(".place-i")?.remove();
+  row.insertAdjacentHTML("beforeend", placeInfoButton(field));
+}
+const placeInfoButton = (field) => (state.form?.[`${field}PlaceId`] ? `<button class="place-i" data-action="place-info" data-path="form.${field}" aria-haspopup="dialog" aria-label="About ${field === "origin" ? "your start" : "your destination"}">${I.info(20)}</button>` : "");
 
 function acAttrs(path) {
   return `data-ac="${path}" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="ac-list" autocomplete="off" spellcheck="false"`;

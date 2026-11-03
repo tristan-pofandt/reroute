@@ -1,7 +1,7 @@
 /* Reroute service worker: offline app shell, network-first API reads, and Web Push notifications. */
 "use strict";
 
-const VERSION = "planb-reroute-25"; // keep the planb- prefix: activate() deletes older planb- caches
+const VERSION = "planb-reroute-26"; // keep the planb- prefix: activate() deletes older planb- caches
 // The React shell's hashed files (/assets/*) are found by reading the cached "/" page and the entry script, see precacheBuilt().
 // Legacy scripts are listed because the shell loads them as classic scripts; the old gsap layer (legacy index.html only) is cached on first use only.
 const SHELL = ["/", "/app.css", "/app.js", "/offline.js", "/favicon.svg", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/apple-touch-icon.png"];
@@ -47,7 +47,8 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname === "/healthz" || url.pathname === "/readyz" || url.pathname.startsWith("/admin/")) return;
   if (url.pathname.startsWith("/api/") || url.pathname === "/qr.svg") {
     // Offline area downloads are large and are stored by the app itself (IndexedDB), so they are not copied into this cache too.
-    if (url.pathname.startsWith("/api/push/") || url.pathname.startsWith("/api/rides") || url.pathname.startsWith("/api/offline/")) return;
+    // Place photos redirect to Google's image servers; the browser follows that itself (an opaque redirect cannot be cached).
+    if (url.pathname.startsWith("/api/push/") || url.pathname.startsWith("/api/rides") || url.pathname.startsWith("/api/offline/") || url.pathname === "/api/place/photo") return;
     event.respondWith(networkFirst(req));
     return;
   }

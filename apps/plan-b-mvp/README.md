@@ -59,6 +59,7 @@ The deployment settings are documented in [`infra/plan-b-mvp/README.md`](../../i
 | `PLANB_DAILY_GOOGLE_CAP` | Searches per Brisbane day for everyone together, default 50 |
 | `PLANB_DAILY_AUTOCOMPLETE_CAP` | Address suggestion and map place lookups per Brisbane day for everyone together, default 500 |
 | `PLANB_PLACE_LIMIT_PER_HOUR` | Map place lookups ("Choose on map") per visitor address per hour, default 60 |
+| `PLANB_PHOTO_LIMIT_PER_HOUR` | Place photos (each a Google Place Photos request) per visitor address per hour, default 120; they also count towards the daily address-lookup cap |
 | `PLANB_OFFLINE_LIMIT_PER_HOUR` | Offline area downloads per visitor address per hour, counted separately for the map (`/api/offline/map`) and the timetable (`/api/offline/transit`), default 6 each. Applies with or without a Google key; the developer's own machine is not limited |
 | `PLANB_DATA_DIR` | Where the ride board, push subscriptions, VAPID keys, the GTFS index and zip (about 37 MB in all) and the offline map cache (`offline/`, up to 20 areas of about 3 MB each) are written, default `data/` here |
 | `PLANB_ADMIN_TOKEN` | Secret that turns on the ride-board moderation queue at `/admin/moderation` (404 while unset). 32+ random characters, host secret only |

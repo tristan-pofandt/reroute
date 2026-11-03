@@ -277,6 +277,99 @@ def place_details(key, place_id):
     return cached(("place", place_id), 86400, compute)
 
 
+# Everything the expanded place sheet shows. reviews and editorialSummary make this a Place Details Enterprise + Atmosphere request
+# (the costliest Place Details SKU), so it is only asked for when the traveller opens the sheet, never for a plain tap on the map.
+PLACE_INFO_FIELDS = ("id,displayName,formattedAddress,location,iconMaskBaseUri,iconBackgroundColor,primaryTypeDisplayName,rating,userRatingCount,"
+                     "priceLevel,businessStatus,currentOpeningHours,regularOpeningHours,nationalPhoneNumber,internationalPhoneNumber,websiteUri,"
+                     "googleMapsUri,photos,reviews,editorialSummary")
+PHOTO_NAME = re.compile(r"^places/[A-Za-z0-9_-]{10,400}/photos/[A-Za-z0-9_-]{10,1200}$")
+PHOTO_HOST = re.compile(r"^https://[a-z0-9-]+\.(googleusercontent|ggpht)\.com/")
+PRICE_LEVELS = {"PRICE_LEVEL_FREE": "Free", "PRICE_LEVEL_INEXPENSIVE": "$", "PRICE_LEVEL_MODERATE": "$$", "PRICE_LEVEL_EXPENSIVE": "$$$",
+                "PRICE_LEVEL_VERY_EXPENSIVE": "$$$$"}
+PHONE = re.compile(r"^\+?[0-9 ()-]{6,24}$")
+MAX_PHOTOS, MAX_REVIEWS = 10, 5
+
+
+def _web(value, host=None):
+    """An http(s) address from Google, or None: it ends up in an href, so nothing else (javascript:, data:) gets through."""
+    value = value if isinstance(value, str) else ""
+    return value if re.match(r"^https?://[^\s\"'<>]+$", value) and len(value) <= 2048 and (not host or host.match(value)) else None
+
+
+def _text(value, size=2000):
+    return ((value or {}).get("text") or "")[:size] if isinstance(value, dict) else ""
+
+
+def place_info(key, place_id):
+    """Opening hours, rating, reviews, phone, website, summary and photo names of one place, for the place sheet. Cached for 15 minutes
+    (opening status changes during the day). One Place Details Enterprise + Atmosphere request."""
+    def compute():
+        try:
+            data = _get_json(f"{PLACES_DETAILS_URL}{place_id}?{urlencode({'languageCode': 'en-AU'})}", timeout=8,
+                             headers={"X-Goog-Api-Key": key, "X-Goog-FieldMask": PLACE_INFO_FIELDS})
+            record_request("Places API (New)", "Place Details Enterprise + Atmosphere")
+        except HTTPError as error:
+            if error.code == 404:
+                return None
+            raise ServiceError("Place details are unavailable.") from error
+        except (URLError, TimeoutError, OSError, ValueError) as error:
+            raise ServiceError("Place details are unavailable.") from error
+        name = _text(data.get("displayName"), 200) or data.get("formattedAddress") or ""
+        if not name:
+            return None
+        location = data.get("location") or {}
+        current = data.get("currentOpeningHours") or {}
+        regular = data.get("regularOpeningHours") or current
+        phone = data.get("nationalPhoneNumber") or ""
+        dial = data.get("internationalPhoneNumber") or phone
+        photos = []
+        for photo in (data.get("photos") or [])[:MAX_PHOTOS]:
+            if isinstance(photo, dict) and PHOTO_NAME.match(photo.get("name") or ""):
+                photos.append({"name": photo["name"], "width": photo.get("widthPx"), "height": photo.get("heightPx"),
+                               "credits": [{"name": (a.get("displayName") or "")[:120], "uri": _web(a.get("uri"))}
+                                           for a in photo.get("authorAttributions") or [] if isinstance(a, dict)][:3]})
+        reviews = []
+        for review in (data.get("reviews") or [])[:MAX_REVIEWS]:
+            if not isinstance(review, dict):
+                continue
+            author = review.get("authorAttribution") or {}
+            rating = review.get("rating")
+            reviews.append({"author": (author.get("displayName") or "A Google user")[:120], "author_uri": _web(author.get("uri")),
+                            "author_photo": _web(author.get("photoUri"), PHOTO_HOST),
+                            "rating": rating if isinstance(rating, (int, float)) and 1 <= rating <= 5 else None,
+                            "when": (review.get("relativePublishTimeDescription") or "")[:60],
+                            "text": _text(review.get("text")) or _text(review.get("originalText"))})
+        rating, count = data.get("rating"), data.get("userRatingCount")
+        return {"place_id": data.get("id") or place_id, "name": name[:200], "address": data.get("formattedAddress") or "",
+                "location": [location["latitude"], location["longitude"]] if "latitude" in location and "longitude" in location else None,
+                "icon": _place_icon(data), "type": _text(data.get("primaryTypeDisplayName"), 80),
+                "rating": rating if isinstance(rating, (int, float)) and 0 <= rating <= 5 else None,
+                "rating_count": count if isinstance(count, int) and count >= 0 else None,
+                "price": PRICE_LEVELS.get(data.get("priceLevel")), "status": data.get("businessStatus") if data.get("businessStatus") in
+                ("OPERATIONAL", "CLOSED_TEMPORARILY", "CLOSED_PERMANENTLY") else None,
+                "open_now": current.get("openNow") if isinstance(current.get("openNow"), bool) else None,
+                "next_open": current.get("nextOpenTime") if isinstance(current.get("nextOpenTime"), str) else None,
+                "next_close": current.get("nextCloseTime") if isinstance(current.get("nextCloseTime"), str) else None,
+                "hours": [str(line)[:120] for line in (regular.get("weekdayDescriptions") or [])[:7]],
+                "phone": phone if PHONE.match(phone) else None, "dial": dial.replace(" ", "") if PHONE.match(dial) else None,
+                "website": _web(data.get("websiteUri")), "maps_url": _web(data.get("googleMapsUri")),
+                "summary": _text(data.get("editorialSummary"), 600), "photos": photos, "reviews": reviews}
+    return cached(("place_info", place_id), 900, compute)
+
+
+def place_photo(key, name, width):
+    """A short-lived image address (on googleusercontent.com, without the key) for one place photo. One Place Photos request."""
+    def compute():
+        try:
+            data = _get_json(f"https://places.googleapis.com/v1/{name}/media?{urlencode({'maxWidthPx': width, 'skipHttpRedirect': 'true'})}",
+                             timeout=8, headers={"X-Goog-Api-Key": key})
+            record_request("Places API (New)", "Place Photos")
+        except (HTTPError, URLError, TimeoutError, OSError, ValueError) as error:
+            raise ServiceError("That photo is unavailable.") from error
+        return _web(data.get("photoUri"), PHOTO_HOST)
+    return cached(("place_photo", name, width), 600, compute)
+
+
 def fuel_price(key, lat, lng, fuel_type="SP91"):
     """Average current price of `fuel_type` (AUD/L) at up to 20 stations within 5 km."""
     def compute():

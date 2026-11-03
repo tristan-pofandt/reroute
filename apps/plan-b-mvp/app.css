@@ -1143,6 +1143,87 @@ button.row:disabled { opacity: 0.45; cursor: default; }
 .picker-choice small { display: block; font-size: 0.8125rem; color: var(--text-muted); margin-top: 2px; line-height: 1.45; overflow-wrap: anywhere; }
 .picker-choice small.warn-text { color: var(--warning-text); }
 .picker-attr { display: block; margin-top: 6px; }
+.place-open { width: 100%; padding: 0; background: none; border: none; color: inherit; font: inherit; text-align: left; border-radius: 12px; }
+.place-more { display: flex; color: var(--text-muted); transform: rotate(180deg); }
+
+/* ── Place sheet (a layer above the map picker; motion/panels.js grows it out of the card or "i" that opened it) ── */
+.place-i { flex-shrink: 0; width: 44px; height: 44px; margin-right: -8px; display: flex; align-items: center; justify-content: center; padding: 0; background: none; border: none; color: var(--text-muted); border-radius: 12px; }
+.place-i:active { color: var(--text-main); }
+.place-backdrop { position: absolute; inset: 0; z-index: 90; display: flex; flex-direction: column; justify-content: flex-end; }
+.place-backdrop::before { content: ""; position: absolute; inset: 0; background: var(--scrim); opacity: 0; transition: opacity var(--dur-close) var(--ease-close); }
+.place-backdrop.open::before { opacity: calc(1 - var(--drag, 0)); transition: opacity 200ms ease; }
+.place-backdrop.dragging::before { transition: none; }
+.place-backdrop:not(.open) { pointer-events: none; }
+.place-backdrop:not(.open) .place-sheet { opacity: 0; }
+.place-sheet { position: relative; height: 92%; display: flex; flex-direction: column; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-bottom: none; border-radius: 28px 28px 0 0; box-shadow: var(--shadow-pop); transform-origin: 50% 0; overflow: hidden; touch-action: none; }
+.place-head { display: flex; align-items: flex-start; gap: 12px; padding: 4px 20px 12px; touch-action: none; }
+.place-title { flex: 1; min-width: 0; }
+.place-title h3 { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.03em; line-height: 1.2; overflow-wrap: anywhere; }
+.place-sub { display: grid; gap: 4px; margin-top: 6px; font-size: 0.875rem; color: var(--text-muted); }
+.place-facts { display: flex; flex-wrap: wrap; align-items: center; column-gap: 4px; }
+.place-rating { display: inline-flex; align-items: center; gap: 5px; }
+.place-rating b { color: var(--text-main); font-weight: 600; }
+.stars { letter-spacing: 1px; font-size: 0.875em; background: linear-gradient(90deg, #F5B301 var(--r), var(--fill-strong) var(--r)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.place-now b.open, .drop-title b.open { color: var(--success-text); font-weight: 600; }
+.place-now b.closed, .drop-title b.closed { color: var(--error-text); font-weight: 600; }
+.place-use { padding: 0 20px 14px; }
+.place-use .btn { width: 100%; }
+.place-scroll { flex: 1; overflow-y: auto; padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--divider); touch-action: pan-y pinch-zoom; overscroll-behavior: contain; }
+.place-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 16px 20px; }
+.place-act { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 68px; padding: 10px 4px; border: none; border-radius: 18px; background: var(--accent-soft); color: var(--accent-text); font: inherit; font-size: 0.75rem; font-weight: 600; text-decoration: none; }
+.place-act:disabled { opacity: 0.45; }
+.place-act.on { background: var(--accent); color: var(--on-accent); }
+.place-act-skel { min-height: 68px; border-radius: 18px; }
+.place-gallery { display: flex; gap: 10px; overflow-x: auto; padding: 4px 20px 18px; scroll-snap-type: x mandatory; scroll-padding: 0 20px; scrollbar-width: none; overscroll-behavior-x: contain; touch-action: pan-x pan-y; }
+.place-gallery::-webkit-scrollbar { display: none; }
+.place-photo { flex: 0 0 auto; position: relative; width: 236px; height: 168px; margin: 0; border-radius: 18px; overflow: hidden; background: var(--fill-strong); scroll-snap-align: start; }
+.place-photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.place-photo figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 16px 10px 6px; font-size: 0.6875rem; color: #FFFFFF; background: linear-gradient(transparent, rgba(0, 0, 0, 0.55)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.place-photo figcaption a { color: inherit; }
+/* Swiping the gallery: each photo turns in from the right edge as it arrives and away at the left as it leaves, tied to its own scroll
+   position (a scroll-driven animation on the compositor: transform and opacity only). Browsers without view timelines show still photos. */
+@keyframes place-photo-pass {
+  entry 0% { opacity: 0.35; transform: perspective(700px) rotateY(-24deg) scale(0.84); }
+  entry 100%, exit 0% { opacity: 1; transform: none; }
+  exit 100% { opacity: 0.35; transform: perspective(700px) rotateY(24deg) scale(0.84); }
+}
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) { :root:not([data-motion="reduced"]) .place-gallery .place-photo { animation: place-photo-pass linear both; animation-timeline: view(inline); } }
+  :root[data-motion="full"] .place-gallery .place-photo { animation: place-photo-pass linear both !important; animation-timeline: view(inline); }
+}
+.place-views { position: relative; padding: 0 20px; }
+.place-view-menu .drop-head { min-height: 48px; width: auto; }
+.place-view-title { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.02em; }
+.place-view-menu > .drop-body { position: absolute; z-index: 3; top: 44px; left: 12px; min-width: 210px; display: grid; padding: 6px; background: var(--bg-pop); border: 1px solid var(--border-subtle); border-radius: 16px; box-shadow: var(--shadow-pop); }
+.place-menu-item { min-height: 44px; padding: 0 14px; border: none; border-radius: 10px; background: none; color: inherit; font: inherit; font-size: 0.9375rem; text-align: left; }
+.place-menu-item[aria-current="true"] { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
+.place-view { display: grid; gap: 22px; padding: 6px 20px 8px; }
+.place-block h4 { margin-bottom: 6px; font-size: 0.8125rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+.place-block > .btn { margin-top: 8px; }
+.place-summary { font-size: 0.9375rem; line-height: 1.5; margin-bottom: 4px; }
+.place-hours-drop { border-bottom: 1px solid var(--divider); padding-bottom: 6px; }
+.place-hours { list-style: none; margin: 4px 0 6px; padding: 0; display: grid; gap: 6px; }
+.place-hours li { display: flex; justify-content: space-between; gap: 12px; font-size: 0.875rem; color: var(--text-muted); }
+.place-hours li.today { color: var(--text-main); font-weight: 600; }
+.place-row { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; color: inherit; font-size: 0.9375rem; line-height: 1.4; text-decoration: none; overflow-wrap: anywhere; }
+.place-row svg { flex-shrink: 0; margin-top: 1px; color: var(--text-muted); }
+a.place-row span { color: var(--accent-text); }
+.review { display: grid; gap: 8px; padding: 12px 0; border-top: 1px solid var(--divider); }
+.review:first-of-type { border-top: none; }
+.review-head { display: flex; align-items: center; gap: 10px; }
+.review-head img, .review-avatar { width: 32px; height: 32px; flex-shrink: 0; border-radius: 50%; }
+.review-avatar { display: flex; align-items: center; justify-content: center; background: var(--fill-strong); font-weight: 600; font-size: 0.875rem; }
+.review-head a, .review-head b { display: block; font-size: 0.875rem; font-weight: 600; color: var(--text-main); text-decoration: none; }
+.review-head small { display: block; font-size: 0.75rem; color: var(--text-muted); }
+.review p { font-size: 0.875rem; line-height: 1.5; overflow-wrap: anywhere; }
+.place-block.clamp .review p { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+.place-score { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; color: var(--text-muted); font-size: 0.875rem; }
+.place-score b { font-size: 2rem; font-weight: 600; color: var(--text-main); letter-spacing: -0.03em; }
+.place-score .stars { font-size: 1.125rem; }
+.place-photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.place-photo-grid .place-photo { width: auto; height: 140px; }
+.place-maps { width: 100%; }
+.place-attr { padding: 12px 20px 0; }
 /* The chosen spot on the picker map (an HTML overlay). The head is a square with three round corners turned 45 degrees, so its sharp
    corner points down; it sits so that corner is exactly on the spot (its centre is --s × 0.7071 above it). A tapped place is a larger
    head in the place's own colour with its Google glyph; a dropped pin is red with a dark centre, like the Google Maps pin.

@@ -8,7 +8,7 @@
 //   * a soft haptic marks a menu / Settings opening, a snap a sheet.
 // A panel that is being dragged shut is left alone: it is already moving under the finger.
 import { animate } from "framer-motion";
-import { CSS_EASE, DUR, IN_CURVE, LINE_OUT, STAGGER_CLOSE, STAGGER_IN, clamp, fx, slide, slow } from "../choreography.js";
+import { CSS_EASE, DUR, IN_CURVE, IN_MS, LINE_OUT, STAGGER_CLOSE, STAGGER_IN, clamp, fx, slide, slow } from "../choreography.js";
 import { snap, soft } from "../haptics.js";
 import { track, untrack } from "./fm.js";
 
@@ -72,6 +72,33 @@ function dropOpened(box) {
   slide([...box.querySelectorAll(DROP_LINES)], { x: 0, y: -10 }, { cap: 8 });
 }
 
+// Place sheet: grows out of the element that opened it (the picker's place card, or the "i" beside a field). It rises from that element's
+// top edge and widens from its width to the full sheet on the arrival spring while its lines slide up; closing shrinks it back into the
+// element, faster, and a sheet dragged shut drops away instead. Transform and opacity only.
+const PLACE_LINES = ".place-head, .place-use, .place-scroll > *";
+function placeChange(backdrop, opened) {
+  const panel = backdrop.querySelector(".place-sheet");
+  if (!panel) return;
+  const was = live.get(panel);
+  was?.c.stop(); was?.run?.stop();
+  if (!opened && (!backdrop.isConnected || panel.style.transform)) return;
+  const to = panel.getBoundingClientRect(), from = backdrop._dragged ? null : backdrop._from;
+  const dx = from ? from.left + from.width / 2 - (to.left + to.width / 2) : 0, dy = from ? from.top - to.top : to.height * 0.6;
+  const sx = from ? clamp(from.width / to.width, 0.4, 1) : 1;
+  const pose = (v) => `translate(${(dx * (1 - v)).toFixed(2)}px, ${(dy * (1 - v)).toFixed(2)}px) scaleX(${(sx + (1 - sx) * v).toFixed(4)})`;
+  const s = slow();
+  if (opened) {
+    snap();
+    const frames = IN_CURVE.map((v, i) => ({ offset: i / (IN_CURVE.length - 1), transform: pose(v), opacity: clamp(0.2 + v * 1.6) }));
+    const done = (el) => { el.style.removeProperty("transform"); el.style.removeProperty("opacity"); };
+    live.set(panel, { c: fx([panel], frames, { duration: IN_MS * s, props: ["transform", "opacity"], done }),
+      run: slide([...panel.querySelectorAll(PLACE_LINES)], { x: 0, y: 24 }, { delay: 0.05, cap: 6 }) });
+    return;
+  }
+  live.set(panel, { c: fx([panel], [{ transform: "none", opacity: 1 }, { transform: pose(0), opacity: 0 }],
+    { duration: DUR.panelOut * 1000 * s, easing: CSS_EASE, props: ["transform", "opacity"], done: (el) => { el.style.opacity = "0"; } }) });
+}
+
 // Busy buttons get a loader drawn from the logo: the direct route bends into the detour and back, the app's idea in one line.
 const STRAIGHT = [4, 28, 10, 22, 18, 14, 28, 4], DETOUR = [4, 28, 4, 16, 11, 6, 25, 6];
 const path = (t) => { const n = STRAIGHT.map((v, i) => +lerp(v, DETOUR[i], t).toFixed(2)); return `M${n[0]} ${n[1]} C${n[2]} ${n[3]} ${n[4]} ${n[5]} ${n[6]} ${n[7]}`; };
@@ -110,9 +137,11 @@ export function handleMutations(list, done) {
       if (was !== now && t.matches(".menu-backdrop, .settings-backdrop, .sheet-backdrop")) panelChange(t, now);
       if (was !== now && t.matches(".profile-menu")) profileChange(t, now);
       if (!was && now && t.matches(".drop")) dropOpened(t);
+      if (was !== now && t.matches(".place-backdrop")) placeChange(t, now);
       if (t.matches("button.is-loading")) addLoader(t);
     } else {
       if (m.removedNodes.length) crossFade(m, done);
+      m.addedNodes.forEach((n) => { if (n.nodeType === 1 && n.matches(".place-view") && n.parentElement?.closest(".place-backdrop.open")) slide([...n.children], { x: 0, y: 12 }, { cap: 6 }); });
       m.addedNodes.forEach((n) => { if (n.nodeType === 1) (n.matches("button.is-loading") ? [n] : n.querySelectorAll("button.is-loading")).forEach(addLoader); });
     }
   }

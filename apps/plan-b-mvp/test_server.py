@@ -219,6 +219,44 @@ class ReadOnlyRouteTests(unittest.TestCase):
             found = server.google_api.place_details("k", "ChIJnoiconhere")
         self.assertEqual((found["name"], found["icon"]), ("Somewhere", None))
 
+    def test_place_info_cleans_googles_answer_for_the_place_sheet(self):
+        def fake_get(url, timeout=15, headers=None):
+            self.assertIn("reviews", headers["X-Goog-FieldMask"])
+            return {"id": "ChIJcafecafe01", "displayName": {"text": "Cafe"}, "formattedAddress": "1 Main St, St Lucia QLD 4067",
+                    "location": {"latitude": -27.5, "longitude": 153.0}, "rating": 4.4, "userRatingCount": 120, "priceLevel": "PRICE_LEVEL_MODERATE",
+                    "businessStatus": "OPERATIONAL", "currentOpeningHours": {"openNow": True, "nextCloseTime": "2026-11-03T07:00:00Z"},
+                    "regularOpeningHours": {"weekdayDescriptions": ["Monday: 7:00 am – 3:00 pm"] * 7}, "nationalPhoneNumber": "(07) 3365 1111",
+                    "internationalPhoneNumber": "+61 7 3365 1111", "websiteUri": "javascript:alert(1)", "googleMapsUri": "https://maps.google.com/?cid=1",
+                    "editorialSummary": {"text": "Coffee and cake."},
+                    "photos": [{"name": "places/ChIJcafecafe01/photos/AbCdEfGhIjKl", "widthPx": 800, "heightPx": 600,
+                                "authorAttributions": [{"displayName": "Sam", "uri": "https://maps.google.com/contrib/1"}]},
+                               {"name": "../../etc/passwd"}],
+                    "reviews": [{"rating": 5, "relativePublishTimeDescription": "a week ago", "text": {"text": "Great"},
+                                 "authorAttribution": {"displayName": "Lee", "photoUri": "https://evil.example/x.png"}}]}
+
+        with patch.object(server.google_api, "_get_json", fake_get):
+            found = server.google_api.place_info("k", "ChIJcafecafe01")
+        self.assertEqual((found["name"], found["rating"], found["rating_count"], found["price"], found["open_now"]), ("Cafe", 4.4, 120, "$$", True))
+        self.assertEqual((found["phone"], found["dial"], found["website"], found["summary"]), ("(07) 3365 1111", "+61733651111", None, "Coffee and cake."))
+        self.assertEqual([p["name"] for p in found["photos"]], ["places/ChIJcafecafe01/photos/AbCdEfGhIjKl"])
+        self.assertEqual(found["photos"][0]["credits"], [{"name": "Sam", "uri": "https://maps.google.com/contrib/1"}])
+        self.assertEqual((found["reviews"][0]["author"], found["reviews"][0]["author_photo"], found["reviews"][0]["text"]), ("Lee", None, "Great"))
+        self.assertEqual(len(found["hours"]), 7)
+
+    def test_place_info_and_photo_endpoints(self):
+        info, photo = server.google_api.place_info, server.google_api.place_photo
+        server.google_api.place_info = lambda key, place_id: {"name": "Cafe"} if place_id == "ChIJcafecafe01" else None
+        server.google_api.place_photo = lambda key, name, width: "https://lh3.googleusercontent.com/p/abc=w640"
+        self.addCleanup(setattr, server.google_api, "place_info", info)
+        self.addCleanup(setattr, server.google_api, "place_photo", photo)
+        self.assertEqual(self.client.get("/api/place/info?id=ChIJcafecafe01").get_json()["name"], "Cafe")
+        self.assertEqual(self.client.get("/api/place/info?id=ChIJmissing00").status_code, 404)
+        self.assertEqual(self.client.get("/api/place/info?id=bad id").status_code, 400)
+        found = self.client.get("/api/place/photo?name=places/ChIJcafecafe01/photos/AbCdEfGhIjKl&w=640")
+        self.assertEqual((found.status_code, found.headers["Location"]), (302, "https://lh3.googleusercontent.com/p/abc=w640"))
+        self.assertEqual(self.client.get("/api/place/photo?name=https://evil.example/x&w=640").status_code, 400)
+        self.assertEqual(self.client.get("/api/place/photo?name=places/ChIJcafecafe01/photos/AbCdEfGhIjKl&w=99999").status_code, 400)
+
     def test_weather_unavailable_is_a_502_with_a_message(self):
         class Down:
             def forecast(self, *args, **kwargs):
