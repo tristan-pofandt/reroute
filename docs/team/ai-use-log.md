@@ -1,0 +1,10 @@
+# AI-use log
+
+Records each piece of work an AI tool did on Reroute: who asked, what the AI did and did not do, and what a person still has to review. Entries before 30 October 2026 are in the course repository's `docs/team/ai-use-log.md`, where the project lived until then.
+
+## 2026-11-03: Place info sheet and live directions rework on `feature/place-info-and-transit-steps`
+
+- **Tool and requester:** Claude Code (Claude Opus 5.5 via Claude Code at T.P's request). T.P asked for a plan first, approved it, then asked for the phases to be carried out without further input.
+- **What the AI did:** reproduced the missing live bus data against the live Translink feeds and fixed its two causes (realtime and timetable route ids use different suffixes; delayed trips fell outside the time window); added a SQLite copy of the static timetable for a ride's stops and the other departures from its stop, and `POST /api/departures`; reworked the live-directions step list (one step per walk, a multi-line transit block with a line-coloured bar, live departure time, other departures and ride stops, the destination's name), stop dots on the directions map and a redrawn bus icon; built the place sheet (`GET /api/place/info`, `GET /api/place/photo`, the sheet that grows out of the place card or the "i" beside a field, its gallery, views and actions); removed the leaf sway; updated the Privacy page to version 2.1 and the privacy data map; wrote tests and the [feature log](../product/reroute-place-info-and-transit-steps-log-2026-11-03.md); checked the screens in a browser at phone size with live data.
+- **What the AI did not do:** see the Google maps (no browser map key locally), test on a real phone or with a screen reader, give legal advice, push, merge or touch `main`.
+- **Human review required:** the Google cost of opening a place sheet and its photos, the Privacy wording, the look and motion on a real phone, the stop dots on a real map, and whether the timetable database's size (about 172 MB) suits the server.

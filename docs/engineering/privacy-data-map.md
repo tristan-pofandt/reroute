@@ -45,8 +45,9 @@ Not collected: contacts, photos, files, calendar, financial or health informatio
 
 | Recipient | What they receive | When | Role |
 |---|---|---|---|
-| Google Maps Platform (server) | Route endpoints, time, mode; typed address fragments + session token + location bias; place ids; coordinates for fuel / parking / elevation | Each search | Service provider |
+| Google Maps Platform (server) | Route endpoints, time, mode; typed address fragments + session token + location bias; place ids (also when a place sheet is opened); coordinates for fuel / parking / elevation | Each search | Service provider |
 | Google Maps JavaScript, Fonts, gstatic | IP, browser details, map area viewed | Map and font load | Independent (browser contacts them) |
+| Google image servers (googleusercontent.com) | IP, browser details, which place's photos and reviewer pictures were viewed | Only when a place sheet is opened and its photos scroll into view | Independent (browser contacts them; the app's server only hands over a short-lived image address) |
 | Google / Apple sign-in | The fact that the person signed in to Reroute | Only if the person signs in | Sign-in provider |
 | Open-Meteo | Rounded location | Weather | Service provider |
 | RainViewer | IP, map area | Weather page | Independent |

@@ -7,6 +7,7 @@ Started in 2026 as a UQ COMP1100 team project (team 45). This repository continu
 - App, setup and commands: [`apps/plan-b-mvp/README.md`](apps/plan-b-mvp/README.md)
 - Engineering docs: [`docs/engineering/`](docs/engineering/README.md)
 - Product docs and feature logs: [`docs/product/`](docs/product/README.md)
+- AI-use log: [`docs/team/ai-use-log.md`](docs/team/ai-use-log.md)
 - Deployment: [`infra/`](infra/README.md)
 
 `make check` runs what CI runs.
