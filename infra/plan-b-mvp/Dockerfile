@@ -20,7 +20,7 @@ COPY apps/plan-b-mvp/web/ ./
 RUN npm run build
 
 # Stage 2: the Flask app. server.py serves web/dist, and falls back to the plain index.html if it is missing.
-FROM python:3.13-slim
+FROM python:3.15-slim
 
 # The commit shown by /healthz: docker build --build-arg GIT_SHA=$(git rev-parse --short HEAD) ...
 ARG GIT_SHA=dev
